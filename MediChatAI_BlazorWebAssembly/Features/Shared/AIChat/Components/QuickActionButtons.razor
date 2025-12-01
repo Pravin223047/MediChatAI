@@ -1,0 +1,89 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+@implements IDisposable
+
+<div class="@(IsDarkMode ? "bg-gray-800/50 border-gray-700" : "bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200") rounded-2xl border-2 p-6">
+    <h3 class="text-sm font-bold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-4 uppercase tracking-wide flex items-center gap-2">
+        <i class="fas fa-bolt text-primary"></i>
+        Quick Actions
+    </h3>
+
+    <div class="grid grid-cols-2 gap-3">
+        @foreach (var action in Actions)
+        {
+            <button @onclick="@(() => OnActionClick.InvokeAsync(action))"
+                    class="group p-4 rounded-xl @(IsDarkMode ? "bg-gray-700/50 hover:bg-gray-700 border border-gray-600" : "bg-white hover:bg-gray-50 border border-gray-200") transition-all duration-200 hover:shadow-lg hover:scale-105">
+                <div class="flex flex-col items-center gap-2 text-center">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br @GetActionGradient(action) flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="@GetActionIcon(action) text-white text-lg"></i>
+                    </div>
+                    <span class="text-xs font-semibold @(IsDarkMode ? "text-gray-200" : "text-gray-800")">
+                        @action
+                    </span>
+                </div>
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<string> Actions { get; set; } = new();
+    [Parameter] public EventCallback<string> OnActionClick { get; set; }
+
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetActionIcon(string action)
+    {
+        return action.ToLower() switch
+        {
+            "check symptoms" or "symptom checker" => "fas fa-heartbeat",
+            "analyze image" or "image analysis" => "fas fa-image",
+            "find a doctor" or "find doctor" => "fas fa-user-md",
+            "medication info" or "medications" => "fas fa-pills",
+            "book appointment" or "appointments" => "fas fa-calendar-check",
+            "health tips" or "wellness tips" => "fas fa-lightbulb",
+            "clinical decision support" => "fas fa-stethoscope",
+            "drug interactions" => "fas fa-flask",
+            "differential diagnosis" => "fas fa-notes-medical",
+            "treatment guidelines" => "fas fa-file-medical",
+            "latest research" => "fas fa-microscope",
+            "patient case analysis" => "fas fa-user-injured",
+            _ => "fas fa-circle"
+        };
+    }
+
+    private string GetActionGradient(string action)
+    {
+        return action.ToLower() switch
+        {
+            "check symptoms" or "symptom checker" => "from-red-400 to-pink-500",
+            "analyze image" or "image analysis" => "from-purple-400 to-pink-500",
+            "find a doctor" or "find doctor" => "from-blue-400 to-indigo-500",
+            "medication info" or "medications" => "from-green-400 to-emerald-500",
+            "book appointment" or "appointments" => "from-amber-400 to-orange-500",
+            "health tips" or "wellness tips" => "from-yellow-400 to-amber-500",
+            "clinical decision support" => "from-teal-400 to-cyan-500",
+            "drug interactions" => "from-rose-400 to-red-500",
+            "differential diagnosis" => "from-indigo-400 to-purple-500",
+            "treatment guidelines" => "from-cyan-400 to-blue-500",
+            "latest research" => "from-violet-400 to-purple-500",
+            "patient case analysis" => "from-fuchsia-400 to-pink-500",
+            _ => "from-gray-400 to-gray-500"
+        };
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}

@@ -1,0 +1,42 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+@implements IDisposable
+
+<div class="flex items-start gap-3 @(IsDarkMode ? "bg-gray-800/30" : "bg-white") rounded-lg p-3">
+    <div class="flex-shrink-0 mt-0.5">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 @(IsDarkMode ? "border border-primary/30" : "") flex items-center justify-center">
+            <i class="@Icon text-primary text-sm"></i>
+        </div>
+    </div>
+    <div class="flex-1 min-w-0">
+        <h5 class="text-sm font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-1">
+            @Title
+        </h5>
+        <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") leading-relaxed">
+            @Description
+        </p>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Description { get; set; } = string.Empty;
+
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}

@@ -1,0 +1,225 @@
+@using MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.Models
+@using MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.Services
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@using Microsoft.AspNetCore.Components.Forms
+@inject ThemeState ThemeState
+@inject IImageUploadService ImageUploadService
+@inject ILogger<ImageAnalysisPanel> Logger
+@implements IDisposable
+
+<div class="@(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") rounded-2xl border-2 shadow-lg p-6">
+    <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold @(IsDarkMode ? "text-white" : "text-gray-900") flex items-center gap-2">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
+                <i class="fas fa-image text-white"></i>
+            </div>
+            Image Analysis
+        </h3>
+        <button @onclick="@Close"
+                class="w-8 h-8 rounded-lg @(IsDarkMode ? "hover:bg-gray-700" : "hover:bg-gray-100") flex items-center justify-center transition-colors">
+            <i class="fas fa-times @(IsDarkMode ? "text-gray-400" : "text-gray-600")"></i>
+        </button>
+    </div>
+
+    @if (!isAnalyzing)
+    {
+        <div class="space-y-4">
+            <!-- Image Upload -->
+            <div>
+                <label class="block text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                    Upload Medical Image
+                </label>
+
+                <label class="block cursor-pointer">
+                    <InputFile OnChange="@HandleFileSelected" accept="image/*" class="hidden" />
+
+                    @if (string.IsNullOrEmpty(imageUrl))
+                    {
+                        <div class="border-2 border-dashed @(IsDarkMode ? "border-gray-600 hover:border-gray-500 bg-gray-700/30" : "border-gray-300 hover:border-gray-400 bg-gray-50") rounded-xl p-8 text-center transition-colors">
+                            <div class="flex flex-col items-center gap-3">
+                                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
+                                    <i class="fas fa-cloud-upload-alt text-white text-2xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold @(IsDarkMode ? "text-gray-200" : "text-gray-900") mb-1">
+                                        Click to upload or drag and drop
+                                    </p>
+                                    <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                        PNG, JPG up to 10MB
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="relative group rounded-xl overflow-hidden">
+                            <img src="@imageUrl" alt="Uploaded image" class="w-full h-64 object-cover rounded-xl" />
+                            <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <span class="px-4 py-2 bg-white rounded-lg shadow-lg text-gray-900 font-semibold text-sm">
+                                    <i class="fas fa-sync-alt mr-2"></i>Click to Change
+                                </span>
+                                <button type="button" @onclick="@RemoveImage" @onclick:stopPropagation="true"
+                                        class="px-4 py-2 bg-red-500 rounded-lg shadow-lg text-white font-semibold text-sm">
+                                    <i class="fas fa-trash mr-2"></i>Remove
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </label>
+            </div>
+
+            <!-- Image Type -->
+            <div>
+                <label class="block text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                    What type of image is this?
+                </label>
+                <select @bind="imageType"
+                        class="w-full px-4 py-2.5 rounded-xl @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-gray-50 text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary">
+                    <option value="">Select type...</option>
+                    <option value="skin_condition">Skin Condition</option>
+                    <option value="lab_result">Lab Result</option>
+                    <option value="xray">X-Ray</option>
+                    <option value="mri_scan">MRI Scan</option>
+                    <option value="ct_scan">CT Scan</option>
+                    <option value="prescription">Prescription</option>
+                    <option value="medical_report">Medical Report</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+
+            <!-- Context -->
+            <div>
+                <label class="block text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                    Additional context (optional)
+                </label>
+                <textarea @bind="context"
+                          rows="3"
+                          placeholder="Describe what you'd like to know about this image..."
+                          class="w-full px-4 py-2.5 rounded-xl @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-gray-50 text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary resize-none"></textarea>
+            </div>
+
+            <!-- Analyze Button -->
+            <button @onclick="@AnalyzeImage"
+                    disabled="@(string.IsNullOrEmpty(imageUrl))"
+                    class="w-full px-6 py-3.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-600 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl transition-all hover:scale-105 disabled:hover:scale-100">
+                <i class="fas fa-search-plus mr-2"></i>
+                Analyze Image
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="flex flex-col items-center justify-center py-12">
+            <div class="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center mb-4 animate-pulse">
+                <i class="fas fa-microscope text-white text-2xl"></i>
+            </div>
+            <p class="text-lg font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                Analyzing image...
+            </p>
+            <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                AI is processing your image
+            </p>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback<ImageAnalysisRequest> OnAnalyze { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string imageUrl = string.Empty;
+    private string imageType = string.Empty;
+    private string context = string.Empty;
+    private bool isAnalyzing = false;
+
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            try
+            {
+                // First, create a preview data URL for immediate display
+                var buffer = new byte[file.Size];
+                await file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).ReadAsync(buffer);
+                var base64 = Convert.ToBase64String(buffer);
+                var previewUrl = $"data:{file.ContentType};base64,{base64}";
+
+                // Display preview immediately
+                imageUrl = previewUrl;
+                StateHasChanged();
+
+                // Upload to server in the background
+                var uploadedUrl = await ImageUploadService.UploadImageAsync(file);
+
+                if (!string.IsNullOrEmpty(uploadedUrl))
+                {
+                    // Use server URL instead of data URL
+                    imageUrl = uploadedUrl;
+                    Logger.LogInformation("Image uploaded successfully: {Url}", uploadedUrl);
+                }
+                else
+                {
+                    // Fallback to data URL if upload fails
+                    Logger.LogWarning("Image upload failed, using data URL fallback");
+                    imageUrl = previewUrl;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error handling file selection");
+                // Keep preview URL on error
+            }
+        }
+    }
+
+    private void RemoveImage()
+    {
+        imageUrl = string.Empty;
+    }
+
+    private async Task AnalyzeImage()
+    {
+        if (string.IsNullOrEmpty(imageUrl)) return;
+
+        isAnalyzing = true;
+
+        var request = new ImageAnalysisRequest
+        {
+            ImageUrl = imageUrl,
+            ImageType = imageType,
+            Context = context
+        };
+
+        await OnAnalyze.InvokeAsync(request);
+
+        // Reset state
+        isAnalyzing = false;
+        imageUrl = string.Empty;
+        imageType = string.Empty;
+        context = string.Empty;
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}

@@ -1,0 +1,143 @@
+@* Chat Header Component *@
+
+<div class="p-4 @(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") border-b flex items-center justify-between">
+    <div class="flex items-center gap-3">
+        <div class="relative">
+            <img src="@PartnerImage"
+                 alt="@PartnerName"
+                 class="profile-image w-10 h-10 rounded-full object-cover"
+                 data-initials="@GetInitials(PartnerName)"
+                 onerror="window.handleImageError(this, '@GetInitials(PartnerName)')" />
+            @if (IsOnline)
+            {
+                <span class="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-green-500 ring-2 @(IsDarkMode ? "ring-gray-800" : "ring-white")"></span>
+            }
+        </div>
+        <div>
+            <h3 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                @PartnerName
+            </h3>
+            <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                @if (IsTyping || IsAttaching)
+                {
+                    <span class="text-primary italic flex items-center gap-1">
+                        @if (IsAttaching)
+                        {
+                            <i class="fas fa-paperclip animate-pulse"></i>
+                            <span>sending attachment...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-ellipsis-h animate-pulse"></i>
+                            <span>typing...</span>
+                        }
+                    </span>
+                }
+                else
+                {
+                    @PartnerSpecialty
+                    @if (IsOnline)
+                    {
+                        <span class="text-green-500 ml-2">• Online</span>
+                    }
+                }
+            </p>
+        </div>
+    </div>
+    <div class="flex items-center gap-2">
+        <button @onclick="HandleAiToggle"
+                class="p-2 rounded-lg @(ShowAiAssistant ? "bg-blue-600 text-white" : (IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600")) transition-colors relative"
+                title="AI Medical Assistant">
+            <i class="fas fa-robot"></i>
+            @if (ShowAiAssistant)
+            {
+                <span class="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+            }
+        </button>
+        <button @onclick="HandleScheduleAppointment"
+                class="p-2 rounded-lg @(IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600") transition-colors"
+                title="Schedule Appointment">
+            <i class="fas fa-calendar-plus"></i>
+        </button>
+        <button @onclick="HandleVideoCall"
+                class="p-2 rounded-lg @(IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600") transition-colors"
+                title="Start Video Call">
+            <i class="fas fa-video"></i>
+        </button>
+        <button @onclick="HandleVoiceCall"
+                class="p-2 rounded-lg @(IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600") transition-colors"
+                title="Start Voice Call">
+            <i class="fas fa-phone"></i>
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string PartnerName { get; set; } = string.Empty;
+
+    [Parameter]
+    public string PartnerImage { get; set; } = string.Empty;
+
+    [Parameter]
+    public string PartnerSpecialty { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsOnline { get; set; }
+
+    [Parameter]
+    public bool ShowAiAssistant { get; set; }
+
+    [Parameter]
+    public bool IsDarkMode { get; set; }
+
+    [Parameter]
+    public EventCallback OnAiToggle { get; set; }
+
+    [Parameter]
+    public EventCallback OnScheduleAppointment { get; set; }
+
+    [Parameter]
+    public EventCallback OnVideoCall { get; set; }
+
+    [Parameter]
+    public EventCallback OnVoiceCall { get; set; }
+
+    [Parameter]
+    public bool IsTyping { get; set; }
+
+    [Parameter]
+    public bool IsAttaching { get; set; }
+
+    private async Task HandleAiToggle()
+    {
+        await OnAiToggle.InvokeAsync();
+    }
+
+    private async Task HandleScheduleAppointment()
+    {
+        await OnScheduleAppointment.InvokeAsync();
+    }
+
+    private async Task HandleVideoCall()
+    {
+        await OnVideoCall.InvokeAsync();
+    }
+
+    private async Task HandleVoiceCall()
+    {
+        await OnVoiceCall.InvokeAsync();
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "??";
+
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+
+        return parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+    }
+}

@@ -1,0 +1,591 @@
+@* Message Bubble Component *@
+
+<div class="flex @(IsSentByCurrentUser ? "justify-end" : "justify-start")">
+    <div class="flex items-end gap-2 max-w-md @(IsSentByCurrentUser ? "flex-row-reverse" : "flex-row")">
+        @if (!IsSentByCurrentUser)
+        {
+            @if (!string.IsNullOrEmpty(PartnerImage))
+            {
+                <img src="@PartnerImage"
+                     alt="@PartnerName"
+                     class="profile-image w-8 h-8 rounded-full object-cover flex-shrink-0"
+                     data-initials="@GetInitials(PartnerName)"
+                     onerror="window.handleImageError(this, '@GetInitials(PartnerName)')" />
+            }
+            else
+            {
+                <div class="w-8 h-8 rounded-full message-avatar-fallback flex-shrink-0">
+                    <span class="text-xs font-semibold">@GetInitials(PartnerName)</span>
+                </div>
+            }
+        }
+        <div class="flex flex-col @(IsSentByCurrentUser ? "items-end" : "items-start")">
+            <div class="relative group @(IsSentByCurrentUser ? "bg-primary text-white" : (IsDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900")) rounded-2xl px-4 py-2 shadow-sm border-2 @(IsSentByCurrentUser ? "border-primary" : (IsDarkMode ? "border-gray-700" : "border-gray-200"))">
+                @* Reply Preview *@
+                @if (!string.IsNullOrEmpty(Message.ReplyToMessageId) && Message.ReplyToMessage != null)
+                {
+                    <div class="mb-2 p-2 rounded-lg @(IsSentByCurrentUser ? "bg-white/10" : (IsDarkMode ? "bg-gray-700" : "bg-gray-100")) border-l-4 @(IsSentByCurrentUser ? "border-white/30" : "border-primary") cursor-pointer hover:opacity-80 transition-opacity" @onclick="() => OnReplyClick.InvokeAsync(Message.ReplyToMessageId)">
+                        <p class="text-xs font-medium @(IsSentByCurrentUser ? "text-white/80" : (IsDarkMode ? "text-gray-300" : "text-gray-600")) mb-1">
+                            @(Message.ReplyToMessage.IsSentByMe ? "You" : PartnerName)
+                        </p>
+                        <p class="text-xs @(IsSentByCurrentUser ? "text-white/70" : (IsDarkMode ? "text-gray-400" : "text-gray-500")) truncate">
+                            @(Message.ReplyToMessage.Content.Length > 50 ? Message.ReplyToMessage.Content.Substring(0, 50) + "..." : Message.ReplyToMessage.Content)
+                        </p>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(Message.Content))
+                {
+                    @if (IsEditing)
+                    {
+                        <!-- Edit Mode -->
+                        <div class="flex flex-col gap-2">
+                            <textarea @bind="EditingContent"
+                                      @bind:event="oninput"
+                                      @bind:after="HandleEditContentChange"
+                                      class="w-full min-w-[250px] px-2 py-1 text-sm @(IsDarkMode ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      rows="2"></textarea>
+                            <div class="flex gap-2">
+                                <button @onclick="HandleSaveEdit"
+                                        class="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
+                                    <i class="fas fa-check mr-1"></i>Save
+                                </button>
+                                <button @onclick="HandleCancelEdit"
+                                        class="px-3 py-1 text-xs @(IsDarkMode ? "bg-gray-600 hover:bg-gray-700" : "bg-gray-300 hover:bg-gray-400") rounded transition-colors">
+                                    <i class="fas fa-times mr-1"></i>Cancel
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-sm break-words">@Message.Content</p>
+                    }
+                }
+
+                @* Image Attachment *@
+                @if (!string.IsNullOrEmpty(Message.AttachmentUrl) && IsImageFile(Message.AttachmentUrl))
+                {
+                    @if (string.IsNullOrEmpty(Message.Content))
+                    {
+                        <div class="group cursor-pointer" @onclick="() => OnAttachmentClick.InvokeAsync(Message.AttachmentUrl)">
+                            <div class="relative overflow-hidden rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
+                                <img src="@Message.AttachmentUrl" 
+                                     alt="Image attachment" 
+                                     class="max-w-xs max-h-64 w-full object-cover" 
+                                     loading="lazy" />
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <div class="bg-black/50 backdrop-blur-sm rounded-full p-2">
+                                        <i class="fas fa-expand-alt text-white text-sm"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mt-2 group cursor-pointer" @onclick="() => OnAttachmentClick.InvokeAsync(Message.AttachmentUrl)">
+                            <div class="relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 p-1">
+                                <img src="@Message.AttachmentUrl" 
+                                     alt="Image attachment" 
+                                     class="max-w-xs max-h-48 w-full object-cover rounded" 
+                                     loading="lazy" />
+                            </div>
+                        </div>
+                    }
+                }
+                @* Voice Message Player *@
+                else if (Message.MessageType == "Audio" && !string.IsNullOrEmpty(Message.AttachmentUrl))
+                {
+                    <div class="mt-2 p-4 rounded-2xl @(IsSentByCurrentUser ? "bg-gradient-to-r from-blue-500 to-purple-600" : (IsDarkMode ? "bg-gradient-to-r from-gray-700 to-gray-600" : "bg-gradient-to-r from-gray-100 to-gray-200")) shadow-lg">
+                        <div class="flex items-center gap-3">
+                            <button @onclick="() => ToggleVoicePlayback(Message.Id)" 
+                                    class="w-10 h-10 rounded-full @(IsSentByCurrentUser ? "bg-white/20 hover:bg-white/30" : (IsDarkMode ? "bg-white/10 hover:bg-white/20" : "bg-black/10 hover:bg-black/20")) flex items-center justify-center transition-all duration-200 hover:scale-105">
+                                <i class="fas @(IsVoicePlaying(Message.Id) ? "fa-pause" : "fa-play") @(IsSentByCurrentUser ? "text-white" : (IsDarkMode ? "text-white" : "text-gray-700")) text-sm"></i>
+                            </button>
+                            
+                            <div class="flex-1 flex items-center gap-2">
+                                @* Animated Voice Waves *@
+                                <div class="flex items-center gap-1 h-8">
+                                    @for (int i = 0; i < 20; i++)
+                                    {
+                                        <div class="w-1 @(IsSentByCurrentUser ? "bg-white/60" : (IsDarkMode ? "bg-white/60" : "bg-gray-600/60")) rounded-full transition-all duration-150 @(IsVoicePlaying(Message.Id) ? GetWaveAnimation(i) : "h-2")"></div>
+                                    }
+                                </div>
+                                
+                                <span class="text-xs @(IsSentByCurrentUser ? "text-white/80" : (IsDarkMode ? "text-white/80" : "text-gray-600")) font-medium ml-2">
+                                    @GetVoiceDuration(Message.Content)
+                                </span>
+                            </div>
+                        </div>
+                        
+                        @* Hidden Audio Element *@
+                        <audio @ref="audioElements[Message.Id]" 
+                               @onended="() => OnVoiceEnded(Message.Id)"
+                               @ontimeupdate="() => OnVoiceTimeUpdate(Message.Id)"
+                               preload="metadata">
+                            <source src="@Message.AttachmentUrl" type="audio/webm">
+                            <source src="@Message.AttachmentUrl" type="audio/ogg">
+                            <source src="@Message.AttachmentUrl" type="audio/mp4">
+                        </audio>
+                    </div>
+                }
+                @* PDF and Other File Attachments *@
+                else if (!string.IsNullOrEmpty(Message.AttachmentUrl) && !IsImageFile(Message.AttachmentUrl))
+                {
+                    @if (string.IsNullOrEmpty(Message.Content))
+                    {
+                        <div class="cursor-pointer group" @onclick="() => OnAttachmentClick.InvokeAsync(Message.AttachmentUrl)">
+                            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-opacity-80 transition-all duration-300">
+                                <div class="@(IsSentByCurrentUser ? "bg-white/20" : (IsDarkMode ? "bg-gray-700" : "bg-gray-100")) rounded-lg p-2">
+                                    <i class="fas fa-@(GetFileIcon(GetFileExtension(Message.AttachmentUrl))) text-lg @(IsSentByCurrentUser ? "text-white" : (IsDarkMode ? "text-gray-300" : "text-gray-600"))"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-medium text-sm @(IsSentByCurrentUser ? "text-white" : (IsDarkMode ? "text-white" : "text-gray-900"))">@GetFileTypeDisplay(Message.AttachmentUrl)</h4>
+                                    <p class="text-xs @(IsSentByCurrentUser ? "text-white/80" : (IsDarkMode ? "text-gray-300" : "text-gray-600"))">@(Message.AttachmentFileName ?? "attachment")</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mt-2 cursor-pointer group" @onclick="() => OnAttachmentClick.InvokeAsync(Message.AttachmentUrl)">
+                            <div class="flex items-center gap-2 p-2 rounded-lg @(IsSentByCurrentUser ? "bg-primary-dark" : (IsDarkMode ? "bg-gray-700" : "bg-gray-50")) hover:opacity-90 transition-opacity">
+                                <i class="fas fa-@(GetFileIcon(GetFileExtension(Message.AttachmentUrl))) text-sm"></i>
+                                <div class="flex-1">
+                                    <p class="text-xs font-medium">@GetFileTypeDisplay(Message.AttachmentUrl)</p>
+                                    <p class="text-xs opacity-75">Click to @(CanPreview(Message.AttachmentUrl) ? "preview" : "download")</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+
+                @* Reply/Edit/Delete Actions *@
+                @if (!IsEditing && !Message.Content.Contains("This message was deleted"))
+                {
+                    <div class="absolute -top-8 @(IsSentByCurrentUser ? "right-0" : "left-0") hidden group-hover:flex gap-1 bg-gray-800 rounded-lg px-2 py-1 shadow-lg">
+                        <button @onclick="HandleReply"
+                                class="text-white hover:text-green-400 transition-colors p-1"
+                                title="Reply to message">
+                            <i class="fas fa-reply text-xs"></i>
+                        </button>
+                        @if (IsSentByCurrentUser)
+                        {
+                            <button @onclick="HandleEdit"
+                                    class="text-white hover:text-blue-400 transition-colors p-1"
+                                    title="Edit message">
+                                <i class="fas fa-edit text-xs"></i>
+                            </button>
+                            <button @onclick="HandleDelete"
+                                    class="text-white hover:text-red-400 transition-colors p-1"
+                                    title="Delete message">
+                                <i class="fas fa-trash text-xs"></i>
+                            </button>
+                        }
+                    </div>
+                }
+
+                @if (Message.Attachments.Any())
+                {
+                    <div class="mt-2 space-y-2">
+                        @foreach (var attachment in Message.Attachments)
+                        {
+                            <div class="flex items-center gap-2 p-2 rounded-lg @(IsSentByCurrentUser ? "bg-primary-dark" : (IsDarkMode ? "bg-gray-700" : "bg-gray-50"))">
+                                <i class="fas fa-file-@(GetFileIcon(attachment.Type)) text-lg"></i>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs font-medium truncate">@attachment.Name</p>
+                                    <p class="text-xs opacity-75">@attachment.Size</p>
+                                </div>
+                                <button @onclick="() => OnDownload.InvokeAsync(attachment)"
+                                        class="p-1 hover:opacity-75 transition-opacity">
+                                    <i class="fas fa-download text-xs"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="flex items-center gap-2 mt-1 px-1">
+                <span class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")">
+                    @Message.Timestamp.ToString("h:mm tt")
+                </span>
+                @if (Message.IsEdited)
+                {
+                    <span class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400") italic">(edited)</span>
+                }
+                @if (IsSentByCurrentUser)
+                {
+                    @if (Message.Status == MessageStatus.Sent)
+                    {
+                        <i class="fas fa-check text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")"></i>
+                    }
+                    else if (Message.Status == MessageStatus.Delivered)
+                    {
+                        <i class="fas fa-check-double text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")"></i>
+                    }
+                    else if (Message.Status == MessageStatus.Read)
+                    {
+                        <i class="fas fa-check-double text-xs text-primary"></i>
+                    }
+                }
+                <button @onclick="HandleToggleEmojiPicker"
+                        class="@(IsDarkMode ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600") transition-colors">
+                    <i class="fas fa-smile text-xs"></i>
+                </button>
+            </div>
+
+            @* Display reactions *@
+            @if (Message.Reactions.Any())
+            {
+                <div class="flex flex-wrap gap-1 mt-1">
+                    @foreach (var reaction in Message.Reactions)
+                    {
+                        <button @onclick="() => OnToggleReaction.InvokeAsync((reaction.Emoji, reaction.UserReacted))"
+                                class="@(reaction.UserReacted ? (IsDarkMode ? "bg-blue-900/50 border-blue-500" : "bg-blue-50 border-blue-400") : (IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-300"))
+                                       border rounded-full px-2 py-0.5 text-xs flex items-center gap-1 hover:opacity-75 transition-opacity">
+                            <span>@reaction.Emoji</span>
+                            <span class="@(IsDarkMode ? "text-gray-300" : "text-gray-600")">@reaction.Count</span>
+                        </button>
+                    }
+                </div>
+            }
+
+            @* Emoji Picker *@
+            @if (ShowEmojiPicker)
+            {
+                <div class="relative mt-2">
+                    @EmojiPickerContent
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@using System.Threading
+@inject IJSRuntime JS
+@implements IDisposable
+
+@code {
+    [Parameter]
+    public MessageBubbleData Message { get; set; } = new();
+
+    [Parameter]
+    public bool IsSentByCurrentUser { get; set; }
+
+    [Parameter]
+    public string PartnerImage { get; set; } = string.Empty;
+
+    [Parameter]
+    public string PartnerName { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsDarkMode { get; set; }
+
+    [Parameter]
+    public bool IsEditing { get; set; }
+
+    [Parameter]
+    public string EditingContent { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> EditingContentChanged { get; set; }
+
+    [Parameter]
+    public bool ShowEmojiPicker { get; set; }
+
+    [Parameter]
+    public EventCallback OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback OnSaveEdit { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelEdit { get; set; }
+
+    [Parameter]
+    public EventCallback OnDelete { get; set; }
+
+    [Parameter]
+    public EventCallback<(string Emoji, bool UserReacted)> OnToggleReaction { get; set; }
+
+    [Parameter]
+    public EventCallback OnToggleEmojiPicker { get; set; }
+
+    [Parameter]
+    public EventCallback<AttachmentData> OnDownload { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnAttachmentClick { get; set; }
+
+    [Parameter]
+    public EventCallback OnReply { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnReplyClick { get; set; }
+
+    private Dictionary<string, ElementReference> audioElements = new();
+    private Dictionary<string, bool> playingStates = new();
+    private Dictionary<string, System.Threading.Timer> waveTimers = new();
+
+    [Parameter]
+    public RenderFragment? EmojiPickerContent { get; set; }
+
+    private async Task HandleEditContentChange()
+    {
+        await EditingContentChanged.InvokeAsync(EditingContent);
+    }
+
+    private async Task HandleSaveEdit()
+    {
+        await OnSaveEdit.InvokeAsync();
+    }
+
+    private async Task HandleCancelEdit()
+    {
+        await OnCancelEdit.InvokeAsync();
+    }
+
+    private async Task HandleEdit()
+    {
+        await OnEdit.InvokeAsync();
+    }
+
+    private async Task HandleDelete()
+    {
+        await OnDelete.InvokeAsync();
+    }
+
+    private async Task HandleReply()
+    {
+        await OnReply.InvokeAsync();
+    }
+
+    private async Task HandleToggleEmojiPicker()
+    {
+        await OnToggleEmojiPicker.InvokeAsync();
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "??";
+
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+
+        return parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+    }
+
+    private string GetFileIcon(string extension)
+    {
+        return extension.ToLower() switch
+        {
+            ".pdf" => "file-pdf",
+            ".doc" or ".docx" => "file-word",
+            ".xls" or ".xlsx" => "file-excel",
+            ".ppt" or ".pptx" => "file-powerpoint",
+            ".txt" => "file-alt",
+            ".zip" or ".rar" or ".7z" => "file-archive",
+            ".mp4" or ".avi" or ".mov" => "file-video",
+            ".mp3" or ".wav" or ".ogg" => "file-audio",
+            ".csv" => "file-csv",
+            ".json" or ".xml" => "file-code",
+            _ => "file"
+        };
+    }
+
+    private bool IsPdfFile(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        var extension = System.IO.Path.GetExtension(url).ToLower();
+        return extension == ".pdf";
+    }
+
+    private string GetFileExtension(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return string.Empty;
+        return System.IO.Path.GetExtension(url);
+    }
+
+    private string GetFileTypeDisplay(string url)
+    {
+        var extension = GetFileExtension(url).ToLower();
+        return extension switch
+        {
+            ".pdf" => "PDF Document",
+            ".doc" or ".docx" => "Word Document",
+            ".xls" or ".xlsx" => "Excel Spreadsheet",
+            ".ppt" or ".pptx" => "PowerPoint Presentation",
+            ".txt" => "Text File",
+            ".zip" or ".rar" or ".7z" => "Archive File",
+            ".mp4" or ".avi" or ".mov" => "Video File",
+            ".mp3" or ".wav" or ".ogg" => "Audio File",
+            ".csv" => "CSV File",
+            ".json" => "JSON File",
+            ".xml" => "XML File",
+            _ => "File Attachment"
+        };
+    }
+
+    private bool CanPreview(string url)
+    {
+        var extension = GetFileExtension(url).ToLower();
+        return extension is ".pdf" or ".txt" or ".json" or ".xml" or ".csv";
+    }
+
+    private bool IsImageFile(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        var extension = System.IO.Path.GetExtension(url).ToLower();
+        return extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp";
+    }
+
+    private bool IsVoicePlaying(string messageId)
+    {
+        return playingStates.GetValueOrDefault(messageId, false);
+    }
+
+    private async Task ToggleVoicePlayback(string messageId)
+    {
+        if (!audioElements.ContainsKey(messageId)) return;
+
+        var isPlaying = IsVoicePlaying(messageId);
+        
+        if (isPlaying)
+        {
+            await JS.InvokeVoidAsync("pauseAudio", audioElements[messageId]);
+            playingStates[messageId] = false;
+            StopWaveAnimation(messageId);
+        }
+        else
+        {
+            // Pause all other playing voices
+            foreach (var kvp in playingStates.Where(p => p.Value).ToList())
+            {
+                if (kvp.Key != messageId && audioElements.ContainsKey(kvp.Key))
+                {
+                    await JS.InvokeVoidAsync("pauseAudio", audioElements[kvp.Key]);
+                    playingStates[kvp.Key] = false;
+                    StopWaveAnimation(kvp.Key);
+                }
+            }
+            
+            await JS.InvokeVoidAsync("playAudio", audioElements[messageId]);
+            playingStates[messageId] = true;
+            StartWaveAnimation(messageId);
+        }
+        
+        StateHasChanged();
+    }
+
+    private void OnVoiceEnded(string messageId)
+    {
+        playingStates[messageId] = false;
+        StopWaveAnimation(messageId);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnVoiceTimeUpdate(string messageId)
+    {
+        // Could be used for progress tracking
+    }
+
+    private string GetWaveAnimation(int index)
+    {
+        var heights = new[] { "h-2", "h-4", "h-6", "h-4", "h-3", "h-5", "h-2", "h-4", "h-6", "h-3" };
+        var delays = new[] { "delay-0", "delay-75", "delay-150", "delay-300", "delay-500", "delay-700", "delay-1000", "delay-150", "delay-300", "delay-500" };
+        
+        return $"animate-pulse {heights[index % heights.Length]} {delays[index % delays.Length]}";
+    }
+
+    private void StartWaveAnimation(string messageId)
+    {
+        if (waveTimers.ContainsKey(messageId))
+        {
+            waveTimers[messageId].Dispose();
+        }
+        
+        waveTimers[messageId] = new Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(200));
+    }
+
+    private void StopWaveAnimation(string messageId)
+    {
+        if (waveTimers.ContainsKey(messageId))
+        {
+            waveTimers[messageId].Dispose();
+            waveTimers.Remove(messageId);
+        }
+    }
+
+    private string GetVoiceDuration(string content)
+    {
+        // Extract duration from content like "Voice message (15s)"
+        var match = System.Text.RegularExpressions.Regex.Match(content, @"\((\d+)s\)");
+        return match.Success ? match.Groups[1].Value + "s" : "--s";
+    }
+
+    protected override void OnInitialized()
+    {
+        if (Message.MessageType == "Audio")
+        {
+            audioElements[Message.Id] = new ElementReference();
+            playingStates[Message.Id] = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        foreach (var timer in waveTimers.Values)
+        {
+            timer?.Dispose();
+        }
+        waveTimers.Clear();
+    }
+
+    // Data classes for the component
+    public class MessageBubbleData
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+        public bool IsSentByMe { get; set; }
+        public MessageStatus Status { get; set; }
+        public List<AttachmentData> Attachments { get; set; } = new();
+        public List<ReactionData> Reactions { get; set; } = new();
+        public bool IsEdited { get; set; }
+        public string? MessageType { get; set; }
+        public string? AttachmentUrl { get; set; }
+        public string? AttachmentFileName { get; set; }
+        public string? ReplyToMessageId { get; set; }
+        public MessageBubbleData? ReplyToMessage { get; set; }
+    }
+
+    public class ReactionData
+    {
+        public string Emoji { get; set; } = string.Empty;
+        public int Count { get; set; }
+        public bool UserReacted { get; set; }
+    }
+
+    public class AttachmentData
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public string Size { get; set; } = string.Empty;
+        public string Url { get; set; } = string.Empty;
+    }
+
+    public enum MessageStatus
+    {
+        Sending,
+        Sent,
+        Delivered,
+        Read,
+        Failed
+    }
+}

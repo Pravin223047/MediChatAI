@@ -1,0 +1,153 @@
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Components
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+@implements IDisposable
+
+<ModalBase IsOpen="@IsOpen"
+           Title="AI Health Assistant Disclaimer"
+           Subtitle="Important Information - Please Read Carefully"
+           Icon="fas fa-shield-alt"
+           IconBgClass="bg-amber-100 dark:bg-amber-900/30"
+           Size="lg"
+           ShowCloseButton="false"
+           CloseOnBackdropClick="false"
+           OnClose="@(() => {})">
+    <ChildContent>
+        <div class="space-y-6">
+            <!-- Warning Banner -->
+            <div class="@(IsDarkMode ? "bg-amber-900/20 border-amber-700/50" : "bg-amber-50 border-amber-200") border-2 rounded-xl p-5">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                            <i class="fas fa-exclamation-triangle text-white text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="text-lg font-bold @(IsDarkMode ? "text-amber-300" : "text-amber-900") mb-2">
+                            Educational Purposes Only
+                        </h3>
+                        <p class="@(IsDarkMode ? "text-amber-200/90" : "text-amber-800") text-sm leading-relaxed">
+                            This AI Health Assistant is designed for <strong>knowledge and educational purposes only</strong>.
+                            It does not provide medical diagnosis, treatment, or professional medical advice.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Points -->
+            <div class="space-y-4">
+                <h4 class="text-base font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") flex items-center gap-2">
+                    <i class="fas fa-clipboard-list text-primary"></i>
+                    Please Understand:
+                </h4>
+
+                <div class="space-y-3">
+                    <DisclaimerPoint
+                        Icon="fas fa-user-md"
+                        Title="Not a Substitute for Professional Care"
+                        Description="This AI cannot replace consultation with a licensed healthcare professional. Always consult your doctor for medical advice." />
+
+                    <DisclaimerPoint
+                        Icon="fas fa-heartbeat"
+                        Title="Emergency Situations"
+                        Description="For emergencies, call your local emergency number immediately. Do not rely on this chatbot for urgent medical situations." />
+
+                    <DisclaimerPoint
+                        Icon="fas fa-shield-virus"
+                        Title="No Diagnosis or Treatment"
+                        Description="The information provided is general in nature and should not be considered as a medical diagnosis or treatment plan." />
+
+                    <DisclaimerPoint
+                        Icon="fas fa-user-shield"
+                        Title="Personal Responsibility"
+                        Description="You are responsible for your health decisions. Always verify information with qualified healthcare providers." />
+
+                    <DisclaimerPoint
+                        Icon="fas fa-database"
+                        Title="Information Accuracy"
+                        Description="While we strive for accuracy, AI responses may contain errors or outdated information. Medical knowledge evolves constantly." />
+                </div>
+            </div>
+
+            <!-- Agreement Checkbox -->
+            <div class="@(IsDarkMode ? "bg-gray-800/50 border-gray-700" : "bg-gray-50 border-gray-200") border-2 rounded-xl p-4">
+                <label class="flex items-start gap-3 cursor-pointer group">
+                    <input type="checkbox"
+                           @bind="@hasAccepted"
+                           class="mt-1 w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary focus:ring-2 cursor-pointer" />
+                    <span class="flex-1 text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700") leading-relaxed">
+                        I understand and acknowledge that this AI Health Assistant is for <strong>educational purposes only</strong>,
+                        and I will consult a licensed healthcare professional for medical advice, diagnosis, or treatment.
+                    </span>
+                </label>
+            </div>
+
+            <!-- Benefits Section -->
+            <div class="@(IsDarkMode ? "bg-primary-900/10 border-primary-700/30" : "bg-primary-50 border-primary-200") border rounded-xl p-4">
+                <h4 class="text-sm font-semibold @(IsDarkMode ? "text-primary-300" : "text-primary-900") mb-2 flex items-center gap-2">
+                    <i class="fas fa-lightbulb"></i>
+                    What This AI Can Help With:
+                </h4>
+                <ul class="text-sm @(IsDarkMode ? "text-primary-200/80" : "text-primary-800") space-y-1 ml-6 list-disc">
+                    <li>General health information and education</li>
+                    <li>Understanding common symptoms and conditions</li>
+                    <li>Health and wellness tips</li>
+                    <li>Answering questions about medications (informational only)</li>
+                    <li>Analyzing medical images for educational insights</li>
+                </ul>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <div class="flex items-center justify-between gap-4 w-full">
+            <button @onclick="@OnDecline"
+                    class="px-6 py-3 rounded-xl font-semibold @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900") transition-all duration-200">
+                <i class="fas fa-times mr-2"></i>
+                Decline
+            </button>
+            <button @onclick="@OnAccept"
+                    disabled="@(!hasAccepted)"
+                    class="px-8 py-3 rounded-xl font-semibold bg-gradient-to-r from-primary to-accent text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:scale-105 disabled:hover:scale-100 disabled:hover:shadow-none">
+                <i class="fas fa-check mr-2"></i>
+                I Understand & Accept
+            </button>
+        </div>
+    </FooterContent>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnAcceptDisclaimer { get; set; }
+    [Parameter] public EventCallback OnDeclineDisclaimer { get; set; }
+
+    private bool hasAccepted = false;
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnAccept()
+    {
+        if (hasAccepted)
+        {
+            await OnAcceptDisclaimer.InvokeAsync();
+        }
+    }
+
+    private async Task OnDecline()
+    {
+        await OnDeclineDisclaimer.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}

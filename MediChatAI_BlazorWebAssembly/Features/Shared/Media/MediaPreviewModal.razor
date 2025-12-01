@@ -1,0 +1,178 @@
+@namespace MediChatAI_BlazorWebAssembly.Features.Shared.Media
+@inject IJSRuntime JS
+
+<!-- Media Preview Modal -->
+@if (IsVisible)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-90"
+         @onclick="Close">
+        <div class="relative max-w-7xl max-h-full w-full h-full flex items-center justify-center"
+             @onclick:stopPropagation>
+
+            <!-- Close Button -->
+            <button @onclick="Close"
+                    class="absolute top-4 right-4 z-10 w-12 h-12 bg-black bg-opacity-50 hover:bg-opacity-75 text-white rounded-full flex items-center justify-center transition-all">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <!-- Download Button -->
+            <button @onclick="Download"
+                    class="absolute top-4 right-20 z-10 w-12 h-12 bg-black bg-opacity-50 hover:bg-opacity-75 text-white rounded-full flex items-center justify-center transition-all">
+                <i class="fas fa-download text-xl"></i>
+            </button>
+
+            <!-- Navigation Buttons (if applicable) -->
+            @if (HasMultipleItems)
+            {
+                <button @onclick="Previous"
+                        class="absolute left-4 w-12 h-12 bg-black bg-opacity-50 hover:bg-opacity-75 text-white rounded-full flex items-center justify-center transition-all">
+                    <i class="fas fa-chevron-left text-xl"></i>
+                </button>
+
+                <button @onclick="Next"
+                        class="absolute right-4 w-12 h-12 bg-black bg-opacity-50 hover:bg-opacity-75 text-white rounded-full flex items-center justify-center transition-all">
+                    <i class="fas fa-chevron-right text-xl"></i>
+                </button>
+            }
+
+            <!-- Media Content -->
+            <div class="max-w-full max-h-full flex items-center justify-center">
+                @if (MediaType?.StartsWith("image/") == true)
+                {
+                    <!-- Image Preview -->
+                    <img src="@MediaUrl"
+                         alt="@FileName"
+                         class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                         @onclick:stopPropagation />
+                }
+                else if (MediaType?.StartsWith("video/") == true)
+                {
+                    <!-- Video Player -->
+                    <video controls
+                           class="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
+                           @onclick:stopPropagation>
+                        <source src="@MediaUrl" type="@MediaType" />
+                        Your browser does not support the video tag.
+                    </video>
+                }
+                else if (MediaType?.StartsWith("audio/") == true)
+                {
+                    <!-- Audio Player -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl"
+                         @onclick:stopPropagation>
+                        <div class="flex items-center gap-4 mb-4">
+                            <i class="fas fa-file-audio text-4xl text-primary"></i>
+                            <div>
+                                <div class="text-lg font-semibold text-gray-900 dark:text-white">@FileName</div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400">Audio File</div>
+                            </div>
+                        </div>
+                        <audio controls class="w-full">
+                            <source src="@MediaUrl" type="@MediaType" />
+                            Your browser does not support the audio tag.
+                        </audio>
+                    </div>
+                }
+                else if (MediaType == "application/pdf")
+                {
+                    <!-- PDF Viewer -->
+                    <div class="w-full h-full max-w-6xl max-h-[90vh] bg-white rounded-lg shadow-2xl overflow-hidden"
+                         @onclick:stopPropagation>
+                        <div class="bg-gray-100 px-4 py-3 border-b flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-file-pdf text-red-500 text-xl"></i>
+                                <span class="font-semibold text-gray-900">@FileName</span>
+                            </div>
+                        </div>
+                        <iframe src="@MediaUrl"
+                                class="w-full h-full"
+                                style="height: calc(90vh - 52px);"
+                                frameborder="0">
+                        </iframe>
+                    </div>
+                }
+                else
+                {
+                    <!-- Generic File Preview -->
+                    <div class="bg-white dark:bg-gray-800 p-12 rounded-lg shadow-2xl text-center"
+                         @onclick:stopPropagation>
+                        <i class="fas fa-file text-6xl text-primary mb-4"></i>
+                        <div class="text-xl font-semibold text-gray-900 dark:text-white mb-2">@FileName</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400 mb-6">@MediaType</div>
+                        <button @onclick="Download"
+                                class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors">
+                            <i class="fas fa-download mr-2"></i>
+                            Download File
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <!-- File Info Overlay -->
+            <div class="absolute bottom-4 left-4 right-4 bg-black bg-opacity-50 text-white px-6 py-3 rounded-lg backdrop-blur-sm">
+                <div class="font-semibold">@FileName</div>
+                @if (!string.IsNullOrEmpty(FileSize))
+                {
+                    <div class="text-sm text-gray-300 mt-1">@FileSize</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string? MediaUrl { get; set; }
+    [Parameter] public string? MediaType { get; set; }
+    [Parameter] public string? FileName { get; set; }
+    [Parameter] public string? FileSize { get; set; }
+    [Parameter] public bool HasMultipleItems { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnPrevious { get; set; }
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnDownload { get; set; }
+
+    private async Task Close()
+    {
+        IsVisible = false;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task Previous()
+    {
+        await OnPrevious.InvokeAsync();
+    }
+
+    private async Task Next()
+    {
+        await OnNext.InvokeAsync();
+    }
+
+    private async Task Download()
+    {
+        if (!string.IsNullOrEmpty(MediaUrl))
+        {
+            await OnDownload.InvokeAsync();
+            await JS.InvokeVoidAsync("open", MediaUrl, "_blank");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Handle keyboard navigation
+        if (IsVisible)
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        document.querySelector('[data-modal-close]')?.click();
+                    } else if (e.key === 'ArrowLeft') {
+                        document.querySelector('[data-modal-prev]')?.click();
+                    } else if (e.key === 'ArrowRight') {
+                        document.querySelector('[data-modal-next]')?.click();
+                    }
+                });
+            ");
+        }
+    }
+}

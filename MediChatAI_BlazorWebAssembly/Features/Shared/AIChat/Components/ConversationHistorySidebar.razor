@@ -1,0 +1,150 @@
+@using MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.DTOs
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+@implements IDisposable
+
+<div class="@(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") border-r h-full flex flex-col">
+    <!-- Header -->
+    <div class="p-4 border-b @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold @(IsDarkMode ? "text-white" : "text-gray-900") flex items-center gap-2">
+                <i class="fas fa-history text-primary"></i>
+                History
+            </h2>
+            <button @onclick="@OnNewChat"
+                    class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-primary to-accent text-white text-sm font-semibold hover:shadow-lg transition-all hover:scale-105">
+                <i class="fas fa-plus mr-1"></i>
+                New
+            </button>
+        </div>
+
+        <!-- Search -->
+        <div class="relative">
+            <input type="text"
+                   @bind="searchQuery"
+                   @bind:event="oninput"
+                   placeholder="Search conversations..."
+                   class="w-full pl-10 pr-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-gray-50 text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary text-sm" />
+            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 @(IsDarkMode ? "text-gray-400" : "text-gray-500") text-sm"></i>
+        </div>
+    </div>
+
+    <!-- Conversations List -->
+    <div class="flex-1 overflow-y-auto p-2 space-y-2">
+        @if (IsLoading)
+        {
+            @for (int i = 0; i < 5; i++)
+            {
+                <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-100") rounded-lg p-4 animate-pulse">
+                    <div class="h-4 @(IsDarkMode ? "bg-gray-600" : "bg-gray-200") rounded mb-2"></div>
+                    <div class="h-3 @(IsDarkMode ? "bg-gray-600" : "bg-gray-200") rounded w-2/3"></div>
+                </div>
+            }
+        }
+        else if (!FilteredConversations.Any())
+        {
+            <div class="text-center py-12">
+                <div class="w-16 h-16 rounded-full @(IsDarkMode ? "bg-gray-700" : "bg-gray-100") flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-comments @(IsDarkMode ? "text-gray-500" : "text-gray-400") text-2xl"></i>
+                </div>
+                <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") font-semibold mb-1">
+                    No conversations yet
+                </p>
+                <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500")">
+                    Start a new chat to begin
+                </p>
+            </div>
+        }
+        else
+        {
+            @foreach (var conversation in FilteredConversations)
+            {
+                <button @onclick="@(() => OnLoadConversation.InvokeAsync(conversation.Id))"
+                        class="w-full group p-4 rounded-lg @(IsDarkMode ? "bg-gray-700/50 hover:bg-gray-700 border border-gray-600" : "bg-gray-50 hover:bg-gray-100 border border-gray-200") transition-all text-left">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                            <i class="fas fa-comment-medical text-white text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-sm font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-1 truncate group-hover:text-primary transition-colors">
+                                @conversation.Title
+                            </h3>
+                            @if (!string.IsNullOrEmpty(conversation.Summary))
+                            {
+                                <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-2 line-clamp-2">
+                                    @conversation.Summary
+                                </p>
+                            }
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") flex items-center gap-1">
+                                    <i class="fas fa-message text-xs"></i>
+                                    @conversation.MessageCount
+                                </span>
+                                <span class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500")">
+                                    @GetRelativeTime(conversation.LastMessageAt)
+                                </span>
+                            </div>
+                        </div>
+                        <button @onclick="@(() => OnDeleteConversation.InvokeAsync(conversation.Id))"
+                                @onclick:stopPropagation="true"
+                                class="opacity-0 group-hover:opacity-100 flex-shrink-0 w-8 h-8 rounded-lg @(IsDarkMode ? "hover:bg-red-900/30 text-red-400" : "hover:bg-red-50 text-red-600") flex items-center justify-center transition-all">
+                            <i class="fas fa-trash text-xs"></i>
+                        </button>
+                    </div>
+                </button>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<SavedConversationDto> Conversations { get; set; } = new();
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public EventCallback<string> OnLoadConversation { get; set; }
+    [Parameter] public EventCallback<string> OnDeleteConversation { get; set; }
+    [Parameter] public EventCallback OnNewChat { get; set; }
+
+    private string searchQuery = string.Empty;
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    private List<SavedConversationDto> FilteredConversations =>
+        string.IsNullOrWhiteSpace(searchQuery)
+            ? Conversations
+            : Conversations.Where(c =>
+                c.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                (c.Summary?.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetRelativeTime(DateTime dateTime)
+    {
+        var timeSpan = DateTime.UtcNow - dateTime;
+
+        if (timeSpan.TotalMinutes < 1)
+            return "Just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours}h ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays}d ago";
+        if (timeSpan.TotalDays < 30)
+            return $"{(int)(timeSpan.TotalDays / 7)}w ago";
+
+        return dateTime.ToLocalTime().ToString("MMM dd");
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}

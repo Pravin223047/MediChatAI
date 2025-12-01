@@ -1,0 +1,384 @@
+@namespace MediChatAI_BlazorWebAssembly.Features.Shared.Media
+@inject IJSRuntime JSRuntime
+@using System.Timers
+@implements IDisposable
+
+<div class="voice-recorder @GetThemeClasses()">
+    @if (!isRecording && recordedAudioUrl == null)
+    {
+        <!-- Record Button -->
+        <button @onclick="StartRecording"
+                class="@GetRecordButtonClasses()"
+                title="Record voice message"
+                disabled="@isProcessing">
+            <i class="fas fa-microphone text-xl"></i>
+            @if (isProcessing)
+            {
+                <span class="ml-2 text-sm">Initializing...</span>
+            }
+        </button>
+    }
+    else if (isRecording)
+    {
+        <!-- Recording UI -->
+        <div class="flex items-center gap-3 p-4 @GetRecordingContainerClasses()">
+            <!-- Animated Recording Indicator -->
+            <div class="recording-pulse"></div>
+
+            <!-- Timer -->
+            <div class="text-lg font-mono @GetTimerClasses()">
+                @FormatTime(recordingDuration)
+            </div>
+
+            <!-- Stop Button -->
+            <button @onclick="StopRecording"
+                    class="@GetStopButtonClasses()"
+                    title="Stop recording">
+                <i class="fas fa-stop"></i>
+            </button>
+
+            <!-- Cancel Button -->
+            <button @onclick="CancelRecording"
+                    class="@GetCancelButtonClasses()"
+                    title="Cancel recording">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    }
+    else if (recordedAudioUrl != null)
+    {
+        <!-- Playback UI -->
+        <div class="flex items-center gap-3 p-3 @GetPlaybackContainerClasses()">
+            <!-- Play/Pause Button -->
+            <button @onclick="TogglePlayback"
+                    class="@GetPlayButtonClasses()"
+                    title="@(isPlaying ? "Pause" : "Play")">
+                <i class="fas fa-@(isPlaying ? "pause" : "play")"></i>
+            </button>
+
+            <!-- Waveform/Progress Bar -->
+            <div class="flex-1">
+                <div class="@GetProgressBarContainerClasses()">
+                    <div class="@GetProgressBarClasses()"
+                         style="width: @(playbackProgress)%"></div>
+                </div>
+                <div class="text-xs @GetDurationTextClasses() mt-1">
+                    @FormatTime(currentPlaybackTime) / @FormatTime(recordingDuration)
+                </div>
+            </div>
+
+            <!-- Send Button -->
+            <button @onclick="SendVoiceMessage"
+                    class="@GetSendVoiceButtonClasses()"
+                    disabled="@isSending"
+                    title="Send voice message">
+                @if (isSending)
+                {
+                    <i class="fas fa-spinner fa-spin"></i>
+                }
+                else
+                {
+                    <i class="fas fa-paper-plane"></i>
+                }
+            </button>
+
+            <!-- Delete Button -->
+            <button @onclick="DeleteRecording"
+                    class="@GetDeleteButtonClasses()"
+                    title="Delete recording"
+                    disabled="@isSending">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+
+        <!-- Hidden Audio Element -->
+        <audio @ref="audioElement" src="@recordedAudioUrl" @ontimeupdate="OnTimeUpdate"></audio>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback<(string audioUrl, int durationSeconds)> OnVoiceMessageReady { get; set; }
+
+    [Parameter]
+    public string ThemeMode { get; set; } = "light";
+
+    private ElementReference audioElement;
+    private bool isRecording = false;
+    private bool isPlaying = false;
+    private bool isProcessing = false;
+    private bool isSending = false;
+    private string? recordedAudioUrl = null;
+    private int recordingDuration = 0; // in seconds
+    private int currentPlaybackTime = 0;
+    private double playbackProgress = 0;
+    private Timer? recordingTimer;
+    private DotNetObjectReference<VoiceRecorder>? objRef;
+
+    protected override void OnInitialized()
+    {
+        objRef = DotNetObjectReference.Create(this);
+    }
+
+    private async Task StartRecording()
+    {
+        try
+        {
+            isProcessing = true;
+            StateHasChanged();
+
+            var hasPermission = await JSRuntime.InvokeAsync<bool>("voiceRecorder.checkMicrophonePermission");
+
+            if (!hasPermission)
+            {
+                isProcessing = false;
+                StateHasChanged();
+                return;
+            }
+
+            await JSRuntime.InvokeVoidAsync("voiceRecorder.startRecording", objRef);
+
+            isRecording = true;
+            isProcessing = false;
+            recordingDuration = 0;
+
+            // Start timer
+            recordingTimer = new Timer(1000);
+            recordingTimer.Elapsed += OnRecordingTimerElapsed;
+            recordingTimer.Start();
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error starting recording: {ex.Message}");
+            isProcessing = false;
+            isRecording = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopRecording()
+    {
+        try
+        {
+            recordingTimer?.Stop();
+            recordingTimer?.Dispose();
+            recordingTimer = null;
+
+            var audioDataUrl = await JSRuntime.InvokeAsync<string>("voiceRecorder.stopRecording");
+
+            if (!string.IsNullOrEmpty(audioDataUrl))
+            {
+                recordedAudioUrl = audioDataUrl;
+            }
+
+            isRecording = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error stopping recording: {ex.Message}");
+            isRecording = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CancelRecording()
+    {
+        recordingTimer?.Stop();
+        recordingTimer?.Dispose();
+        recordingTimer = null;
+
+        JSRuntime.InvokeVoidAsync("voiceRecorder.cancelRecording");
+
+        isRecording = false;
+        recordingDuration = 0;
+        StateHasChanged();
+    }
+
+    private async Task TogglePlayback()
+    {
+        try
+        {
+            if (isPlaying)
+            {
+                await JSRuntime.InvokeVoidAsync("voiceRecorder.pauseAudio", audioElement);
+                isPlaying = false;
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("voiceRecorder.playAudio", audioElement);
+                isPlaying = true;
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error toggling playback: {ex.Message}");
+        }
+    }
+
+    private async Task OnTimeUpdate()
+    {
+        try
+        {
+            var currentTime = await JSRuntime.InvokeAsync<double>("voiceRecorder.getCurrentTime", audioElement);
+            var duration = await JSRuntime.InvokeAsync<double>("voiceRecorder.getDuration", audioElement);
+
+            currentPlaybackTime = (int)currentTime;
+
+            if (duration > 0)
+            {
+                playbackProgress = (currentTime / duration) * 100;
+            }
+
+            // Check if audio ended
+            if (currentTime >= duration && duration > 0)
+            {
+                isPlaying = false;
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating time: {ex.Message}");
+        }
+    }
+
+    private async Task SendVoiceMessage()
+    {
+        if (recordedAudioUrl == null) return;
+
+        try
+        {
+            isSending = true;
+            StateHasChanged();
+
+            // Notify parent component
+            await OnVoiceMessageReady.InvokeAsync((recordedAudioUrl, recordingDuration));
+
+            // Reset component
+            DeleteRecording();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending voice message: {ex.Message}");
+        }
+        finally
+        {
+            isSending = false;
+            StateHasChanged();
+        }
+    }
+
+    private void DeleteRecording()
+    {
+        if (recordedAudioUrl != null)
+        {
+            JSRuntime.InvokeVoidAsync("voiceRecorder.revokeObjectURL", recordedAudioUrl);
+        }
+
+        recordedAudioUrl = null;
+        recordingDuration = 0;
+        currentPlaybackTime = 0;
+        playbackProgress = 0;
+        isPlaying = false;
+        isSending = false;
+        StateHasChanged();
+    }
+
+    private void OnRecordingTimerElapsed(object? sender, ElapsedEventArgs e)
+    {
+        recordingDuration++;
+
+        // Auto-stop at 5 minutes
+        if (recordingDuration >= 300)
+        {
+            InvokeAsync(StopRecording);
+        }
+        else
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public void OnRecordingError(string error)
+    {
+        Console.WriteLine($"Recording error: {error}");
+        CancelRecording();
+    }
+
+    private string FormatTime(int seconds)
+    {
+        var minutes = seconds / 60;
+        var secs = seconds % 60;
+        return $"{minutes:D2}:{secs:D2}";
+    }
+
+    // Theme-aware CSS classes
+    private string GetThemeClasses() =>
+        ThemeMode == "dark" ? "dark" : "";
+
+    private string GetRecordButtonClasses() =>
+        $"flex items-center gap-2 px-4 py-2 rounded-full transition-all " +
+        $"{(ThemeMode == "dark" ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-blue-500 hover:bg-blue-600 text-white")} " +
+        $"disabled:opacity-50 disabled:cursor-not-allowed";
+
+    private string GetRecordingContainerClasses() =>
+        $"rounded-lg border-2 " +
+        $"{(ThemeMode == "dark" ? "bg-gray-800 border-red-600" : "bg-red-50 border-red-500")}";
+
+    private string GetTimerClasses() =>
+        ThemeMode == "dark" ? "text-red-400" : "text-red-600";
+
+    private string GetStopButtonClasses() =>
+        $"px-4 py-2 rounded-full transition-all " +
+        $"{(ThemeMode == "dark" ? "bg-red-600 hover:bg-red-700 text-white" : "bg-red-500 hover:bg-red-600 text-white")}";
+
+    private string GetCancelButtonClasses() =>
+        $"px-4 py-2 rounded-full transition-all " +
+        $"{(ThemeMode == "dark" ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-300 hover:bg-gray-400 text-gray-800")}";
+
+    private string GetPlaybackContainerClasses() =>
+        $"rounded-lg border " +
+        $"{(ThemeMode == "dark" ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-300")}";
+
+    private string GetPlayButtonClasses() =>
+        $"w-10 h-10 rounded-full flex items-center justify-center transition-all " +
+        $"{(ThemeMode == "dark" ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-blue-500 hover:bg-blue-600 text-white")}";
+
+    private string GetProgressBarContainerClasses() =>
+        $"h-2 rounded-full overflow-hidden " +
+        $"{(ThemeMode == "dark" ? "bg-gray-700" : "bg-gray-200")}";
+
+    private string GetProgressBarClasses() =>
+        $"h-full transition-all duration-300 " +
+        $"{(ThemeMode == "dark" ? "bg-blue-500" : "bg-blue-600")}";
+
+    private string GetDurationTextClasses() =>
+        ThemeMode == "dark" ? "text-gray-400" : "text-gray-600";
+
+    private string GetSendVoiceButtonClasses() =>
+        $"px-4 py-2 rounded-full transition-all " +
+        $"{(ThemeMode == "dark" ? "bg-green-600 hover:bg-green-700 text-white" : "bg-green-500 hover:bg-green-600 text-white")} " +
+        $"disabled:opacity-50 disabled:cursor-not-allowed";
+
+    private string GetDeleteButtonClasses() =>
+        $"px-4 py-2 rounded-full transition-all " +
+        $"{(ThemeMode == "dark" ? "bg-red-600 hover:bg-red-700 text-white" : "bg-red-500 hover:bg-red-600 text-white")} " +
+        $"disabled:opacity-50 disabled:cursor-not-allowed";
+
+    public void Dispose()
+    {
+        recordingTimer?.Dispose();
+        objRef?.Dispose();
+
+        if (recordedAudioUrl != null)
+        {
+            JSRuntime.InvokeVoidAsync("voiceRecorder.revokeObjectURL", recordedAudioUrl);
+        }
+    }
+}

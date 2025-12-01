@@ -1,0 +1,166 @@
+@if (IsVisible)
+{
+    <div class="fixed top-4 right-4 z-50 call-notification">
+        <div class="@(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") border rounded-lg shadow-2xl p-4 min-w-[320px]">
+            <!-- Header -->
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 call-avatar">
+                    @if (!string.IsNullOrEmpty(CallerImage))
+                    {
+                        <img src="@CallerImage" alt="@CallerName" class="w-full h-full object-cover profile-image" data-initials="@GetInitials(CallerName)" onerror="window.handleImageError(this, '@GetInitials(CallerName)')" />
+                    }
+                    else
+                    {
+                        <div class="w-full h-full message-avatar-fallback rounded-full">
+                            <span class="text-sm font-semibold">@GetInitials(CallerName)</span>
+                        </div>
+                    }
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">@CallerName</h3>
+                    <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                        Incoming @(IsVideoCall ? "video" : "voice") call...
+                    </p>
+                </div>
+                <div class="flex items-center">
+                    @if (IsVideoCall)
+                    {
+                        <i class="fas fa-video text-blue-500 text-lg"></i>
+                    }
+                    else
+                    {
+                        <i class="fas fa-phone text-green-500 text-lg"></i>
+                    }
+                </div>
+            </div>
+
+            <!-- Call Controls -->
+            <div class="flex gap-3 justify-center">
+                <!-- Reject Button -->
+                <button @onclick="RejectCall"
+                        class="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all transform hover:scale-110 shadow-lg">
+                    <i class="fas fa-phone-slash text-lg"></i>
+                </button>
+
+                <!-- Accept Button -->
+                <button @onclick="AcceptCall"
+                        class="w-12 h-12 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center transition-all transform hover:scale-110 shadow-lg">
+                    <i class="fas fa-phone text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Auto-dismiss timer -->
+            <div class="mt-3">
+                <div class="w-full bg-gray-200 rounded-full h-1">
+                    <div class="bg-red-500 h-1 rounded-full transition-all duration-1000" style="width: @(timeoutProgress)%"></div>
+                </div>
+                <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400") text-center mt-1">
+                    Auto-reject in @remainingSeconds seconds
+                </p>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .animate-slide-in {
+        animation: slideIn 0.3s ease-out;
+    }
+
+    @@keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+</style>
+
+@implements IDisposable
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string CallerName { get; set; } = string.Empty;
+    [Parameter] public string CallerImage { get; set; } = string.Empty;
+    [Parameter] public bool IsVideoCall { get; set; }
+    [Parameter] public bool IsDarkMode { get; set; }
+    [Parameter] public EventCallback OnAccept { get; set; }
+    [Parameter] public EventCallback OnReject { get; set; }
+
+    private System.Timers.Timer? timeoutTimer;
+    private int remainingSeconds = 30;
+    private double timeoutProgress = 0;
+
+    protected override void OnParametersSet()
+    {
+        if (IsVisible && timeoutTimer == null)
+        {
+            StartTimeout();
+        }
+        else if (!IsVisible && timeoutTimer != null)
+        {
+            StopTimeout();
+        }
+    }
+
+    private void StartTimeout()
+    {
+        remainingSeconds = 30;
+        timeoutProgress = 0;
+        
+        timeoutTimer = new System.Timers.Timer(1000);
+        timeoutTimer.Elapsed += async (s, e) =>
+        {
+            remainingSeconds--;
+            timeoutProgress = ((30 - remainingSeconds) / 30.0) * 100;
+
+            if (remainingSeconds <= 0)
+            {
+                await RejectCall();
+            }
+            else
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        };
+        timeoutTimer.Start();
+    }
+
+    private void StopTimeout()
+    {
+        timeoutTimer?.Stop();
+        timeoutTimer?.Dispose();
+        timeoutTimer = null;
+        remainingSeconds = 30;
+        timeoutProgress = 0;
+    }
+
+    private async Task AcceptCall()
+    {
+        StopTimeout();
+        await OnAccept.InvokeAsync();
+    }
+
+    private async Task RejectCall()
+    {
+        StopTimeout();
+        await OnReject.InvokeAsync();
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+    }
+
+    public void Dispose()
+    {
+        StopTimeout();
+    }
+}

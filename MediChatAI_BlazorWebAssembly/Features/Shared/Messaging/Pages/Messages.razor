@@ -1,0 +1,2643 @@
+@page "/patient/messages"
+@page "/doctor/messages"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Services
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Components
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@using System.Security.Claims
+@using ServiceDtos = MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.DTOs
+@using MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.Components
+@using MediChatAI_BlazorWebAssembly.Features.Shared.Media
+@using SharedDtos = MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.DTOs
+@using SharedComponents = MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.Components
+@using PatientDtos = MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using PatientComponents = MediChatAI_BlazorWebAssembly.Features.Patient.Components
+@using FileAttachment = MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.Components.FilePreviewGrid.FileAttachment
+@using SummaryStats = MediChatAI_BlazorWebAssembly.Features.Patient.Components.ConversationSummaryModal.SummaryStats
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ThemeState ThemeState
+@inject IMessagingService MessagingService
+@inject ISmartReplyService SmartReplyService
+@inject IMedicalTermService MedicalTermService
+@inject IToastService ToastService
+@inject ILogger<Messages> Logger
+
+<PageTitle>Messages - MediChat AI</PageTitle>
+
+<div class="@(IsDarkMode ? "bg-gray-900" : "bg-gray-50") min-h-screen flex flex-col">
+    <div class="flex-1 flex flex-col p-4">
+        <!-- Header -->
+        <div class="mb-4 flex-shrink-0">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                        <i class="fas fa-comments text-primary mr-3"></i>Messages
+                    </h1>
+                    <p class="mt-2 @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                        @if (UserRole == "Patient")
+                        {
+                            <text>Chat with your healthcare providers</text>
+                        }
+                        else
+                        {
+                            <text>Chat with your patients</text>
+                        }
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <!-- Search Button -->
+                    <button @onclick="OpenSearchModal"
+                            class="flex items-center gap-2 px-4 py-2 @(IsDarkMode ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-500 hover:bg-blue-600") text-white rounded-lg transition-colors">
+                        <i class="fas fa-search"></i>
+                        <span class="hidden sm:inline">Search</span>
+                    </button>
+
+                    @if (UserRole == "Patient")
+                    {
+                        <!-- Summarize Button (Patient Only) -->
+                        <button @onclick="GenerateConversationSummary"
+                                disabled="@(!currentMessages.Any())"
+                                class="flex items-center gap-2 px-4 py-2 @(IsDarkMode ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-500 hover:bg-purple-600") text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-magic"></i>
+                            <span class="hidden sm:inline">Summarize</span>
+                        </button>
+                    }
+
+                    @if (hubConnection?.State == HubConnectionState.Connected)
+                    {
+                        <div class="flex items-center gap-2 px-3 py-2 rounded-lg @(IsDarkMode ? "bg-green-900/30" : "bg-green-50")">
+                            <span class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                            </span>
+                            <span class="text-sm font-medium text-green-600 dark:text-green-400">Connected</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="flex items-center gap-2 px-3 py-2 rounded-lg @(IsDarkMode ? "bg-gray-800" : "bg-gray-100")">
+                            <span class="relative flex h-3 w-3">
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-gray-400"></span>
+                            </span>
+                            <span class="text-sm font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-600")">Connecting...</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-xl shadow-lg overflow-hidden flex-1 flex flex-col">
+            <div class="grid grid-cols-12 h-full">
+                <!-- Conversations Sidebar -->
+                <ConversationSidebar Conversations="@ConvertToSharedConversations(filteredConversations)"
+                                     SelectedConversationId="@(selectedConversation != null ? Guid.Parse(selectedConversation.Id) : null)"
+                                     @bind-SearchQuery="searchQuery"
+                                     IsDarkMode="@IsDarkMode"
+                                     OnConversationSelected="SelectSharedConversation" />
+
+                <!-- Chat Area -->
+                <div class="col-span-12 md:col-span-8 lg:col-span-9 flex flex-col">
+                    @if (selectedConversation != null)
+                    {
+                        <!-- Chat Header -->
+                        <div class="flex-shrink-0">
+                            <ChatHeader PartnerName="@selectedConversation.DoctorName"
+                                        PartnerImage="@selectedConversation.DoctorImage"
+                                        PartnerSpecialty="@selectedConversation.Specialty"
+                                        IsOnline="@selectedConversation.IsOnline"
+                                        ShowAiAssistant="@(UserRole == "Patient" && showAiAssistant)"
+                                        IsDarkMode="@IsDarkMode"
+                                        IsTyping="@selectedConversation.IsTyping"
+                                        IsAttaching="@selectedConversation.IsAttaching"
+                                        OnAiToggle="HandleAiToggle"
+                                        OnScheduleAppointment="HandleScheduleAppointment"
+                                        OnVideoCall="StartVideoCall"
+                                        OnVoiceCall="StartVoiceCall" />
+                        </div>
+
+                        <!-- Messages Area -->
+                        <div @ref="messagesContainer" class="overflow-y-auto p-4 space-y-4 @(IsDarkMode ? "bg-gray-900" : "bg-gray-50") h-[500px]" style="scroll-behavior: smooth;">
+                            @if (isLoadingMessages)
+                            {
+                                <HeartRateLoader IsDarkMode="@IsDarkMode" />
+                            }
+                            else
+                            {
+                                @foreach (var message in currentMessages)
+                                {
+                                    var messageBubbleData = ConvertToSharedMessage(message);
+                                    <div id="message-@message.Id">
+                                        <MessageBubble Message="@messageBubbleData"
+                                                       IsSentByCurrentUser="@(message.IsSentByMe)"
+                                                       PartnerImage="@selectedConversation.DoctorImage"
+                                                       PartnerName="@selectedConversation.DoctorName"
+                                                       IsDarkMode="@IsDarkMode"
+                                                       IsEditing="@(editingMessageId == message.Id)"
+                                                       EditingContent="@editingContent"
+                                                       ShowEmojiPicker="@(selectedMessageIdForReaction == message.Id)"
+                                                       OnEdit="@(() => StartEdit(message.Id))"
+                                                       OnSaveEdit="@(() => SaveEdit(message.Id))"
+                                                       OnCancelEdit="CancelEdit"
+                                                       OnDelete="@(() => ShowDeleteConfirmation(message.Id))"
+                                                       OnReply="@(() => StartReply(message))"
+                                                       OnReplyClick="@((messageId) => ScrollToMessage(messageId))"
+                                                       OnToggleReaction="@((reactionData) => HandleToggleReaction(message.Id, reactionData.Emoji, reactionData.UserReacted))"
+                                                       OnToggleEmojiPicker="@(() => ToggleEmojiPicker(message.Id))"
+                                                       OnAttachmentClick="@((url) => OpenAttachmentPreview(url))">
+                                            <EmojiPickerContent>
+                                                @if (showEmojiPicker && selectedMessageIdForReaction == message.Id)
+                                                {
+                                                    <MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.Components.EmojiPicker IsVisible="@showEmojiPicker"
+                                                                 IsDarkMode="@IsDarkMode"
+                                                                 Position="@(message.IsSentByMe ? "bottom-0 right-0 mt-2" : "bottom-0 left-0 mt-2")"
+                                                                 OnEmojiSelected="@((emoji) => HandleEmojiSelected(message.Id, emoji))"
+                                                                 OnClose="@CloseEmojiPicker" />
+                                                }
+                                            </EmojiPickerContent>
+                                        </MessageBubble>
+                                    </div>
+                                }
+
+                                <TypingIndicator IsVisible="@selectedConversation.IsTyping"
+                                                 PartnerImage="@selectedConversation.DoctorImage"
+                                                 PartnerName="@selectedConversation.DoctorName"
+                                                 IsDarkMode="@IsDarkMode"
+                                                 IsAttaching="@selectedConversation.IsAttaching" />
+                            }
+                        </div>
+
+                        <!-- Message Input -->
+                        <div class="flex-shrink-0 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                            <MessageInput Message="@newMessage"
+                                      MessageChanged="@((value) => newMessage = value)"
+                                      IsSending="@isSendingMessage"
+                                      IsDarkMode="@IsDarkMode"
+                                      HasSelectedConversation="@(selectedConversation != null)"
+                                      HasFiles="@selectedFiles.Any()"
+                                      ReplyToMessage="@replyToMessage"
+                                      OnSend="SendMessage"
+                                      OnOpenFileSelector="OpenFileSelector"
+                                      OnKeyDown="HandleKeyDown"
+                                      OnTyping="HandleTyping"
+                                      OnClearReply="ClearReply">
+                            <SmartReplyPanelContent>
+                                <MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.Components.SmartReplyPanel Suggestions="@smartReplySuggestions"
+                                                 IsVisible="@showSmartReplies"
+                                                 IsDarkMode="@IsDarkMode"
+                                                 OnReplySelected="HandleSmartReply" />
+                            </SmartReplyPanelContent>
+                            <FilePreviewContent>
+                                <FilePreviewGrid Files="@selectedFiles"
+                                                 IsDarkMode="@IsDarkMode"
+                                                 OnRemoveFile="@RemoveFile" />
+                            </FilePreviewContent>
+                            <VoiceRecorderContent>
+                                <MediChatAI_BlazorWebAssembly.Features.Shared.Media.VoiceRecorder OnVoiceMessageReady="HandleVoiceMessage"
+                                               ThemeMode="@(IsDarkMode ? "dark" : "light")" />
+                            </VoiceRecorderContent>
+                        </MessageInput>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Empty State -->
+                        <div class="flex-1 flex items-center justify-center @(IsDarkMode ? "bg-gray-900" : "bg-gray-50")">
+                            <div class="text-center">
+                                <i class="fas fa-comments text-6xl @(IsDarkMode ? "text-gray-700" : "text-gray-300") mb-4"></i>
+                                <h3 class="text-xl font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Select a conversation
+                                </h3>
+                                <p class="@(IsDarkMode ? "text-gray-500" : "text-gray-500")">
+                                    @if (UserRole == "Patient")
+                                    {
+                                        <text>Choose a doctor from the list to start messaging</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Choose a patient from the list to start messaging</text>
+                                    }
+                                </p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden File Input -->
+<InputFile @ref="fileInput" OnChange="HandleFileSelection" multiple hidden />
+
+<!-- Enhanced Attachment Preview Modal -->
+<AttachmentPreviewModal IsVisible="@showMediaPreview"
+                        AttachmentUrl="@previewMediaUrl"
+                        AttachmentFileName="@previewFileName"
+                        OnClose="CloseMediaPreview" />
+
+<!-- Message Search Modal -->
+<MessageSearchModal @ref="searchModal"
+                    IsVisible="@showSearchModal"
+                    IsDarkMode="@IsDarkMode"
+                    OnClose="CloseSearchModal"
+                    OnResultClick="HandleSearchResultClick"
+                    OnSearch="HandleSearch" />
+
+@if (UserRole == "Patient")
+{
+    <!-- Conversation Summary Modal (Patient Only) -->
+    <ConversationSummaryModal IsVisible="@showSummaryModal"
+                              Summary="@conversationSummary"
+                              Stats="@summaryStats"
+                              IsGenerating="@isGeneratingSummary"
+                              IsDarkMode="@IsDarkMode"
+                              OnClose="CloseSummaryModal" />
+
+    <!-- Appointment Scheduling Modal (Patient Only) -->
+    <AppointmentSchedulerModal IsVisible="@showAppointmentScheduler"
+                               DoctorName="@selectedConversation?.DoctorName"
+                               DoctorImage="@selectedConversation?.DoctorImage"
+                               DoctorSpecialty="@selectedConversation?.Specialty"
+                               AppointmentDate="@appointmentDate"
+                               AppointmentDateChanged="@((value) => appointmentDate = value)"
+                               AppointmentTime="@appointmentTime.ToTimeSpan()"
+                               AppointmentTimeChanged="@((value) => appointmentTime = TimeOnly.FromTimeSpan(value))"
+                               AppointmentReason="@appointmentReason"
+                               AppointmentReasonChanged="@((value) => appointmentReason = value)"
+                               AppointmentType="@appointmentType"
+                               AppointmentTypeChanged="@((value) => appointmentType = value)"
+                               IsDarkMode="@IsDarkMode"
+                               OnClose="CloseAppointmentScheduler"
+                               OnSubmit="SubmitAppointmentRequest" />
+
+    <!-- AI Assistant Panel (Patient Only) -->
+    <MediChatAI_BlazorWebAssembly.Features.Patient.Components.AiAssistantPanel @ref="aiAssistantPanel"
+                      IsVisible="@showAiAssistant"
+                      IsDarkMode="@IsDarkMode"
+                      UserId="@patientId"
+                      OnClose="CloseAiAssistant"
+                      OnActionClick="HandleAiAction" />
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteConfirmation)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i>
+                <h3 class="text-lg font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">Delete Message?</h3>
+            </div>
+            <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-600") mb-6">
+                Are you sure you want to delete this message? This action cannot be undone.
+            </p>
+            <div class="flex gap-3 justify-end">
+                <button @onclick="CancelDelete"
+                        class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmDelete"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Call Notification Toast -->
+<MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.Components.CallNotificationToast 
+                IsVisible="@showCallNotification"
+                CallerName="@incomingCallerName"
+                CallerImage="@incomingCallerImage"
+                IsVideoCall="@incomingIsVideoCall"
+                IsDarkMode="@IsDarkMode"
+                OnAccept="AcceptIncomingCall"
+                OnReject="RejectIncomingCall" />
+
+<!-- Video Call Modal -->
+<MediChatAI_BlazorWebAssembly.Features.Patient.Components.VideoCallModal @ref="videoCallModal"
+                IsVisible="@isCallActive"
+                PartnerId="@callPartnerId"
+                PartnerName="@callPartnerName"
+                PartnerImage="@GetPartnerImage(callPartnerId)"
+                IsVideoCall="@isVideoCall"
+                CallState="@callState"
+                IsDarkMode="@IsDarkMode"
+                OnCallAccepted="HandleCallAccepted"
+                OnCallRejected="HandleCallRejected"
+                OnCallEnded="HandleCallEnded"
+                OnIceCandidateGenerated="HandleIceCandidateGenerated"
+                OnOfferCreated="HandleOfferCreated"
+                OnAnswerCreated="HandleAnswerCreated" />
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+    private string UserRole { get; set; } = "Patient"; // Default to Patient, will be set in OnInitializedAsync
+
+    private HubConnection? hubConnection;
+    private ElementReference messagesContainer;
+    private InputFile? fileInput;
+
+    private string searchQuery = "";
+    private string newMessage = "";
+    private bool isSendingMessage = false;
+    private string? patientId;
+    private System.Timers.Timer? typingTimer;
+    private bool isUserTyping = false;
+
+    private List<ConversationDto> allConversations = new();
+    private List<ConversationDto> filteredConversations = new();
+    private ConversationDto? selectedConversation;
+    private List<MessageDto> currentMessages = new();
+    private List<FileAttachment> selectedFiles = new();
+
+    // Media preview state
+    private bool showMediaPreview = false;
+    private string? previewMediaUrl;
+    private string? previewMediaType;
+    private string? previewFileName;
+    private string? previewFileSize;
+
+    // Emoji picker state
+    private bool showEmojiPicker = false;
+    private string? selectedMessageIdForReaction;
+
+    // Search state
+    private bool showSearchModal = false;
+    private MessageSearchModal? searchModal;
+
+    // Summary state (Patient only)
+    private bool showSummaryModal = false;
+    private bool isGeneratingSummary = false;
+    private string conversationSummary = "";
+    private SummaryStats summaryStats = new();
+
+    // Appointment scheduling state (Patient only)
+    private bool showAppointmentScheduler = false;
+    private DateTime appointmentDate = DateTime.Now;
+    private TimeOnly appointmentTime = new TimeOnly(9, 0);
+    private string appointmentReason = "";
+    private string appointmentType = "Teleconsultation";
+
+    // Edit/Delete state
+    private string? editingMessageId;
+    private string editingContent = "";
+    private bool showDeleteConfirmation = false;
+    private string? messageToDelete;
+
+    // Video/Voice Call state
+    private PatientComponents.VideoCallModal? videoCallModal;
+    private bool isCallActive = false;
+    private string callPartnerId = "";
+    private string callPartnerName = "";
+    private bool isVideoCall = false;
+    private PatientComponents.VideoCallModal.CallStatus callState = PatientComponents.VideoCallModal.CallStatus.Idle;
+
+    // Call notification state
+    private bool showCallNotification = false;
+    private string incomingCallerName = "";
+    private string incomingCallerImage = "";
+    private bool incomingIsVideoCall = false;
+    private string incomingCallerId = "";
+
+    // AI Assistant state (Patient only)
+    private PatientComponents.AiAssistantPanel? aiAssistantPanel;
+    private bool showAiAssistant = false;
+
+    // Smart Reply state
+    private List<string> smartReplySuggestions = new();
+    private bool showSmartReplies = false;
+
+    // User reactions tracking
+    private Dictionary<string, HashSet<string>> userReactions = new(); // messageId -> set of emojis user reacted with
+    
+    // Loading state
+    private bool isLoadingMessages = false;
+
+    // Reply state
+    private MessageInput.ReplyMessageData? replyToMessage;
+
+    private record ConversationDto(
+        string Id,
+        string DoctorName,
+        string Specialty,
+        string DoctorImage,
+        string LastMessage,
+        DateTime LastMessageTime,
+        bool IsOnline)
+    {
+        public int UnreadCount { get; set; }
+        public bool IsTyping { get; set; }
+        public bool IsAttaching { get; set; }
+        public string? PartnerId { get; set; } // Store the actual partner/doctor ID
+    }
+
+    private record MessageDto(
+        string Id,
+        string Content,
+        DateTime Timestamp,
+        bool IsSentByMe,
+        MessageStatus Status,
+        List<AttachmentDto> Attachments)
+    {
+        public List<ReactionDto> Reactions { get; set; } = new();
+        public bool IsEdited { get; set; } = false;
+        public string? MessageType { get; set; }
+        public string? AttachmentUrl { get; set; }
+        public string? ReplyToMessageId { get; set; }
+    }
+
+    private record ReactionDto(string Emoji, int Count);
+
+    private record AttachmentDto(string Id, string Name, string Type, string Size, string Url);
+
+    private enum MessageStatus
+    {
+        Sending,
+        Sent,
+        Delivered,
+        Read
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            // Detect user role
+            if (user.IsInRole("Doctor"))
+            {
+                UserRole = "Doctor";
+            }
+            else if (user.IsInRole("Patient"))
+            {
+                UserRole = "Patient";
+            }
+
+            patientId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(patientId))
+            {
+                await LoadConversationsAsync();
+            }
+
+            await InitializeSignalR();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing messages page");
+        }
+    }
+
+    private async Task LoadConversationsAsync()
+    {
+        try
+        {
+            var serviceConversations = await MessagingService.GetConversationsAsync();
+
+            // Map service DTOs to local DTOs
+            allConversations = serviceConversations.Select(c => new ConversationDto(
+                c.Id.ToString(),
+                c.PartnerName,
+                c.PartnerRole, // Used as Specialty
+                GetValidImageUrl(c.PartnerProfileImage, c.PartnerName),
+                c.LastMessage,
+                c.LastMessageTime,
+                c.IsOnline)
+            {
+                UnreadCount = c.UnreadCount,
+                PartnerId = c.PartnerId // This is the actual user ID we need for calls
+            }).ToList();
+
+            Logger.LogInformation($"Loaded {allConversations.Count} conversations");
+            foreach (var conv in allConversations)
+            {
+                Logger.LogInformation($"Conversation: {conv.DoctorName}, PartnerId: {conv.PartnerId}");
+            }
+
+            filteredConversations = allConversations;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading conversations");
+            allConversations = new List<ConversationDto>();
+            filteredConversations = new List<ConversationDto>();
+        }
+    }
+
+    private async Task InitializeSignalR()
+    {
+        try
+        {
+            // Get JWT token from localStorage
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+
+            if (string.IsNullOrEmpty(token))
+            {
+                Logger.LogError("No authentication token found in localStorage");
+                return;
+            }
+
+            // Remove any surrounding quotes and trim
+            token = token.Trim('"').Trim();
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl($"http://localhost:5095/chathub?access_token={Uri.EscapeDataString(token)}")
+                .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10) })
+                .Build();
+
+            // Handle incoming messages
+            hubConnection.On<object>("ReceiveMessage", async (messageData) =>
+            {
+                try
+                {
+                    var json = System.Text.Json.JsonSerializer.Serialize(messageData);
+                    var message = System.Text.Json.JsonSerializer.Deserialize<ReceivedMessageDto>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (message != null)
+                    {
+                        await ReceiveMessage(message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error processing received message");
+                }
+            });
+
+            // Handle typing indicators
+            hubConnection.On<string>("UserTyping", (userId) =>
+            {
+                HandleUserTyping(userId, true, false);
+            });
+
+            hubConnection.On<string>("UserStoppedTyping", (userId) =>
+            {
+                HandleUserTyping(userId, false, false);
+            });
+
+            // Handle attachment status
+            hubConnection.On<string>("UserSendingAttachment", (userId) =>
+            {
+                HandleUserTyping(userId, true, true);
+            });
+
+            hubConnection.On<string>("UserStoppedSendingAttachment", (userId) =>
+            {
+                HandleUserTyping(userId, false, true);
+            });
+
+            // Handle message status changes
+            hubConnection.On<string, string, DateTime>("MessageStatusChanged", async (messageId, status, timestamp) =>
+            {
+                await UpdateMessageStatus(messageId, status);
+            });
+
+            // Handle conversation messages read
+            hubConnection.On<string, DateTime>("ConversationMessagesRead", async (conversationId, readTime) =>
+            {
+                await UpdateConversationMessagesRead(conversationId, readTime);
+            });
+
+            // Handle online/offline status
+            hubConnection.On<string>("UserOnline", (userId) =>
+            {
+                UpdateUserOnlineStatus(userId, true);
+            });
+
+            hubConnection.On<string>("UserOffline", (userId) =>
+            {
+                UpdateUserOnlineStatus(userId, false);
+            });
+
+            // Receive list of online users
+            hubConnection.On<List<string>>("OnlineUsers", (onlineUserIds) =>
+            {
+                UpdateOnlineUsersList(onlineUserIds);
+            });
+
+            // Handle message reaction updates
+            hubConnection.On<string, List<object>>("MessageReactionUpdated", async (messageId, reactions) =>
+            {
+                await HandleReactionUpdate(messageId, reactions);
+            });
+
+            // Handle incoming reaction updates from other users
+            hubConnection.On<string, List<object>, string>("ReceiveReactionUpdate", async (messageId, reactions, fromUserId) =>
+            {
+                // Only update if the reaction is from another user
+                if (fromUserId != patientId)
+                {
+                    await HandleReactionUpdate(messageId, reactions);
+                }
+            });
+
+            // Handle message edited
+            hubConnection.On<string, string, DateTime>("MessageEdited", async (messageId, newContent, editedAt) =>
+            {
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+                if (message != null)
+                {
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with
+                    {
+                        Content = newContent,
+                        IsEdited = true
+                    };
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            // Handle message deleted
+            hubConnection.On<string, DateTime>("MessageDeleted", async (messageId, deletedAt) =>
+            {
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+                if (message != null)
+                {
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with { Content = "This message was deleted" };
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            // Handle WebRTC call signaling
+            hubConnection.On<string, string, bool>("IncomingCall", async (callerId, callerName, isVideo) =>
+            {
+                if (isCallActive || showCallNotification)
+                {
+                    await hubConnection.SendAsync("RejectCall", callerId, "User is busy");
+                    return;
+                }
+
+                // Show call notification toast
+                incomingCallerId = callerId;
+                incomingCallerName = callerName;
+                incomingCallerImage = GetPartnerImage(callerId);
+                incomingIsVideoCall = isVideo;
+                showCallNotification = true;
+
+                // Play notification sound
+                await PlayCallNotificationSound();
+
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string>("CallAccepted", async (accepterId) =>
+            {
+                if (callState == PatientComponents.VideoCallModal.CallStatus.Ringing)
+                {
+                    callState = PatientComponents.VideoCallModal.CallStatus.Connecting;
+                    await InvokeAsync(StateHasChanged);
+                    
+                    // Now send the offer
+                    await HandleCallAccepted();
+                }
+            });
+
+            hubConnection.On<string, string>("ReceiveCallOffer", async (senderId, offerJson) =>
+            {
+                if (videoCallModal != null && isCallActive && callState == PatientComponents.VideoCallModal.CallStatus.Connecting)
+                {
+                    var answer = await videoCallModal.HandleOffer(offerJson);
+                    if (!string.IsNullOrEmpty(answer))
+                    {
+                        await hubConnection.SendAsync("SendCallAnswer", senderId, answer);
+                        callState = PatientComponents.VideoCallModal.CallStatus.Connected;
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+            });
+
+            hubConnection.On<string, string>("ReceiveCallAnswer", async (responderId, answerJson) =>
+            {
+                if (videoCallModal != null && (callState == PatientComponents.VideoCallModal.CallStatus.Ringing || callState == PatientComponents.VideoCallModal.CallStatus.Connecting))
+                {
+                    await videoCallModal.HandleAnswer(answerJson);
+                    callState = PatientComponents.VideoCallModal.CallStatus.Connected;
+                    
+                    // Simulate connection established for timer
+                    await JS.InvokeVoidAsync("webrtc.simulateConnection");
+                    
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<string, string>("ReceiveIceCandidate", async (senderId, candidateJson) =>
+            {
+                if (videoCallModal != null && isCallActive)
+                {
+                    await videoCallModal.AddIceCandidate(candidateJson);
+                }
+            });
+
+            hubConnection.On<string, string>("CallRejected", async (receiverId, reason) =>
+            {
+                isCallActive = false;
+                showCallNotification = false;
+                callState = PatientComponents.VideoCallModal.CallStatus.Ended;
+                
+                // Show rejection message
+                await JS.InvokeVoidAsync("console.log", $"Call rejected: {reason}");
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string>("CallEnded", async (userId) =>
+            {
+                isCallActive = false;
+                showCallNotification = false;
+                callState = PatientComponents.VideoCallModal.CallStatus.Ended;
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string>("CallFailed", async (reason) =>
+            {
+                isCallActive = false;
+                showCallNotification = false;
+                callState = PatientComponents.VideoCallModal.CallStatus.Ended;
+                ToastService.ShowError($"Call failed: {reason}");
+                await InvokeAsync(StateHasChanged);
+            });
+
+            // Handle reconnection
+            hubConnection.Reconnecting += error =>
+            {
+                Logger.LogWarning("SignalR reconnecting...");
+                return Task.CompletedTask;
+            };
+
+            hubConnection.Reconnected += async connectionId =>
+            {
+                Logger.LogInformation("SignalR reconnected");
+                await InvokeAsync(StateHasChanged);
+            };
+
+            hubConnection.Closed += async error =>
+            {
+                Logger.LogError(error, "SignalR connection closed");
+                await Task.Delay(5000);
+                try
+                {
+                    await hubConnection.StartAsync();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error restarting SignalR connection");
+                }
+            };
+
+            await hubConnection.StartAsync();
+            Logger.LogInformation("SignalR connected successfully");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "SignalR connection error");
+            await JS.InvokeVoidAsync("console.error", $"Chat connection failed: {ex.Message}");
+        }
+    }
+
+    // DTO for receiving messages from SignalR
+    private record ReceivedMessageDto(
+        string Id,
+        string SenderId,
+        string SenderName,
+        string SenderProfileImage,
+        string ReceiverId,
+        string Content,
+        string MessageType,
+        string Status,
+        DateTime SentAt,
+        string ConversationId,
+        string AttachmentUrl,
+        string AttachmentFileName,
+        long? AttachmentFileSize,
+        string AttachmentMimeType,
+        string ReplyToMessageId
+    );
+
+    private void FilterConversations()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filteredConversations = allConversations;
+        }
+        else
+        {
+            filteredConversations = allConversations
+                .Where(c => c.DoctorName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                           c.Specialty.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                           c.LastMessage.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    private async Task SelectConversation(ConversationDto conversation)
+    {
+        selectedConversation = conversation;
+        conversation.UnreadCount = 0;
+        
+        // Show loading animation
+        isLoadingMessages = true;
+        StateHasChanged();
+
+        // Load messages for this conversation
+        await LoadMessagesForConversation(conversation.Id);
+        
+        // Hide loading animation
+        isLoadingMessages = false;
+        StateHasChanged();
+
+        // Scroll to bottom
+        await Task.Delay(200);
+        await ScrollToBottom();
+
+        // Mark messages as read
+        try
+        {
+            if (Guid.TryParse(conversation.Id, out var convGuid))
+            {
+                await MessagingService.MarkMessagesAsReadAsync(convGuid);
+            }
+
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                await hubConnection.SendAsync("MarkMessagesAsRead", conversation.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error marking messages as read");
+        }
+    }
+
+    private async Task LoadMessagesForConversation(string conversationId)
+    {
+        try
+        {
+            if (!Guid.TryParse(conversationId, out var convGuid))
+            {
+                Logger.LogWarning("Invalid conversation ID: {ConversationId}", conversationId);
+                return;
+            }
+
+            // Add a small delay to show the loading animation
+            await Task.Delay(500);
+            
+            var serviceMessages = await MessagingService.GetConversationMessagesAsync(convGuid);
+
+            // Load user reactions from localStorage
+            await LoadUserReactions();
+
+            // Map service DTOs to local DTOs
+            currentMessages = serviceMessages.Select(m => new MessageDto(
+                m.Id.ToString(),
+                m.Content,
+                m.SentAt,
+                m.IsSender, // IsSender from service indicates if the current user sent it
+                MapMessageStatus(m.Status),
+                new List<AttachmentDto>() // Attachments to be implemented later
+            )
+            {
+                AttachmentUrl = m.AttachmentUrl,
+                MessageType = m.Content.Contains("Voice message") ? "Audio" : "Text",
+                Reactions = m.Reactions.Select(r => new ReactionDto(r.Emoji, r.Count)).ToList(),
+                ReplyToMessageId = null // Will be populated when reply functionality is implemented in backend
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading messages for conversation {ConversationId}", conversationId);
+            currentMessages = new List<MessageDto>();
+        }
+    }
+
+    private async Task LoadUserReactions()
+    {
+        try
+        {
+            var reactionsJson = await JS.InvokeAsync<string>("localStorage.getItem", "userReactions");
+            if (!string.IsNullOrEmpty(reactionsJson))
+            {
+                var reactions = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(reactionsJson);
+                if (reactions != null)
+                {
+                    userReactions = reactions.ToDictionary(kvp => kvp.Key, kvp => new HashSet<string>(kvp.Value));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading user reactions from localStorage");
+        }
+    }
+
+    private async Task SaveUserReactions()
+    {
+        try
+        {
+            var reactions = userReactions.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToList());
+            var reactionsJson = System.Text.Json.JsonSerializer.Serialize(reactions);
+            await JS.InvokeVoidAsync("localStorage.setItem", "userReactions", reactionsJson);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error saving user reactions to localStorage");
+        }
+    }
+
+    private MessageStatus MapMessageStatus(string status)
+    {
+        return status.ToLower() switch
+        {
+            "sent" => MessageStatus.Sent,
+            "delivered" => MessageStatus.Delivered,
+            "read" => MessageStatus.Read,
+            _ => MessageStatus.Sending
+        };
+    }
+
+    private async Task SendMessage()
+    {
+        if (selectedConversation == null || (string.IsNullOrWhiteSpace(newMessage) && !selectedFiles.Any()))
+            return;
+
+        isSendingMessage = true;
+        MessageDto? tempMessage = null;
+
+        try
+        {
+            // Get the partner (doctor) ID from the conversation
+            // Note: In the real implementation, you'll need to store the partnerId in the conversation
+            // For now, we'll use a workaround
+            var receiverId = await GetPartnerIdFromConversation(selectedConversation.Id);
+
+            if (string.IsNullOrEmpty(receiverId))
+            {
+                Logger.LogError("Cannot send message: receiverId not found");
+                await JS.InvokeVoidAsync("alert", "Error: Cannot determine message recipient");
+                return;
+            }
+
+            var messageContent = newMessage.Trim();
+
+            // Store selected files temporarily as they'll be cleared
+            var filesToUpload = selectedFiles.ToList();
+
+            // Create a temporary message for immediate UI feedback
+            tempMessage = new MessageDto(
+                Guid.NewGuid().ToString(),
+                messageContent,
+                DateTime.Now,
+                true,
+                MessageStatus.Sending,
+                new List<AttachmentDto>()
+            );
+
+            currentMessages.Add(tempMessage);
+
+            newMessage = "";
+            selectedFiles.Clear();
+
+            await ScrollToBottom();
+
+            // Upload files first if any
+            string? attachmentUrl = null;
+            if (filesToUpload.Any())
+            {
+                // For now, only upload the first file (can be enhanced for multiple files)
+                var firstFile = filesToUpload.First();
+                attachmentUrl = await UploadFileAsync(firstFile);
+
+                if (string.IsNullOrEmpty(attachmentUrl) && !string.IsNullOrWhiteSpace(firstFile.ErrorMessage))
+                {
+                    await JS.InvokeVoidAsync("alert", $"File upload failed: {firstFile.ErrorMessage}");
+                    // Continue with text message even if file upload fails
+                }
+            }
+
+            // Send via service
+            var input = new ServiceDtos.SendMessageInput
+            {
+                ReceiverId = receiverId,
+                Content = string.IsNullOrWhiteSpace(messageContent) ? "" : messageContent,
+                AttachmentUrl = attachmentUrl
+            };
+
+            // Store reply info before clearing
+            var replyId = replyToMessage?.Id;
+            var replyContent = replyToMessage?.Content;
+            var replySenderName = replyToMessage?.SenderName;
+            replyToMessage = null;
+
+            var sentMessage = await MessagingService.SendMessageAsync(input);
+
+            if (sentMessage != null)
+            {
+                // Replace temp message with actual sent message
+                currentMessages.Remove(tempMessage);
+                var newMessage = new MessageDto(
+                    sentMessage.Id.ToString(),
+                    sentMessage.Content,
+                    sentMessage.SentAt,
+                    true,
+                    MapMessageStatus(sentMessage.Status),
+                    new List<AttachmentDto>()
+                )
+                {
+                    AttachmentUrl = sentMessage.AttachmentUrl,
+                    MessageType = sentMessage.Content.Contains("Voice message") ? "Audio" : "Text",
+                    ReplyToMessageId = replyId
+                };
+                currentMessages.Add(newMessage);
+
+                // Update conversation last message
+                selectedConversation = selectedConversation with
+                {
+                    LastMessage = messageContent,
+                    LastMessageTime = sentMessage.SentAt
+                };
+
+                // Send via SignalR to notify receiver in real-time
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    try
+                    {
+                        await hubConnection.SendAsync("SendMessage", sentMessage.Id, receiverId, messageContent, "Text");
+                        Logger.LogInformation("Message sent via SignalR");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Error sending message via SignalR");
+                    }
+                }
+
+                // Stop typing and attachment indicators
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    try
+                    {
+                        await hubConnection.SendAsync("StopTyping", receiverId);
+                        await hubConnection.SendAsync("UserStoppedSendingAttachment", receiverId);
+                    }
+                    catch { }
+                }
+
+                await ScrollToBottom();
+            }
+            else
+            {
+                Logger.LogError("Failed to send message");
+                currentMessages.Remove(tempMessage);
+                await JS.InvokeVoidAsync("alert", "Failed to send message. Please try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error sending message");
+            await JS.InvokeVoidAsync("alert", $"Error sending message: {ex.Message}");
+
+            // Remove temp message if it still exists
+            if (tempMessage != null && currentMessages.Contains(tempMessage))
+            {
+                currentMessages.Remove(tempMessage);
+            }
+        }
+        finally
+        {
+            isSendingMessage = false;
+            StateHasChanged();
+            await Task.Delay(100);
+            await ScrollToBottom();
+        }
+    }
+
+    private Task<string?> GetPartnerIdFromConversation(string conversationId)
+    {
+        // The partnerId is stored in the conversation
+        return Task.FromResult(selectedConversation?.PartnerId);
+    }
+
+    private async Task ReceiveMessage(ReceivedMessageDto message)
+    {
+        try
+        {
+            var isMyConversation = selectedConversation?.Id == message.ConversationId ||
+                                   (selectedConversation?.PartnerId == message.SenderId);
+
+            if (isMyConversation)
+            {
+                // Add message to current conversation
+                var newMsg = new MessageDto(
+                    message.Id,
+                    message.Content,
+                    message.SentAt,
+                    false, // Not sent by me
+                    MapMessageStatus(message.Status),
+                    new List<AttachmentDto>() // TODO: Map attachments
+                )
+                {
+                    MessageType = message.MessageType ?? (message.Content.Contains("Voice message") ? "Audio" : "Text"),
+                    AttachmentUrl = message.AttachmentUrl,
+                    Reactions = new List<ReactionDto>() // Initialize empty reactions
+                };
+
+                currentMessages.Add(newMsg);
+                await InvokeAsync(StateHasChanged);
+                await ScrollToBottom();
+
+                // Mark as read immediately if conversation is open
+                if (hubConnection?.State == HubConnectionState.Connected && !string.IsNullOrEmpty(message.ConversationId))
+                {
+                    await hubConnection.SendAsync("MarkMessagesAsRead", Guid.Parse(message.ConversationId), message.SenderId);
+                }
+
+                // Play notification sound
+                await PlayNotificationSound();
+
+                // Generate smart reply suggestions for doctor's message
+                GenerateSmartReplies(message.Content, true);
+            }
+            else
+            {
+                // Update conversation in the list
+                var conversation = allConversations.FirstOrDefault(c =>
+                    c.Id == message.ConversationId || c.PartnerId == message.SenderId);
+
+                if (conversation != null)
+                {
+                    var index = allConversations.IndexOf(conversation);
+                    allConversations[index] = conversation with
+                    {
+                        UnreadCount = conversation.UnreadCount + 1,
+                        LastMessage = message.Content,
+                        LastMessageTime = message.SentAt
+                    };
+
+                    await InvokeAsync(StateHasChanged);
+
+                    // Play notification sound
+                    await PlayNotificationSound();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error receiving message");
+        }
+    }
+
+    private void HandleUserTyping(string userId, bool isActive, bool isAttaching = false)
+    {
+        var conversation = allConversations.FirstOrDefault(c => c.PartnerId == userId);
+        if (conversation != null)
+        {
+            if (isAttaching)
+            {
+                conversation.IsAttaching = isActive;
+                conversation.IsTyping = false; // Clear typing when attaching
+            }
+            else
+            {
+                conversation.IsTyping = isActive;
+                if (isActive)
+                {
+                    conversation.IsAttaching = false; // Clear attaching when typing
+                }
+            }
+            InvokeAsync(async () => 
+            {
+                StateHasChanged();
+                if (isActive && selectedConversation?.PartnerId == userId)
+                {
+                    await ScrollToBottom();
+                }
+            });
+        }
+    }
+
+    private void UpdateUserOnlineStatus(string userId, bool isOnline)
+    {
+        foreach (var conversation in allConversations.Where(c => c.PartnerId == userId))
+        {
+            var index = allConversations.IndexOf(conversation);
+            allConversations[index] = conversation with { IsOnline = isOnline };
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateOnlineUsersList(List<string> onlineUserIds)
+    {
+        foreach (var conversation in allConversations)
+        {
+            var isOnline = onlineUserIds.Contains(conversation.PartnerId ?? "");
+            var index = allConversations.IndexOf(conversation);
+            allConversations[index] = conversation with { IsOnline = isOnline };
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task UpdateConversationMessagesRead(string conversationId, DateTime readTime)
+    {
+        if (selectedConversation?.Id == conversationId)
+        {
+            // Update all sent messages to Read status
+            for (int i = 0; i < currentMessages.Count; i++)
+            {
+                if (currentMessages[i].IsSentByMe && currentMessages[i].Status != MessageStatus.Read)
+                {
+                    currentMessages[i] = currentMessages[i] with { Status = MessageStatus.Read };
+                }
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task PlayNotificationSound()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "new Audio('/sounds/notification.mp3').play().catch(() => {})");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error playing notification sound");
+        }
+    }
+
+    private async Task HandleTyping()
+    {
+        if (selectedConversation == null || string.IsNullOrEmpty(selectedConversation.PartnerId)) return;
+
+        if (!isUserTyping && hubConnection?.State == HubConnectionState.Connected)
+        {
+            isUserTyping = true;
+            await hubConnection.SendAsync("UserTyping", selectedConversation.PartnerId);
+        }
+
+        typingTimer?.Stop();
+        typingTimer = new System.Timers.Timer(2000); // 2 seconds delay
+        typingTimer.Elapsed += async (sender, e) =>
+        {
+            isUserTyping = false;
+            if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+            {
+                await hubConnection.SendAsync("StopTyping", selectedConversation.PartnerId);
+            }
+            typingTimer?.Stop();
+        };
+        typingTimer.Start();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task UpdateMessageStatus(string messageId, string status)
+    {
+        var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+        if (message != null)
+        {
+            var mappedStatus = MapMessageStatus(status);
+            currentMessages[currentMessages.IndexOf(message)] = message with { Status = mappedStatus };
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ToggleEmojiPicker(string messageId)
+    {
+        if (showEmojiPicker && selectedMessageIdForReaction == messageId)
+        {
+            showEmojiPicker = false;
+            selectedMessageIdForReaction = null;
+        }
+        else
+        {
+            showEmojiPicker = true;
+            selectedMessageIdForReaction = messageId;
+        }
+    }
+
+    private void CloseEmojiPicker()
+    {
+        showEmojiPicker = false;
+        selectedMessageIdForReaction = null;
+    }
+
+    private bool CheckIfUserReacted(string messageId, string emoji)
+    {
+        return userReactions.ContainsKey(messageId) && userReactions[messageId].Contains(emoji);
+    }
+
+    private async void UpdateUserReaction(string messageId, string emoji, bool add)
+    {
+        if (!userReactions.ContainsKey(messageId))
+        {
+            userReactions[messageId] = new HashSet<string>();
+        }
+
+        if (add)
+        {
+            userReactions[messageId].Add(emoji);
+        }
+        else
+        {
+            userReactions[messageId].Remove(emoji);
+        }
+
+        await SaveUserReactions();
+    }
+
+    private async Task HandleEmojiSelected(string messageId, string emoji)
+    {
+        try
+        {
+            CloseEmojiPicker();
+
+            // Check if user already reacted with this emoji
+            bool userAlreadyReacted = CheckIfUserReacted(messageId, emoji);
+
+            if (userAlreadyReacted)
+            {
+                // Remove reaction
+                var result = await MessagingService.RemoveReactionAsync(Guid.Parse(messageId));
+                if (result?.Success == true)
+                {
+                    UpdateUserReaction(messageId, emoji, false);
+                    await UpdateMessageReactions(messageId, result.Reactions);
+                }
+            }
+            else
+            {
+                // Add reaction
+                var result = await MessagingService.AddReactionAsync(Guid.Parse(messageId), emoji);
+                if (result?.Success == true)
+                {
+                    UpdateUserReaction(messageId, emoji, true);
+                    await UpdateMessageReactions(messageId, result.Reactions);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error handling emoji selection for message {MessageId}", messageId);
+        }
+    }
+
+    private async Task UpdateMessageReactions(string messageId, List<PatientDtos.ReactionCountDto> reactions)
+    {
+        var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+        if (message != null)
+        {
+            var updatedReactions = reactions.Select(r => new ReactionDto(r.Emoji, r.Count)).ToList();
+            var index = currentMessages.IndexOf(message);
+            currentMessages[index] = message with { Reactions = updatedReactions };
+
+            // Broadcast reaction update via SignalR
+            if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+            {
+                var reactionData = reactions.Select(r => new { Emoji = r.Emoji, Count = r.Count }).ToList();
+                await hubConnection.SendAsync("BroadcastReactionUpdate", messageId, reactionData, selectedConversation.PartnerId);
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ToggleReaction(string messageId, string emoji, bool userReacted)
+    {
+        await HandleEmojiSelected(messageId, emoji);
+    }
+
+    private async Task HandleReactionUpdate(string messageId, List<object> reactions)
+    {
+        try
+        {
+            var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+            if (message != null)
+            {
+                // Convert dynamic objects to ReactionDto
+                var updatedReactions = new List<ReactionDto>();
+                foreach (var reaction in reactions)
+                {
+                    var reactionDict = reaction as IDictionary<string, object>;
+                    if (reactionDict != null)
+                    {
+                        var emoji = reactionDict["Emoji"]?.ToString() ?? "";
+                        var count = Convert.ToInt32(reactionDict["Count"]);
+                        updatedReactions.Add(new ReactionDto(emoji, count));
+                    }
+                }
+
+                var index = currentMessages.IndexOf(message);
+                currentMessages[index] = message with { Reactions = updatedReactions };
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error handling reaction update for message {MessageId}", messageId);
+        }
+    }
+
+    private async Task OpenFileSelector()
+    {
+        try
+        {
+            var element = fileInput?.Element;
+            if (element != null)
+            {
+                await JS.InvokeVoidAsync("eval", $"document.querySelector('[_bl_{element.Value.Id}]')?.click()");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error opening file selector: {ex.Message}");
+        }
+    }
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            const long maxFileSize = 50 * 1024 * 1024; // 50MB
+
+            // Notify that user is preparing attachments
+            if (selectedConversation != null && hubConnection?.State == HubConnectionState.Connected)
+            {
+                await hubConnection.SendAsync("UserSendingAttachment", selectedConversation.PartnerId);
+            }
+
+            foreach (var file in e.GetMultipleFiles(10))
+            {
+                // Validate file size
+                if (file.Size > maxFileSize)
+                {
+                    await JS.InvokeVoidAsync("alert", $"File '{file.Name}' exceeds 50MB limit");
+                    continue;
+                }
+
+                var fileAttachment = new FileAttachment
+                {
+                    Name = file.Name,
+                    Size = file.Size,
+                    ContentType = file.ContentType,
+                    BrowserFile = file
+                };
+
+                // Generate preview for images
+                if (file.ContentType.StartsWith("image/"))
+                {
+                    try
+                    {
+                        var resizedFile = await file.RequestImageFileAsync(file.ContentType, 400, 400);
+                        var buffer = new byte[resizedFile.Size];
+                        await using var stream = resizedFile.OpenReadStream();
+                        await stream.ReadAsync(buffer);
+                        var base64 = Convert.ToBase64String(buffer);
+                        fileAttachment.PreviewUrl = $"data:{file.ContentType};base64,{base64}";
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Error creating image preview for {FileName}", file.Name);
+                    }
+                }
+
+                selectedFiles.Add(fileAttachment);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error handling file selection");
+            await JS.InvokeVoidAsync("alert", "Error selecting files. Please try again.");
+        }
+    }
+
+    private async Task RemoveFile(FileAttachment file)
+    {
+        selectedFiles.Remove(file);
+        
+        // If no more files, stop attachment indicator
+        if (!selectedFiles.Any() && selectedConversation != null && hubConnection?.State == HubConnectionState.Connected)
+        {
+            try
+            {
+                await hubConnection.SendAsync("UserStoppedSendingAttachment", selectedConversation.PartnerId);
+            }
+            catch { }
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task<string?> UploadFileAsync(FileAttachment fileAttachment)
+    {
+        try
+        {
+            if (fileAttachment.BrowserFile == null)
+                return null;
+
+            fileAttachment.IsUploading = true;
+            fileAttachment.UploadProgress = 0;
+            StateHasChanged();
+
+            // Read file as base64
+            var buffer = new byte[fileAttachment.BrowserFile.Size];
+            await using var stream = fileAttachment.BrowserFile.OpenReadStream(50 * 1024 * 1024);
+            await stream.ReadAsync(buffer);
+            var base64 = Convert.ToBase64String(buffer);
+
+            fileAttachment.UploadProgress = 50;
+            StateHasChanged();
+
+            // Upload to server
+            var result = await MessagingService.UploadAttachmentAsync(
+                base64,
+                fileAttachment.Name,
+                fileAttachment.ContentType
+            );
+
+            if (result != null && result.Success)
+            {
+                fileAttachment.UploadProgress = 100;
+                fileAttachment.UploadedUrl = result.Url;
+                fileAttachment.IsUploading = false;
+                Logger.LogInformation("File uploaded successfully: {FileName}", fileAttachment.Name);
+                return result.Url;
+            }
+            else
+            {
+                fileAttachment.ErrorMessage = result?.ErrorMessage ?? "Upload failed";
+                fileAttachment.IsUploading = false;
+                Logger.LogError("File upload failed: {FileName}", fileAttachment.Name);
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error uploading file: {FileName}", fileAttachment.Name);
+            fileAttachment.ErrorMessage = ex.Message;
+            fileAttachment.IsUploading = false;
+            return null;
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleVoiceMessage((string audioUrl, int durationSeconds) voiceData)
+    {
+        if (selectedConversation == null || string.IsNullOrEmpty(selectedConversation.PartnerId)) return;
+
+        try
+        {
+            isSendingMessage = true;
+            StateHasChanged();
+
+            // Convert audio data URL to base64
+            var base64Audio = await JS.InvokeAsync<string>("voiceRecorder.dataURLtoBase64", voiceData.audioUrl);
+
+            if (string.IsNullOrEmpty(base64Audio))
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to process audio recording");
+                return;
+            }
+
+            // Generate filename with timestamp
+            var fileName = $"voice_{DateTime.UtcNow:yyyyMMddHHmmss}.webm";
+            var mimeType = "audio/webm";
+
+            // Upload audio to Cloudinary
+            var uploadResult = await MessagingService.UploadAttachmentAsync(base64Audio, fileName, mimeType);
+
+            if (uploadResult == null || !uploadResult.Success)
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to upload voice message");
+                return;
+            }
+
+            // Send voice message
+            var input = new ServiceDtos.SendMessageInput
+            {
+                ReceiverId = selectedConversation.PartnerId,
+                Content = $"Voice message ({voiceData.durationSeconds}s)",
+                AttachmentUrl = uploadResult.Url
+            };
+
+            var sentMessage = await MessagingService.SendMessageAsync(input);
+
+            if (sentMessage != null)
+            {
+                // Add to current messages
+                var newMessage = new MessageDto(
+                    sentMessage.Id.ToString(),
+                    sentMessage.Content,
+                    sentMessage.SentAt,
+                    true, // IsSentByMe
+                    MapMessageStatus(sentMessage.Status),
+                    new List<AttachmentDto>()
+                )
+                {
+                    MessageType = "Audio",
+                    AttachmentUrl = sentMessage.AttachmentUrl
+                };
+
+                currentMessages.Add(newMessage);
+
+                // Update conversation last message
+                var convIndex = allConversations.IndexOf(selectedConversation);
+                if (convIndex >= 0)
+                {
+                    allConversations[convIndex] = selectedConversation with
+                    {
+                        LastMessage = $"Voice message ({voiceData.durationSeconds}s)",
+                        LastMessageTime = sentMessage.SentAt
+                    };
+                    selectedConversation = allConversations[convIndex];
+                    filteredConversations = allConversations;
+                }
+
+                // Scroll to bottom
+                await ScrollToBottom();
+
+                // Send via SignalR
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    try
+                    {
+                        await hubConnection.SendAsync("SendMessage",
+                            sentMessage.Id.ToString(),
+                            input.ReceiverId,
+                            sentMessage.Content,
+                            "Audio");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Error sending voice message via SignalR");
+                    }
+                }
+
+                Logger.LogInformation("Voice message sent successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error sending voice message");
+            await JS.InvokeVoidAsync("alert", "Failed to send voice message. Please try again.");
+        }
+        finally
+        {
+            isSendingMessage = false;
+            StateHasChanged();
+            await Task.Delay(100);
+            await ScrollToBottom();
+        }
+    }
+
+    private void OpenMediaPreview(AttachmentDto attachment)
+    {
+        previewMediaUrl = attachment.Url;
+        previewMediaType = attachment.Type;
+        previewFileName = attachment.Name;
+        previewFileSize = attachment.Size;
+        showMediaPreview = true;
+        StateHasChanged();
+    }
+
+    private Task CloseMediaPreview()
+    {
+        showMediaPreview = false;
+        previewMediaUrl = null;
+        previewMediaType = null;
+        previewFileName = null;
+        previewFileSize = null;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task DownloadCurrentMedia()
+    {
+        Logger.LogInformation("Downloading media: {FileName}", previewFileName);
+        return Task.CompletedTask;
+    }
+
+    private void OpenAttachmentPreview(string attachmentUrl)
+    {
+        if (string.IsNullOrEmpty(attachmentUrl)) return;
+        
+        previewMediaUrl = attachmentUrl;
+        previewMediaType = GetMediaTypeFromUrl(attachmentUrl);
+        previewFileName = System.IO.Path.GetFileName(attachmentUrl);
+        previewFileSize = "Unknown";
+        showMediaPreview = true;
+        StateHasChanged();
+    }
+
+    private string GetMediaTypeFromUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return "unknown";
+        var extension = System.IO.Path.GetExtension(url).ToLower();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" => "image",
+            ".mp4" or ".avi" or ".mov" or ".wmv" => "video",
+            ".mp3" or ".wav" or ".ogg" or ".webm" => "audio",
+            ".pdf" => "pdf",
+            _ => "file"
+        };
+    }
+
+    private async Task DownloadAttachment(AttachmentDto attachment)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(attachment.Url))
+            {
+                await JS.InvokeVoidAsync("open", attachment.Url, "_blank");
+                Logger.LogInformation("Downloading attachment: {FileName}", attachment.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error downloading attachment");
+        }
+    }
+
+    private void OpenSearchModal()
+    {
+        showSearchModal = true;
+    }
+
+    private Task CloseSearchModal()
+    {
+        showSearchModal = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void GenerateConversationSummary()
+    {
+        if (!currentMessages.Any() || UserRole != "Patient")
+            return;
+
+        showSummaryModal = true;
+        isGeneratingSummary = true;
+        StateHasChanged();
+
+        try
+        {
+            // Collect all messages from current conversation
+            var allMessages = currentMessages.OrderBy(m => m.Timestamp).ToList();
+
+            if (!allMessages.Any())
+            {
+                conversationSummary = "No messages to summarize.";
+                isGeneratingSummary = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Calculate stats
+            summaryStats = new SummaryStats
+            {
+                TotalMessages = allMessages.Count,
+                DoctorMessages = allMessages.Count(m => !m.IsSentByMe),
+                PatientMessages = allMessages.Count(m => m.IsSentByMe),
+                FirstMessageDate = allMessages.First().Timestamp.ToString("MMM dd, yyyy HH:mm"),
+                LastMessageDate = allMessages.Last().Timestamp.ToString("MMM dd, yyyy HH:mm")
+            };
+
+            // Extract medical terms from messages
+            var medicalTermsFound = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var message in allMessages)
+            {
+                var annotatedMessage = MedicalTermService.AnnotateMessage(message.Content);
+                var matches = System.Text.RegularExpressions.Regex.Matches(annotatedMessage, @"data-term='([^']+)'");
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    if (match.Groups.Count > 1)
+                    {
+                        medicalTermsFound.Add(match.Groups[1].Value);
+                    }
+                }
+            }
+            summaryStats.MedicalTerms = medicalTermsFound.OrderBy(t => t).ToList();
+
+            // Generate summary text
+            var summaryBuilder = new System.Text.StringBuilder();
+            summaryBuilder.AppendLine("Conversation Overview:");
+            summaryBuilder.AppendLine();
+
+            // Group messages by topic/context
+            var recentMessages = allMessages.TakeLast(10).ToList();
+
+            summaryBuilder.AppendLine("Key Discussion Points:");
+            summaryBuilder.AppendLine();
+
+            // Identify main topics
+            var hasAppointmentDiscussion = allMessages.Any(m => m.Content.Contains("appointment", StringComparison.OrdinalIgnoreCase));
+            var hasMedicationDiscussion = allMessages.Any(m => m.Content.Contains("medication", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("prescription", StringComparison.OrdinalIgnoreCase));
+            var hasSymptomsDiscussion = allMessages.Any(m => m.Content.Contains("symptom", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("pain", StringComparison.OrdinalIgnoreCase));
+            var hasTestDiscussion = allMessages.Any(m => m.Content.Contains("test", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("lab", StringComparison.OrdinalIgnoreCase));
+
+            if (hasAppointmentDiscussion)
+            {
+                summaryBuilder.AppendLine("• Appointment scheduling and timing discussed");
+            }
+
+            if (hasMedicationDiscussion)
+            {
+                summaryBuilder.AppendLine("• Medication and prescriptions mentioned");
+            }
+
+            if (hasSymptomsDiscussion)
+            {
+                summaryBuilder.AppendLine("• Patient symptoms and condition discussed");
+            }
+
+            if (hasTestDiscussion)
+            {
+                summaryBuilder.AppendLine("• Medical tests or lab work mentioned");
+            }
+
+            summaryBuilder.AppendLine();
+            summaryBuilder.AppendLine("Recent Activity:");
+            summaryBuilder.AppendLine();
+
+            // Show recent message snippets
+            foreach (var msg in recentMessages.TakeLast(5))
+            {
+                var sender = msg.IsSentByMe ? "Patient" : "Doctor";
+                var preview = msg.Content.Length > 80 ? msg.Content.Substring(0, 80) + "..." : msg.Content;
+                summaryBuilder.AppendLine($"• {sender}: {preview}");
+            }
+
+            conversationSummary = summaryBuilder.ToString();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error generating conversation summary");
+            conversationSummary = "Error generating summary. Please try again.";
+        }
+        finally
+        {
+            isGeneratingSummary = false;
+            StateHasChanged();
+        }
+    }
+
+    private Task CloseSummaryModal()
+    {
+        showSummaryModal = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void OpenAppointmentScheduler()
+    {
+        if (UserRole != "Patient") return;
+
+        showAppointmentScheduler = true;
+        appointmentDate = DateTime.Now;
+        appointmentTime = new TimeOnly(9, 0);
+        appointmentReason = "";
+        appointmentType = "Teleconsultation";
+    }
+
+    private void HandleTimeChange(string timeValue)
+    {
+        if (!string.IsNullOrEmpty(timeValue) && TimeOnly.TryParse(timeValue, out var time))
+        {
+            appointmentTime = time;
+        }
+    }
+
+    private Task CloseAppointmentScheduler()
+    {
+        showAppointmentScheduler = false;
+        appointmentDate = DateTime.Now;
+        appointmentTime = new TimeOnly(9, 0);
+        appointmentReason = "";
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task SubmitAppointmentRequest()
+    {
+        if (selectedConversation == null || string.IsNullOrEmpty(appointmentReason) || UserRole != "Patient")
+            return;
+
+        try
+        {
+            var dateTime = appointmentDate.Add(appointmentTime.ToTimeSpan());
+
+            // Send a message to the doctor about the appointment request
+            var appointmentMessage = $"📅 Appointment Request:\n\n" +
+                                   $"Date: {dateTime:MMM dd, yyyy}\n" +
+                                   $"Time: {dateTime:hh:mm tt}\n" +
+                                   $"Type: {appointmentType}\n" +
+                                   $"Reason: {appointmentReason}";
+
+            newMessage = appointmentMessage;
+            await SendMessage();
+
+            showAppointmentScheduler = false;
+            StateHasChanged();
+
+            // Show success message
+            ToastService.ShowSuccess("Appointment request sent to doctor");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error submitting appointment request");
+            ToastService.ShowError("Failed to send appointment request");
+        }
+    }
+
+    private async Task HandleSearch(PatientDtos.SearchMessagesInputDto input)
+    {
+        try
+        {
+            var results = await MessagingService.SearchMessagesAsync(input);
+            if (searchModal != null && results != null)
+            {
+                searchModal.UpdateResults(results);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error searching messages");
+        }
+    }
+
+    private async Task HandleSearchResultClick(PatientDtos.MessageSearchResultDto result)
+    {
+        try
+        {
+            // Close search modal
+            showSearchModal = false;
+
+            // Find the conversation for this result
+            var conversation = filteredConversations.FirstOrDefault(c => c.Id == result.ConversationId.ToString());
+
+            if (conversation != null)
+            {
+                // Select the conversation
+                await SelectConversation(conversation);
+
+                // Optionally, scroll to the specific message
+                // This would require additional implementation to highlight/scroll to the message
+                Logger.LogInformation("Navigated to conversation with message {MessageId}", result.Id);
+            }
+            else
+            {
+                Logger.LogWarning("Conversation not found for message {MessageId}", result.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error handling search result click");
+        }
+    }
+
+    private void StartEdit(string messageId, string content)
+    {
+        editingMessageId = messageId;
+        editingContent = content;
+    }
+
+    private void CancelEdit()
+    {
+        editingMessageId = null;
+        editingContent = "";
+    }
+
+    private async Task SaveEdit(string messageId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(editingContent))
+            {
+                return;
+            }
+
+            var result = await MessagingService.EditMessageAsync(Guid.Parse(messageId), editingContent);
+
+            if (result?.Success == true)
+            {
+                // Update message in UI
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+                if (message != null)
+                {
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with
+                    {
+                        Content = result.NewContent,
+                        IsEdited = true
+                    };
+
+                    // Broadcast via SignalR
+                    if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+                    {
+                        await hubConnection.SendAsync("BroadcastMessageEdited", Guid.Parse(messageId), result.NewContent, result.EditedAt, selectedConversation.PartnerId);
+                    }
+                }
+
+                CancelEdit();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error saving edit for message {MessageId}", messageId);
+        }
+    }
+
+    private void ShowDeleteConfirmation(string messageId)
+    {
+        messageToDelete = messageId;
+        showDeleteConfirmation = true;
+    }
+
+    private void CancelDelete()
+    {
+        messageToDelete = null;
+        showDeleteConfirmation = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (string.IsNullOrEmpty(messageToDelete))
+            return;
+
+        try
+        {
+            var result = await MessagingService.DeleteMessageAsync(Guid.Parse(messageToDelete));
+
+            if (result?.Success == true)
+            {
+                // Update message in UI
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageToDelete);
+                if (message != null)
+                {
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with { Content = "This message was deleted" };
+
+                    // Broadcast via SignalR
+                    if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+                    {
+                        await hubConnection.SendAsync("BroadcastMessageDeleted", Guid.Parse(messageToDelete), result.DeletedAt, selectedConversation.PartnerId);
+                    }
+                }
+
+                CancelDelete();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error deleting message {MessageId}", messageToDelete);
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await Task.Delay(50); // Small delay to ensure DOM is updated
+            await JS.InvokeVoidAsync("eval",
+                $"const container = document.querySelector('[_bl_{messagesContainer.Id}]'); if(container) {{ container.scrollTop = container.scrollHeight; container.scrollIntoView({{ behavior: 'smooth', block: 'end' }}); }}");
+        }
+        catch { }
+    }
+
+    private string FormatMessageTime(DateTime time)
+    {
+        var diff = DateTime.Now - time;
+
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d";
+
+        return time.ToString("MMM dd");
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private string GetFileIcon(string fileType)
+    {
+        return fileType.ToLower() switch
+        {
+            "pdf" => "pdf",
+            "doc" or "docx" => "word",
+            "xls" or "xlsx" => "excel",
+            "jpg" or "jpeg" or "png" or "gif" => "image",
+            "zip" or "rar" => "archive",
+            _ => "alt"
+        };
+    }
+
+    private string GetDoctorInitials(string? doctorName)
+    {
+        if (string.IsNullOrWhiteSpace(doctorName))
+            return "Dr";
+
+        var parts = doctorName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        if (parts.Length == 1 && parts[0].Length > 0)
+            return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+
+        return "Dr";
+    }
+
+    // WebRTC Call Methods
+
+    private async Task StartVideoCall()
+    {
+        if (selectedConversation == null) return;
+
+        isVideoCall = true;
+        await InitiateCall();
+    }
+
+    private async Task StartVoiceCall()
+    {
+        if (selectedConversation == null) return;
+
+        isVideoCall = false;
+        await InitiateCall();
+    }
+
+    private async Task InitiateCall()
+    {
+        if (selectedConversation == null || hubConnection == null) return;
+
+        try
+        {
+            if (string.IsNullOrEmpty(selectedConversation.PartnerId))
+            {
+                Logger.LogError("Partner ID is null for conversation {ConversationId}", selectedConversation.Id);
+                return;
+            }
+
+            callPartnerId = selectedConversation.PartnerId;
+            callPartnerName = selectedConversation.DoctorName;
+            callState = PatientComponents.VideoCallModal.CallStatus.Ringing;
+            isCallActive = true;
+
+            if (videoCallModal != null)
+            {
+                await videoCallModal.StartLocalStream();
+            }
+
+            await hubConnection.SendAsync("InitiateCall", callPartnerId, isVideoCall);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initiating call");
+            isCallActive = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleCallAccepted()
+    {
+        if (hubConnection == null || videoCallModal == null) return;
+
+        try
+        {
+            callState = PatientComponents.VideoCallModal.CallStatus.Connecting;
+            StateHasChanged();
+
+            await videoCallModal.StartLocalStream();
+            var offer = await videoCallModal.CreateOffer();
+            if (!string.IsNullOrEmpty(offer))
+            {
+                await hubConnection.SendAsync("SendCallOffer", callPartnerId, offer);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error accepting call");
+            await HandleCallEnded();
+        }
+    }
+
+    private async Task HandleCallRejected()
+    {
+        if (hubConnection == null) return;
+
+        try
+        {
+            await hubConnection.SendAsync("RejectCall", callPartnerId, "Call declined");
+            isCallActive = false;
+            callState = PatientComponents.VideoCallModal.CallStatus.Ended;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error rejecting call");
+        }
+    }
+
+    private async Task AcceptIncomingCall()
+    {
+        showCallNotification = false;
+        
+        callPartnerId = incomingCallerId;
+        callPartnerName = incomingCallerName;
+        isVideoCall = incomingIsVideoCall;
+        callState = PatientComponents.VideoCallModal.CallStatus.Connecting;
+        isCallActive = true;
+
+        StateHasChanged();
+        
+        // Start local stream and wait for offer
+        if (videoCallModal != null)
+        {
+            await videoCallModal.StartLocalStream();
+        }
+        
+        // Notify caller that call was accepted
+        if (hubConnection != null)
+        {
+            await hubConnection.SendAsync("AcceptCall", incomingCallerId);
+        }
+    }
+
+    private async Task RejectIncomingCall()
+    {
+        showCallNotification = false;
+        
+        if (hubConnection != null)
+        {
+            await hubConnection.SendAsync("RejectCall", incomingCallerId, "Call declined");
+        }
+        
+        // Clear incoming call data
+        incomingCallerId = "";
+        incomingCallerName = "";
+        incomingCallerImage = "";
+        
+        StateHasChanged();
+    }
+
+    private string GetCallerImage(string callerId)
+    {
+        // Find the caller's image from conversations
+        var conversation = allConversations.FirstOrDefault(c => c.PartnerId == callerId);
+        return conversation?.DoctorImage ?? "https://i.pravatar.cc/150?img=1";
+    }
+
+    private string GetPartnerImage(string partnerId)
+    {
+        // Find the partner's image from conversations
+        var conversation = allConversations.FirstOrDefault(c => c.PartnerId == partnerId);
+        return GetValidImageUrl(conversation?.DoctorImage, conversation?.DoctorName ?? "User");
+    }
+
+    private string GetValidImageUrl(string? imageUrl, string name)
+    {
+        // If we have a valid image URL, return it
+        if (!string.IsNullOrEmpty(imageUrl) && 
+            !imageUrl.Contains("placeholder") && 
+            !imageUrl.Contains("default") &&
+            Uri.IsWellFormedUriString(imageUrl, UriKind.Absolute))
+        {
+            return imageUrl;
+        }
+
+        // Generate a fallback URL using UI Avatars service
+        var cleanName = Uri.EscapeDataString(name?.Trim() ?? "User");
+        return $"https://ui-avatars.com/api/?name={cleanName}&background=6366f1&color=fff&size=200&rounded=true";
+    }
+
+    private async Task PlayCallNotificationSound()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "new Audio('/sounds/notification.mp3').play().catch(() => {})");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error playing call notification sound");
+        }
+    }
+
+    private async Task HandleCallEnded()
+    {
+        if (hubConnection != null && !string.IsNullOrEmpty(callPartnerId))
+        {
+            try
+            {
+                await hubConnection.SendAsync("EndCall", callPartnerId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error ending call via SignalR");
+            }
+        }
+
+        isCallActive = false;
+        showCallNotification = false;
+        callState = PatientComponents.VideoCallModal.CallStatus.Ended;
+        callPartnerId = "";
+        callPartnerName = "";
+        StateHasChanged();
+    }
+
+    private async Task HandleIceCandidateGenerated(string candidateJson)
+    {
+        if (hubConnection == null || string.IsNullOrEmpty(callPartnerId)) return;
+
+        try
+        {
+            await hubConnection.SendAsync("SendIceCandidate", callPartnerId, candidateJson);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error sending ICE candidate");
+        }
+    }
+
+    private Task HandleOfferCreated(string offerJson)
+    {
+        // Offer is created and sent in HandleCallAccepted
+        return Task.CompletedTask;
+    }
+
+    private Task HandleAnswerCreated(string answerJson)
+    {
+        // Answer is handled automatically in SignalR event handlers
+        return Task.CompletedTask;
+    }
+
+    // AI Assistant Methods
+
+    private void HandleAiToggle()
+    {
+        if (UserRole == "Patient")
+        {
+            ToggleAiAssistant();
+        }
+    }
+
+    private void HandleScheduleAppointment()
+    {
+        if (UserRole == "Patient")
+        {
+            OpenAppointmentScheduler();
+        }
+    }
+
+    private void ToggleAiAssistant()
+    {
+        if (UserRole != "Patient") return;
+
+        showAiAssistant = !showAiAssistant;
+        StateHasChanged();
+    }
+
+    private void CloseAiAssistant()
+    {
+        showAiAssistant = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleAiAction(string action)
+    {
+        if (UserRole != "Patient") return;
+
+        // Handle AI suggested actions
+        if (action.Contains("call-emergency"))
+        {
+            await JS.InvokeVoidAsync("open", "tel:911");
+        }
+        else if (action.Contains("find-hospital"))
+        {
+            // Could open hospital finder or map
+            Logger.LogInformation("Find hospital action triggered");
+        }
+        else if (action.Contains("book-appointment"))
+        {
+            // Navigate to appointment booking
+            Navigation.NavigateTo("/patient/appointments");
+        }
+    }
+
+    // Smart Reply Methods
+
+    private Task HandleSmartReply(string reply)
+    {
+        newMessage = reply;
+        showSmartReplies = false;
+        smartReplySuggestions.Clear();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void GenerateSmartReplies(string lastMessage, bool isFromDoctor)
+    {
+        try
+        {
+            smartReplySuggestions = SmartReplyService.GenerateSuggestions(lastMessage, isFromDoctor);
+            showSmartReplies = smartReplySuggestions.Any();
+            StateHasChanged();
+
+            // Auto-hide suggestions after 30 seconds
+            Task.Delay(30000).ContinueWith(_ =>
+            {
+                InvokeAsync(() =>
+                {
+                    showSmartReplies = false;
+                    StateHasChanged();
+                });
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error generating smart replies");
+        }
+    }
+
+    // DTO Converter Methods
+
+    private List<SharedDtos.ConversationDto> ConvertToSharedConversations(List<ConversationDto> conversations)
+    {
+        return conversations.Select(c => new SharedDtos.ConversationDto
+        {
+            Id = Guid.Parse(c.Id),
+            PartnerId = c.PartnerId ?? string.Empty,
+            PartnerName = c.DoctorName,
+            PartnerRole = c.Specialty,
+            PartnerProfileImage = c.DoctorImage,
+            LastMessage = c.LastMessage,
+            LastMessageTime = c.LastMessageTime,
+            UnreadCount = c.UnreadCount,
+            IsOnline = c.IsOnline
+        }).ToList();
+    }
+
+    private async Task SelectSharedConversation(SharedDtos.ConversationDto sharedConversation)
+    {
+        var localConversation = filteredConversations.FirstOrDefault(c => c.Id == sharedConversation.Id.ToString());
+        if (localConversation != null)
+        {
+            await SelectConversation(localConversation);
+        }
+    }
+
+    private MessageBubble.MessageBubbleData ConvertToSharedMessage(MessageDto localMsg)
+    {
+        // Determine message type based on content and attachment
+        var messageType = localMsg.MessageType ?? "Text";
+        if (string.IsNullOrEmpty(messageType) || messageType == "Text")
+        {
+            if (!string.IsNullOrEmpty(localMsg.AttachmentUrl) && localMsg.Content.Contains("Voice message"))
+            {
+                messageType = "Audio";
+            }
+        }
+
+        return new MessageBubble.MessageBubbleData
+        {
+            Id = localMsg.Id,
+            Content = localMsg.Content,
+            Timestamp = localMsg.Timestamp,
+            IsSentByMe = localMsg.IsSentByMe,
+            Status = ConvertMessageStatus(localMsg.Status),
+            MessageType = messageType,
+            AttachmentUrl = localMsg.AttachmentUrl,
+            AttachmentFileName = !string.IsNullOrEmpty(localMsg.AttachmentUrl) ? System.IO.Path.GetFileName(localMsg.AttachmentUrl) : null,
+            IsEdited = localMsg.IsEdited,
+            ReplyToMessageId = localMsg.ReplyToMessageId,
+            ReplyToMessage = !string.IsNullOrEmpty(localMsg.ReplyToMessageId) ? GetReplyToMessage(localMsg.ReplyToMessageId) : null,
+            Attachments = localMsg.Attachments.Select(a => new MessageBubble.AttachmentData
+            {
+                Id = a.Id,
+                Name = a.Name,
+                Type = a.Type,
+                Size = a.Size,
+                Url = a.Url
+            }).ToList(),
+            Reactions = localMsg.Reactions.Select(r => new MessageBubble.ReactionData
+            {
+                Emoji = r.Emoji,
+                Count = r.Count,
+                UserReacted = CheckIfUserReacted(localMsg.Id, r.Emoji)
+            }).ToList()
+        };
+    }
+
+    private MessageBubble.MessageStatus ConvertMessageStatus(MessageStatus status)
+    {
+        return status switch
+        {
+            MessageStatus.Sending => MessageBubble.MessageStatus.Sending,
+            MessageStatus.Sent => MessageBubble.MessageStatus.Sent,
+            MessageStatus.Delivered => MessageBubble.MessageStatus.Delivered,
+            MessageStatus.Read => MessageBubble.MessageStatus.Read,
+            _ => MessageBubble.MessageStatus.Sent
+        };
+    }
+
+    private void StartEdit(string messageId)
+    {
+        var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+        if (message != null)
+        {
+            StartEdit(messageId, message.Content);
+        }
+    }
+
+    private async Task HandleEmojiSelectedWrapper(string messageId, string emoji)
+    {
+        await HandleEmojiSelected(messageId, emoji);
+    }
+
+    private async Task HandleToggleReaction(string messageId, string emoji, bool userReacted)
+    {
+        await ToggleReaction(messageId, emoji, userReacted);
+    }
+
+    private void StartReply(MessageDto message)
+    {
+        replyToMessage = new MessageInput.ReplyMessageData
+        {
+            Id = message.Id,
+            Content = message.Content,
+            SenderName = message.IsSentByMe ? "You" : selectedConversation?.DoctorName ?? "User",
+            IsSentByMe = message.IsSentByMe
+        };
+        StateHasChanged();
+    }
+
+    private void ClearReply()
+    {
+        replyToMessage = null;
+        StateHasChanged();
+    }
+
+    private MessageBubble.MessageBubbleData? GetReplyToMessage(string replyToMessageId)
+    {
+        var replyMsg = currentMessages.FirstOrDefault(m => m.Id == replyToMessageId);
+        if (replyMsg == null) return null;
+
+        return new MessageBubble.MessageBubbleData
+        {
+            Id = replyMsg.Id,
+            Content = replyMsg.Content,
+            IsSentByMe = replyMsg.IsSentByMe
+        };
+    }
+
+    private async Task ScrollToMessage(string messageId)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("scrollToMessage", messageId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error scrolling to message {MessageId}", messageId);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        typingTimer?.Dispose();
+
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

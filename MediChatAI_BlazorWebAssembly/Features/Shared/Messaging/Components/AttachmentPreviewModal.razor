@@ -1,0 +1,203 @@
+@* Enhanced Attachment Preview Modal *@
+
+@if (IsVisible)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" @onclick="CloseModal">
+        <div class="relative max-w-6xl max-h-[90vh] w-full mx-4" @onclick:stopPropagation="true">
+            @* Close Button *@
+            <button @onclick="CloseModal" 
+                    class="absolute -top-12 right-0 text-white hover:text-gray-300 transition-colors z-10">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+
+            @* Download Button *@
+            <button @onclick="DownloadAttachment" 
+                    class="absolute -top-12 right-12 text-white hover:text-gray-300 transition-colors z-10">
+                <i class="fas fa-download text-xl"></i>
+            </button>
+
+            @* Content Container *@
+            <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
+                @if (IsImageFile(AttachmentUrl))
+                {
+                    @* Image Preview *@
+                    <div class="relative">
+                        <img src="@AttachmentUrl" 
+                             alt="Image preview" 
+                             class="w-full h-auto max-h-[80vh] object-contain" 
+                             loading="lazy" />
+                        
+                        @* Image Info Overlay *@
+                        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                            <div class="text-white">
+                                <h3 class="font-semibold text-lg">📷 Image Preview</h3>
+                                <p class="text-sm opacity-90">@(AttachmentFileName ?? "image")</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (IsPdfFile(AttachmentUrl))
+                {
+                    @* PDF Preview *@
+                    <div class="h-[80vh] flex flex-col">
+                        <div class="bg-red-50 dark:bg-red-900/20 p-4 border-b border-red-200 dark:border-red-800">
+                            <div class="flex items-center gap-3">
+                                <div class="bg-red-500 rounded-lg p-2">
+                                    <i class="fas fa-file-pdf text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-gray-900 dark:text-white">📄 PDF Document</h3>
+                                    <p class="text-sm text-gray-600 dark:text-gray-300">@(AttachmentFileName ?? "document.pdf")</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex-1 relative">
+                            <iframe src="@AttachmentUrl" 
+                                    class="w-full h-full border-0"
+                                    title="PDF Preview">
+                            </iframe>
+                            
+                            @* Fallback for browsers that don't support PDF preview *@
+                            <div class="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-800" 
+                                 style="display: none;" 
+                                 id="pdf-fallback">
+                                <div class="text-center">
+                                    <i class="fas fa-file-pdf text-6xl text-red-500 mb-4"></i>
+                                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">PDF Preview Not Available</h3>
+                                    <p class="text-gray-600 dark:text-gray-300 mb-4">Your browser doesn't support PDF preview</p>
+                                    <button @onclick="DownloadAttachment" 
+                                            class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg transition-colors">
+                                        <i class="fas fa-download mr-2"></i>Download PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    @* Other File Types *@
+                    <div class="p-8 text-center">
+                        <div class="mb-6">
+                            <div class="inline-flex items-center justify-center w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
+                                <i class="fas fa-@(GetFileIcon(GetFileExtension(AttachmentUrl))) text-3xl text-blue-600 dark:text-blue-400"></i>
+                            </div>
+                            <h3 class="text-2xl font-semibold text-gray-900 dark:text-white mb-2">@GetFileTypeDisplay(AttachmentUrl)</h3>
+                            <p class="text-gray-600 dark:text-gray-300 mb-6">@(AttachmentFileName ?? "attachment")</p>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            <button @onclick="DownloadAttachment" 
+                                    class="bg-blue-500 hover:bg-blue-600 text-white px-8 py-3 rounded-lg transition-colors font-medium">
+                                <i class="fas fa-download mr-2"></i>Download File
+                            </button>
+                            
+                            @if (CanPreview(AttachmentUrl))
+                            {
+                                <button @onclick="OpenInNewTab" 
+                                        class="block w-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white px-8 py-3 rounded-lg transition-colors font-medium">
+                                    <i class="fas fa-external-link-alt mr-2"></i>Open in New Tab
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@inject IJSRuntime JS
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string AttachmentUrl { get; set; } = string.Empty;
+    [Parameter] public string? AttachmentFileName { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task CloseModal()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task DownloadAttachment()
+    {
+        if (!string.IsNullOrEmpty(AttachmentUrl))
+        {
+            await JS.InvokeVoidAsync("downloadFile", AttachmentUrl, AttachmentFileName ?? "attachment");
+        }
+    }
+
+    private async Task OpenInNewTab()
+    {
+        if (!string.IsNullOrEmpty(AttachmentUrl))
+        {
+            await JS.InvokeVoidAsync("open", AttachmentUrl, "_blank");
+        }
+    }
+
+    private bool IsImageFile(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        var extension = System.IO.Path.GetExtension(url).ToLower();
+        return extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp";
+    }
+
+    private bool IsPdfFile(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        var extension = System.IO.Path.GetExtension(url).ToLower();
+        return extension == ".pdf";
+    }
+
+    private string GetFileExtension(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return string.Empty;
+        return System.IO.Path.GetExtension(url);
+    }
+
+    private string GetFileIcon(string extension)
+    {
+        return extension.ToLower() switch
+        {
+            ".pdf" => "file-pdf",
+            ".doc" or ".docx" => "file-word",
+            ".xls" or ".xlsx" => "file-excel",
+            ".ppt" or ".pptx" => "file-powerpoint",
+            ".txt" => "file-alt",
+            ".zip" or ".rar" or ".7z" => "file-archive",
+            ".mp4" or ".avi" or ".mov" => "file-video",
+            ".mp3" or ".wav" or ".ogg" => "file-audio",
+            ".csv" => "file-csv",
+            ".json" or ".xml" => "file-code",
+            _ => "file"
+        };
+    }
+
+    private string GetFileTypeDisplay(string url)
+    {
+        var extension = GetFileExtension(url).ToLower();
+        return extension switch
+        {
+            ".pdf" => "PDF Document",
+            ".doc" or ".docx" => "Word Document",
+            ".xls" or ".xlsx" => "Excel Spreadsheet",
+            ".ppt" or ".pptx" => "PowerPoint Presentation",
+            ".txt" => "Text File",
+            ".zip" or ".rar" or ".7z" => "Archive File",
+            ".mp4" or ".avi" or ".mov" => "Video File",
+            ".mp3" or ".wav" or ".ogg" => "Audio File",
+            ".csv" => "CSV File",
+            ".json" => "JSON File",
+            ".xml" => "XML File",
+            _ => "File Attachment"
+        };
+    }
+
+    private bool CanPreview(string url)
+    {
+        var extension = GetFileExtension(url).ToLower();
+        return extension is ".pdf" or ".txt" or ".json" or ".xml" or ".csv";
+    }
+}

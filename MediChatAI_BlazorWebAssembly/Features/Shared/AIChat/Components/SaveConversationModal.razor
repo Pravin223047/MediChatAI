@@ -1,0 +1,183 @@
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Components
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+@implements IDisposable
+
+<ModalBase IsOpen="@IsOpen"
+           Title="Save Conversation"
+           Subtitle="Give your conversation a title for easy reference"
+           Icon="fas fa-save"
+           IconBgClass="bg-primary-100 dark:bg-primary-900/30"
+           Size="lg"
+           ShowCloseButton="true"
+           CloseOnBackdropClick="false"
+           OnClose="@HandleCancel">
+    <ChildContent>
+        <div class="space-y-5">
+            <!-- Title Input -->
+            <div>
+                <label class="block text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                    Conversation Title <span class="text-red-500">*</span>
+                </label>
+                <input type="text"
+                       @bind="title"
+                       @bind:event="oninput"
+                       maxlength="100"
+                       placeholder="E.g., Headache consultation, Blood pressure questions..."
+                       class="w-full px-4 py-3 rounded-xl @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-gray-50 text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary focus:border-transparent @(titleError ? "border-red-500" : "")" />
+                @if (titleError)
+                {
+                    <p class="mt-1 text-sm text-red-600 dark:text-red-400">
+                        <i class="fas fa-exclamation-circle mr-1"></i>@titleErrorMessage
+                    </p>
+                }
+                <p class="mt-1 text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") text-right">
+                    @title.Length / 100
+                </p>
+            </div>
+
+            <!-- Summary Input (Optional) -->
+            <div>
+                <label class="block text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                    Summary <span class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500")">(Optional)</span>
+                </label>
+                <textarea @bind="summary"
+                          @bind:event="oninput"
+                          rows="4"
+                          maxlength="500"
+                          placeholder="Add a brief summary of this conversation for future reference..."
+                          class="w-full px-4 py-3 rounded-xl @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-gray-50 text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary focus:border-transparent resize-none"></textarea>
+                <p class="mt-1 text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") text-right">
+                    @summary.Length / 500
+                </p>
+            </div>
+
+            <!-- Info Box -->
+            <div class="@(IsDarkMode ? "bg-blue-900/20 border-blue-700/50" : "bg-blue-50 border-blue-200") border rounded-xl p-4">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-info-circle text-blue-600 dark:text-blue-400"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm @(IsDarkMode ? "text-blue-200" : "text-blue-800")">
+                            Saved conversations can be accessed from the history sidebar and will be synced across your devices.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <div class="flex items-center justify-end gap-3 w-full">
+            <button @onclick="@HandleCancel"
+                    class="px-6 py-3 rounded-xl font-semibold @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900") transition-all duration-200">
+                Cancel
+            </button>
+            <button @onclick="@HandleSave"
+                    disabled="@(string.IsNullOrWhiteSpace(title) || isSaving)"
+                    class="px-8 py-3 rounded-xl font-semibold bg-gradient-to-r from-primary to-accent text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:scale-105 disabled:hover:scale-100 disabled:hover:shadow-none flex items-center gap-2">
+                @if (isSaving)
+                {
+                    <i class="fas fa-circle-notch fa-spin"></i>
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <i class="fas fa-save"></i>
+                    <span>Save Conversation</span>
+                }
+            </button>
+        </div>
+    </FooterContent>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string SessionId { get; set; } = string.Empty;
+    [Parameter] public EventCallback<(string title, string summary)> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string title = string.Empty;
+    private string summary = string.Empty;
+    private bool titleError = false;
+    private string titleErrorMessage = string.Empty;
+    private bool isSaving = false;
+
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Reset form when modal opens
+        if (IsOpen && string.IsNullOrEmpty(title))
+        {
+            GenerateDefaultTitle();
+        }
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void GenerateDefaultTitle()
+    {
+        var timestamp = DateTime.Now.ToString("MMM dd, yyyy h:mm tt");
+        title = $"Conversation - {timestamp}";
+    }
+
+    private async Task HandleSave()
+    {
+        // Validate title
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            titleError = true;
+            titleErrorMessage = "Title is required";
+            return;
+        }
+
+        if (title.Length < 3)
+        {
+            titleError = true;
+            titleErrorMessage = "Title must be at least 3 characters";
+            return;
+        }
+
+        titleError = false;
+        titleErrorMessage = string.Empty;
+        isSaving = true;
+
+        try
+        {
+            await OnSave.InvokeAsync((title.Trim(), summary.Trim()));
+
+            // Reset form after successful save
+            title = string.Empty;
+            summary = string.Empty;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task HandleCancel()
+    {
+        // Reset form
+        title = string.Empty;
+        summary = string.Empty;
+        titleError = false;
+        titleErrorMessage = string.Empty;
+
+        await OnCancel.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}

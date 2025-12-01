@@ -1,0 +1,130 @@
+@using Microsoft.AspNetCore.Components.Forms
+@* File Preview Grid Component *@
+
+@if (Files.Any())
+{
+    <div class="mb-3 flex flex-wrap gap-3">
+        @foreach (var file in Files)
+        {
+            <div class="relative group">
+                <!-- File Preview Card -->
+                <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-100") rounded-lg overflow-hidden shadow-sm" style="width: 120px;">
+                    @if (file.IsImage && !string.IsNullOrEmpty(file.PreviewUrl))
+                    {
+                        <!-- Image Preview -->
+                        <div class="relative" style="height: 120px;">
+                            <img src="@file.PreviewUrl" alt="@file.Name" class="w-full h-full object-cover" />
+                            @if (file.IsUploading)
+                            {
+                                <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                                    <div class="text-white text-center">
+                                        <i class="fas fa-spinner fa-spin text-2xl mb-1"></i>
+                                        <div class="text-xs">@file.UploadProgress%</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- File Icon Preview -->
+                        <div class="h-24 flex items-center justify-center">
+                            <i class="fas @file.FileIcon text-4xl text-primary"></i>
+                        </div>
+                    }
+
+                    <!-- File Info -->
+                    <div class="p-2 border-t @(IsDarkMode ? "border-gray-600" : "border-gray-200")">
+                        <div class="text-xs @(IsDarkMode ? "text-white" : "text-gray-900") truncate font-medium" title="@file.Name">
+                            @file.Name
+                        </div>
+                        <div class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-500") mt-1">
+                            @file.FormattedSize
+                        </div>
+
+                        <!-- Upload Progress -->
+                        @if (file.IsUploading)
+                        {
+                            <div class="mt-2">
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-600">
+                                    <div class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width: @file.UploadProgress%"></div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Error Message -->
+                        @if (!string.IsNullOrEmpty(file.ErrorMessage))
+                        {
+                            <div class="text-xs text-red-500 mt-1 truncate" title="@file.ErrorMessage">
+                                @file.ErrorMessage
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Remove Button -->
+                @if (!file.IsUploading)
+                {
+                    <button @onclick="() => OnRemoveFile.InvokeAsync(file)"
+                            class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public List<FileAttachment> Files { get; set; } = new();
+
+    [Parameter]
+    public bool IsDarkMode { get; set; }
+
+    [Parameter]
+    public EventCallback<FileAttachment> OnRemoveFile { get; set; }
+
+    public class FileAttachment
+    {
+        public string Name { get; set; } = string.Empty;
+        public long Size { get; set; }
+        public string ContentType { get; set; } = string.Empty;
+        public IBrowserFile? BrowserFile { get; set; }
+        public string? PreviewUrl { get; set; }
+        public bool IsUploading { get; set; }
+        public int UploadProgress { get; set; }
+        public string? UploadedUrl { get; set; }
+        public string? ErrorMessage { get; set; }
+
+        public string FormattedSize
+        {
+            get
+            {
+                if (Size < 1024)
+                    return $"{Size} B";
+                else if (Size < 1024 * 1024)
+                    return $"{Size / 1024.0:F1} KB";
+                else if (Size < 1024 * 1024 * 1024)
+                    return $"{Size / (1024.0 * 1024.0):F1} MB";
+                else
+                    return $"{Size / (1024.0 * 1024.0 * 1024.0):F1} GB";
+            }
+        }
+
+        public string FileIcon => ContentType switch
+        {
+            var t when t.StartsWith("image/") => "fa-file-image",
+            var t when t.StartsWith("video/") => "fa-file-video",
+            var t when t.StartsWith("audio/") => "fa-file-audio",
+            "application/pdf" => "fa-file-pdf",
+            var t when t.Contains("word") => "fa-file-word",
+            var t when t.Contains("excel") || t.Contains("spreadsheet") => "fa-file-excel",
+            var t when t.Contains("powerpoint") || t.Contains("presentation") => "fa-file-powerpoint",
+            _ => "fa-file"
+        };
+
+        public bool IsImage => ContentType.StartsWith("image/");
+        public bool IsVideo => ContentType.StartsWith("video/");
+    }
+}

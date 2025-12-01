@@ -1,0 +1,213 @@
+@using MediChatAI_BlazorWebAssembly.Features.Shared.Messaging.DTOs
+@* Conversation Sidebar Component *@
+
+<div class="col-span-12 md:col-span-4 lg:col-span-3 @(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") border-r flex flex-col">
+    <!-- Search Bar -->
+    <div class="p-4 @(IsDarkMode ? "border-gray-700" : "border-gray-200") border-b">
+        <div class="flex gap-2">
+            <div class="relative flex-1">
+                <input type="text"
+                       @bind="SearchQuery"
+                       @bind:event="oninput"
+                       @bind:after="HandleSearchChange"
+                       placeholder="Search conversations..."
+                       class="w-full pl-10 pr-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600 placeholder-gray-400" : "bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-500") border focus:ring-2 focus:ring-primary focus:border-transparent transition-all" />
+                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 @(IsDarkMode ? "text-gray-400" : "text-gray-400")"></i>
+            </div>
+            <button @onclick="ToggleSort"
+                    class="p-2 rounded-lg @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600") transition-colors"
+                    title="Sort alphabetically">
+                <i class="fas @(IsSortedAlphabetically ? "fa-sort-alpha-down" : "fa-sort-alpha-up")"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Conversations List -->
+    <div class="flex-1 overflow-y-auto">
+        @if (FilteredConversations.Any())
+        {
+            @foreach (var conversation in FilteredConversations)
+            {
+                <button @onclick="() => OnConversationSelected.InvokeAsync(conversation)"
+                        class="w-full p-4 flex items-start gap-3 transition-all duration-200 @(SelectedConversationId == conversation.Id ? (IsDarkMode ? "bg-primary/20 border-l-4 border-primary" : "bg-primary/10 border-l-4 border-primary") : (IsDarkMode ? "hover:bg-gray-700 border-l-4 border-transparent" : "hover:bg-gray-50 border-l-4 border-transparent"))">
+                    <div class="relative flex-shrink-0">
+                        <img src="@GetImageUrl(conversation)"
+                             alt="@conversation.PartnerName"
+                             class="profile-image w-12 h-12 rounded-full object-cover border-2 @(conversation.IsOnline ? "border-green-500" : (IsDarkMode ? "border-gray-600" : "border-gray-300"))"
+                             data-initials="@GetInitials(conversation.PartnerName)"
+                             onerror="window.handleImageError(this, '@GetInitials(conversation.PartnerName)')" />
+                        @if (conversation.IsOnline)
+                        {
+                            <span class="absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full bg-green-500 ring-2 @(IsDarkMode ? "ring-gray-800" : "ring-white")"></span>
+                        }
+                    </div>
+                    <div class="flex-1 min-w-0 text-left">
+                        <div class="flex items-start justify-between mb-1">
+                            <h3 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") truncate">
+                                @conversation.PartnerName
+                            </h3>
+                            <span class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-500") ml-2 flex-shrink-0">
+                                @FormatMessageTime(conversation.LastMessageTime)
+                            </span>
+                        </div>
+                        <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-1">
+                            @conversation.PartnerRole
+                        </p>
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") truncate flex-1">
+                                @if (IsTypingOrAttaching(conversation))
+                                {
+                                    <span class="text-primary italic flex items-center gap-1">
+                                        @if (IsAttaching(conversation))
+                                        {
+                                            <i class="fas fa-paperclip animate-pulse"></i>
+                                            <span>sending attachment...</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="fas fa-ellipsis-h animate-pulse"></i>
+                                            <span>typing...</span>
+                                        }
+                                    </span>
+                                }
+                                else
+                                {
+                                    @conversation.LastMessage
+                                }
+                            </p>
+                            @if (conversation.UnreadCount > 0)
+                            {
+                                <span class="ml-2 flex-shrink-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-primary rounded-full">
+                                    @conversation.UnreadCount
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </button>
+            }
+        }
+        else
+        {
+            <div class="p-8 text-center">
+                <i class="fas fa-inbox text-4xl @(IsDarkMode ? "text-gray-600" : "text-gray-300") mb-3"></i>
+                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-500")">No conversations found</p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public List<ConversationDto> Conversations { get; set; } = new();
+
+    [Parameter]
+    public Guid? SelectedConversationId { get; set; }
+
+    [Parameter]
+    public string SearchQuery { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SearchQueryChanged { get; set; }
+
+    [Parameter]
+    public bool IsDarkMode { get; set; }
+
+    [Parameter]
+    public EventCallback<ConversationDto> OnConversationSelected { get; set; }
+
+    private bool IsSortedAlphabetically { get; set; } = false;
+
+    private List<ConversationDto> FilteredConversations
+    {
+        get
+        {
+            var filtered = Conversations.AsEnumerable();
+
+            // Apply search filter
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                filtered = filtered.Where(c => 
+                    c.PartnerName.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    c.PartnerRole.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    c.LastMessage.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Apply sorting
+            if (IsSortedAlphabetically)
+            {
+                filtered = filtered.OrderBy(c => c.PartnerName);
+            }
+            else
+            {
+                filtered = filtered.OrderByDescending(c => c.LastMessageTime);
+            }
+
+            return filtered.ToList();
+        }
+    }
+
+    private async Task HandleSearchChange()
+    {
+        await SearchQueryChanged.InvokeAsync(SearchQuery);
+        StateHasChanged();
+    }
+
+    private void ToggleSort()
+    {
+        IsSortedAlphabetically = !IsSortedAlphabetically;
+        StateHasChanged();
+    }
+
+    private bool IsTypingOrAttaching(ConversationDto conversation)
+    {
+        return IsTyping(conversation) || IsAttaching(conversation);
+    }
+
+    private bool IsTyping(ConversationDto conversation)
+    {
+        // Check if conversation has typing status from the DTO properties
+        return conversation.GetType().GetProperty("IsTyping")?.GetValue(conversation) as bool? ?? false;
+    }
+
+    private bool IsAttaching(ConversationDto conversation)
+    {
+        // Check if conversation has attaching status from the DTO properties
+        return conversation.GetType().GetProperty("IsAttaching")?.GetValue(conversation) as bool? ?? false;
+    }
+
+    private string GetImageUrl(ConversationDto conversation)
+    {
+        return conversation.PartnerProfileImage ?? "/images/default-avatar.png";
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "??";
+
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+
+        return parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+    }
+
+    private string FormatMessageTime(DateTime time)
+    {
+        var now = DateTime.Now;
+        var diff = now - time;
+
+        if (diff.TotalMinutes < 1)
+            return "Just now";
+        if (diff.TotalMinutes < 60)
+            return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24)
+            return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7)
+            return $"{(int)diff.TotalDays}d ago";
+        if (time.Year == now.Year)
+            return time.ToString("MMM dd");
+
+        return time.ToString("MM/dd/yy");
+    }
+}

@@ -1,0 +1,62 @@
+@* Typing Indicator Component *@
+
+@if (IsVisible)
+{
+<div class="flex justify-start">
+    <div class="flex items-end gap-2">
+        <img src="@PartnerImage"
+             alt="@PartnerName"
+             class="profile-image w-8 h-8 rounded-full object-cover"
+             data-initials="@GetInitials(PartnerName)"
+             onerror="window.handleImageError(this, '@GetInitials(PartnerName)')" />
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-2xl px-4 py-3 shadow-sm">
+            @if (IsAttaching)
+            {
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-paperclip text-primary animate-pulse"></i>
+                    <span class="text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-600")">sending attachment...</span>
+                </div>
+            }
+            else
+            {
+                <div class="flex items-center gap-2">
+                    <div class="flex gap-1">
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+                    </div>
+                    <span class="text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-600")">typing...</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+    [Parameter]
+    public string PartnerImage { get; set; } = string.Empty;
+
+    [Parameter]
+    public string PartnerName { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsDarkMode { get; set; }
+
+    [Parameter]
+    public bool IsAttaching { get; set; }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "??";
+
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+
+        return parts[0].Length >= 2 ? parts[0].Substring(0, 2).ToUpper() : parts[0].ToUpper();
+    }
+}
