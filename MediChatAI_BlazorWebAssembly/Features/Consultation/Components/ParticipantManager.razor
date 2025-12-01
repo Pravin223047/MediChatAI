@@ -1,0 +1,460 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Consultation
+@using MediChatAI_BlazorWebAssembly.Core.Services.State
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@inject IConsultationRoomService ConsultationRoomService
+@inject ConsultationState ConsultationState
+@inject IToastService ToastService
+@inject IJSRuntime JSRuntime
+
+<div class="participant-manager bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+
+    <!-- Header -->
+    <div class="px-6 py-4 bg-gray-800 border-b border-gray-700 rounded-t-lg flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+            </svg>
+            <h3 class="text-white font-bold text-lg">Manage Participants</h3>
+        </div>
+        <button @onclick="OnClose" class="text-gray-400 hover:text-white transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Content -->
+    <div class="flex-1 overflow-y-auto p-6">
+
+        <!-- Current Participants -->
+        <div class="mb-6">
+            <h4 class="text-white font-semibold text-sm mb-3 flex items-center">
+                <svg class="w-4 h-4 mr-2 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                </svg>
+                Current Participants (@participants.Count)
+            </h4>
+
+            @if (participants.Any())
+            {
+                <div class="space-y-2">
+                    @foreach (var participant in participants)
+                    {
+                        <div class="participant-item bg-gray-800 rounded-lg p-3 border border-gray-700 flex items-center justify-between">
+                            <div class="flex items-center space-x-3 flex-1">
+                                <!-- Avatar -->
+                                <div class="relative">
+                                    <div class="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span class="text-white font-bold text-sm">@GetInitials(participant.Name)</span>
+                                    </div>
+                                    @if (participant.IsOnline)
+                                    {
+                                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-gray-800 rounded-full"></span>
+                                    }
+                                </div>
+
+                                <!-- Info -->
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-white font-medium text-sm truncate">@participant.Name</span>
+                                        <span class="badge badge-xs @GetRoleBadgeClass(participant.Role)">
+                                            @participant.Role
+                                        </span>
+                                    </div>
+                                    <p class="text-gray-400 text-xs">
+                                        @if (participant.IsOnline)
+                                        {
+                                            <span class="text-green-400">Online</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Offline</span>
+                                        }
+                                        @if (participant.JoinedAt != default)
+                                        {
+                                            <span class="mx-1">•</span>
+                                            <span>Joined @FormatTime(participant.JoinedAt)</span>
+                                        }
+                                    </p>
+                                </div>
+
+                                <!-- Actions -->
+                                @if (participant.Role != "Doctor" && participant.Role != "Patient")
+                                {
+                                    <button @onclick="() => ShowRemoveConfirmation(participant)"
+                                            class="text-red-400 hover:text-red-300 transition-colors p-2"
+                                            title="Remove participant">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-6 bg-gray-800 rounded-lg border border-gray-700">
+                    <svg class="w-12 h-12 text-gray-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                    <p class="text-gray-500 text-sm">No participants yet</p>
+                </div>
+            }
+        </div>
+
+        <!-- Add Participant Section -->
+        <div class="border-t border-gray-700 pt-6">
+            <h4 class="text-white font-semibold text-sm mb-3 flex items-center">
+                <svg class="w-4 h-4 mr-2 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                </svg>
+                Add Participant
+            </h4>
+
+            @if (!showAddForm)
+            {
+                <div class="grid grid-cols-2 gap-3">
+                    <button @onclick="@(() => ShowAddForm("Medical"))"
+                            class="btn btn-outline btn-sm border-primary-500 text-primary-400 hover:bg-primary-500 hover:text-white">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Medical Staff
+                    </button>
+                    <button @onclick="@(() => ShowAddForm("Observer"))"
+                            class="btn btn-outline btn-sm border-gray-500 text-gray-400 hover:bg-gray-600 hover:text-white">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                        Observer
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div class="mb-4">
+                        <label class="text-gray-400 text-xs mb-1 block">Participant Name</label>
+                        <input @bind="newParticipantName"
+                               placeholder="Enter name..."
+                               class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500" />
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="text-gray-400 text-xs mb-1 block">Email (Optional)</label>
+                        <input @bind="newParticipantEmail"
+                               type="email"
+                               placeholder="email@example.com"
+                               class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500" />
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="text-gray-400 text-xs mb-1 block">Role</label>
+                        <select @bind="newParticipantRole"
+                                class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <option value="Specialist">Specialist</option>
+                            <option value="Nurse">Nurse</option>
+                            <option value="Medical Student">Medical Student</option>
+                            <option value="Observer">Observer</option>
+                            <option value="Family Member">Family Member</option>
+                            <option value="Interpreter">Interpreter</option>
+                        </select>
+                    </div>
+
+                    <div class="flex space-x-2">
+                        <button @onclick="GenerateGuestLink" disabled="@(string.IsNullOrWhiteSpace(newParticipantName) || isGeneratingLink)"
+                                class="btn btn-primary btn-sm flex-1">
+                            @if (isGeneratingLink)
+                            {
+                                <span class="loading loading-spinner loading-xs mr-2"></span>
+                            }
+                            Generate Guest Link
+                        </button>
+                        <button @onclick="CancelAddForm" class="btn btn-ghost btn-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Generated Link Display -->
+        @if (!string.IsNullOrEmpty(generatedGuestLink))
+        {
+            <div class="mt-4 bg-green-900/20 border border-green-700 rounded-lg p-4">
+                <div class="flex items-start mb-3">
+                    <svg class="w-5 h-5 text-green-400 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                    <div class="flex-1">
+                        <h5 class="text-green-400 font-semibold text-sm mb-1">Guest Link Generated!</h5>
+                        <p class="text-green-300 text-xs mb-3">Share this link with the participant. It expires in 24 hours.</p>
+
+                        <div class="bg-gray-800 rounded px-3 py-2 mb-3 flex items-center justify-between">
+                            <span class="text-gray-300 text-xs font-mono truncate mr-2">@generatedGuestLink</span>
+                            <button @onclick="CopyLinkToClipboard" class="text-primary-400 hover:text-primary-300 transition-colors flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <button @onclick="() => generatedGuestLink = string.Empty" class="text-xs text-gray-400 hover:text-white">
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Remove Confirmation Modal -->
+    @if (participantToRemove != null)
+    {
+        <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 rounded-lg">
+            <div class="bg-gray-800 rounded-lg p-6 max-w-sm w-full border border-gray-700">
+                <h4 class="text-white font-bold text-lg mb-3">Remove Participant?</h4>
+                <p class="text-gray-300 text-sm mb-4">
+                    Are you sure you want to remove <strong>@participantToRemove.Name</strong> from this consultation?
+                </p>
+                <div class="flex space-x-3">
+                    <button @onclick="ConfirmRemoveParticipant" disabled="@isRemoving" class="btn btn-error btn-sm flex-1">
+                        @if (isRemoving)
+                        {
+                            <span class="loading loading-spinner loading-xs mr-2"></span>
+                        }
+                        Remove
+                    </button>
+                    <button @onclick="() => participantToRemove = null" class="btn btn-ghost btn-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+    [Parameter]
+    public int SessionId { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private List<ConsultationParticipantDto> participants = new();
+    private ConsultationParticipantDto? participantToRemove;
+
+    private bool showAddForm = false;
+    private bool isGeneratingLink = false;
+    private bool isRemoving = false;
+    private string newParticipantName = string.Empty;
+    private string newParticipantEmail = string.Empty;
+    private string newParticipantRole = "Specialist";
+    private string generatedGuestLink = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ConsultationState.OnParticipantJoined += OnParticipantJoined;
+        ConsultationState.OnParticipantLeft += OnParticipantLeft;
+        await LoadParticipants();
+    }
+
+    private async Task LoadParticipants()
+    {
+        if (SessionId <= 0) return;
+
+        try
+        {
+            var result = await ConsultationRoomService.GetParticipantsAsync(SessionId);
+            if (result != null)
+            {
+                participants = result;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading participants: {ex.Message}");
+            ToastService.ShowError("Failed to load participants");
+        }
+    }
+
+    private void ShowAddForm(string defaultRole)
+    {
+        showAddForm = true;
+        newParticipantRole = defaultRole;
+        generatedGuestLink = string.Empty;
+    }
+
+    private void CancelAddForm()
+    {
+        showAddForm = false;
+        newParticipantName = string.Empty;
+        newParticipantEmail = string.Empty;
+        newParticipantRole = "Specialist";
+        generatedGuestLink = string.Empty;
+    }
+
+    private async Task GenerateGuestLink()
+    {
+        if (string.IsNullOrWhiteSpace(newParticipantName) || SessionId <= 0) return;
+
+        isGeneratingLink = true;
+        try
+        {
+            var participantInput = new CreateParticipantInput
+            {
+                Name = newParticipantName.Trim(),
+                Email = string.IsNullOrWhiteSpace(newParticipantEmail) ? null : newParticipantEmail.Trim(),
+                Role = newParticipantRole
+            };
+
+            var link = await ConsultationRoomService.GenerateMeetingLinkAsync(SessionId);
+
+            if (!string.IsNullOrEmpty(link))
+            {
+                generatedGuestLink = link;
+                ToastService.ShowSuccess("Guest link generated successfully");
+
+                // Add participant
+                await ConsultationRoomService.AddParticipantAsync(SessionId, participantInput);
+                await LoadParticipants();
+
+                // Clear form but keep it open to show the link
+                newParticipantName = string.Empty;
+                newParticipantEmail = string.Empty;
+            }
+            else
+            {
+                ToastService.ShowError("Failed to generate guest link");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error generating link: {ex.Message}");
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isGeneratingLink = false;
+        }
+    }
+
+    private async Task CopyLinkToClipboard()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", generatedGuestLink);
+            ToastService.ShowSuccess("Link copied to clipboard");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error copying to clipboard: {ex.Message}");
+            ToastService.ShowError("Failed to copy link");
+        }
+    }
+
+    private void ShowRemoveConfirmation(ConsultationParticipantDto participant)
+    {
+        participantToRemove = participant;
+    }
+
+    private async Task ConfirmRemoveParticipant()
+    {
+        if (participantToRemove == null || SessionId <= 0) return;
+
+        isRemoving = true;
+        try
+        {
+            var success = await ConsultationRoomService.RemoveParticipantAsync(
+                SessionId,
+                participantToRemove.Id,
+                "Removed by host"
+            );
+
+            if (success)
+            {
+                ToastService.ShowSuccess($"{participantToRemove.Name} removed");
+                await LoadParticipants();
+                participantToRemove = null;
+            }
+            else
+            {
+                ToastService.ShowError("Failed to remove participant");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error removing participant: {ex.Message}");
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isRemoving = false;
+        }
+    }
+
+    private void OnParticipantJoined(ConsultationParticipantDto participant)
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadParticipants();
+            StateHasChanged();
+        });
+    }
+
+    private void OnParticipantLeft(int participantId)
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadParticipants();
+            StateHasChanged();
+        });
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+    }
+
+    private string GetRoleBadgeClass(string role)
+    {
+        return role switch
+        {
+            "Doctor" => "bg-blue-900/30 text-blue-400 border-blue-700",
+            "Patient" => "bg-green-900/30 text-green-400 border-green-700",
+            "Specialist" or "Nurse" => "bg-purple-900/30 text-purple-400 border-purple-700",
+            "Observer" or "Medical Student" => "bg-gray-900/30 text-gray-400 border-gray-700",
+            _ => "bg-gray-900/30 text-gray-400 border-gray-700"
+        };
+    }
+
+    private string FormatTime(DateTime dateTime)
+    {
+        var diff = DateTime.UtcNow - dateTime;
+        if (diff.TotalMinutes < 1)
+            return "just now";
+        else if (diff.TotalMinutes < 60)
+            return $"{(int)diff.TotalMinutes}m ago";
+        else if (diff.TotalHours < 24)
+            return $"{(int)diff.TotalHours}h ago";
+        else
+            return dateTime.ToString("MMM dd, h:mm tt");
+    }
+
+    public void Dispose()
+    {
+        ConsultationState.OnParticipantJoined -= OnParticipantJoined;
+        ConsultationState.OnParticipantLeft -= OnParticipantLeft;
+    }
+}

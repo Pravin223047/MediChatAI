@@ -1,0 +1,459 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Consultation
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@inject IConsultationRoomService ConsultationRoomService
+@inject IToastService ToastService
+
+<div class="consultation-notes h-full flex flex-col bg-gray-850">
+
+    <!-- Header -->
+    <div class="notes-header bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+        <div class="flex items-center space-x-2">
+            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+            </svg>
+            <h3 class="text-white font-semibold text-sm">Consultation Notes</h3>
+        </div>
+        <div class="flex items-center space-x-2">
+            @if (isAutoSaving)
+            {
+                <span class="text-xs text-gray-400 flex items-center">
+                    <span class="loading loading-spinner loading-xs mr-1"></span>
+                    Saving...
+                </span>
+            }
+            else if (lastSavedTime.HasValue)
+            {
+                <span class="text-xs text-gray-500">
+                    Saved @GetTimeSince(lastSavedTime.Value)
+                </span>
+            }
+            <button @onclick="TogglePreview" class="btn btn-ghost btn-xs text-gray-400 hover:text-white">
+                @if (isPreviewMode)
+                {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    <span class="ml-1">Edit</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                    </svg>
+                    <span class="ml-1">Preview</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    <!-- Template Selector -->
+    <div class="template-selector bg-gray-800 border-b border-gray-700 px-4 py-2">
+        <select @bind="selectedTemplate" @bind:after="ApplyTemplate" class="select select-sm bg-gray-750 text-white text-xs w-full max-w-xs">
+            <option value="">Custom (Blank)</option>
+            <option value="soap">SOAP Note</option>
+            <option value="detailed">Detailed Clinical Note</option>
+            <option value="followup">Follow-up Visit</option>
+        </select>
+    </div>
+
+    <!-- Notes Content -->
+    <div class="notes-content flex-1 overflow-y-auto p-4">
+        @if (!isPreviewMode)
+        {
+            <!-- Edit Mode -->
+            <div class="space-y-4">
+                <!-- Chief Complaint -->
+                <div class="note-section bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <label class="text-white font-semibold text-sm mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                        Chief Complaint (CC)
+                    </label>
+                    <textarea @bind="chiefComplaint"
+                              @bind:event="oninput"
+                              @bind:after="QueueAutoSave"
+                              placeholder="Enter patient's main complaint or reason for visit..."
+                              rows="2"
+                              class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm mt-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"></textarea>
+                </div>
+
+                <!-- History of Present Illness -->
+                <div class="note-section bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <label class="text-white font-semibold text-sm mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"></path>
+                        </svg>
+                        History of Present Illness (HPI)
+                    </label>
+                    <textarea @bind="historyOfPresentIllness"
+                              @bind:event="oninput"
+                              @bind:after="QueueAutoSave"
+                              placeholder="Detailed description of the presenting problem, onset, duration, associated symptoms..."
+                              rows="5"
+                              class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm mt-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Supports Markdown formatting</p>
+                </div>
+
+                <!-- Physical Examination -->
+                <div class="note-section bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <label class="text-white font-semibold text-sm mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+                            <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                        Physical Examination (PE)
+                    </label>
+                    <textarea @bind="physicalExamination"
+                              @bind:event="oninput"
+                              @bind:after="QueueAutoSave"
+                              placeholder="General appearance, vital signs, system-specific findings..."
+                              rows="5"
+                              class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm mt-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"></textarea>
+                </div>
+
+                <!-- Assessment -->
+                <div class="note-section bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <label class="text-white font-semibold text-sm mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+                            <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+                        </svg>
+                        Assessment / Diagnosis
+                    </label>
+                    <textarea @bind="assessment"
+                              @bind:event="oninput"
+                              @bind:after="QueueAutoSave"
+                              placeholder="Clinical impressions, differential diagnoses, ICD codes..."
+                              rows="4"
+                              class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm mt-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"></textarea>
+                </div>
+
+                <!-- Plan -->
+                <div class="note-section bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <label class="text-white font-semibold text-sm mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"></path>
+                        </svg>
+                        Plan / Treatment
+                    </label>
+                    <textarea @bind="plan"
+                              @bind:event="oninput"
+                              @bind:after="QueueAutoSave"
+                              placeholder="Treatment plan, medications, follow-up instructions, referrals..."
+                              rows="5"
+                              class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm mt-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"></textarea>
+                </div>
+
+                <!-- Additional Notes -->
+                <div class="note-section bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <label class="text-white font-semibold text-sm mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path>
+                        </svg>
+                        Additional Notes
+                    </label>
+                    <textarea @bind="additionalNotes"
+                              @bind:event="oninput"
+                              @bind:after="QueueAutoSave"
+                              placeholder="Any additional observations, patient education provided, special instructions..."
+                              rows="3"
+                              class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm mt-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"></textarea>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Preview Mode -->
+            <div class="preview-content prose prose-invert max-w-none">
+                @if (!string.IsNullOrWhiteSpace(chiefComplaint))
+                {
+                    <div class="preview-section mb-6">
+                        <h3 class="text-red-400 font-bold text-sm mb-2">Chief Complaint</h3>
+                        <p class="text-gray-300 text-sm whitespace-pre-wrap">@chiefComplaint</p>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(historyOfPresentIllness))
+                {
+                    <div class="preview-section mb-6">
+                        <h3 class="text-blue-400 font-bold text-sm mb-2">History of Present Illness</h3>
+                        <div class="text-gray-300 text-sm whitespace-pre-wrap">@historyOfPresentIllness</div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(physicalExamination))
+                {
+                    <div class="preview-section mb-6">
+                        <h3 class="text-green-400 font-bold text-sm mb-2">Physical Examination</h3>
+                        <p class="text-gray-300 text-sm whitespace-pre-wrap">@physicalExamination</p>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(assessment))
+                {
+                    <div class="preview-section mb-6">
+                        <h3 class="text-yellow-400 font-bold text-sm mb-2">Assessment</h3>
+                        <p class="text-gray-300 text-sm whitespace-pre-wrap">@assessment</p>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(plan))
+                {
+                    <div class="preview-section mb-6">
+                        <h3 class="text-purple-400 font-bold text-sm mb-2">Plan</h3>
+                        <p class="text-gray-300 text-sm whitespace-pre-wrap">@plan</p>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(additionalNotes))
+                {
+                    <div class="preview-section mb-6">
+                        <h3 class="text-gray-400 font-bold text-sm mb-2">Additional Notes</h3>
+                        <p class="text-gray-300 text-sm whitespace-pre-wrap">@additionalNotes</p>
+                    </div>
+                }
+
+                @if (string.IsNullOrWhiteSpace(chiefComplaint) &&
+                     string.IsNullOrWhiteSpace(historyOfPresentIllness) &&
+                     string.IsNullOrWhiteSpace(physicalExamination) &&
+                     string.IsNullOrWhiteSpace(assessment) &&
+                     string.IsNullOrWhiteSpace(plan) &&
+                     string.IsNullOrWhiteSpace(additionalNotes))
+                {
+                    <div class="text-center py-8">
+                        <svg class="w-12 h-12 text-gray-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p class="text-gray-500 text-sm">No notes yet</p>
+                        <p class="text-gray-600 text-xs mt-1">Switch to edit mode to start writing</p>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="notes-footer bg-gray-800 border-t border-gray-700 px-4 py-3 flex items-center justify-between">
+        <button @onclick="SaveNotes" disabled="@isSaving" class="btn btn-primary btn-sm">
+            @if (isSaving)
+            {
+                <span class="loading loading-spinner loading-xs mr-2"></span>
+            }
+            Save Notes
+        </button>
+        <div class="text-xs text-gray-500">
+            Auto-saves every 30 seconds
+        </div>
+    </div>
+
+</div>
+
+<style>
+    .consultation-notes {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .notes-content::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .notes-content::-webkit-scrollbar-track {
+        background: #1f2937;
+    }
+
+    .notes-content::-webkit-scrollbar-thumb {
+        background: #4b5563;
+        border-radius: 3px;
+    }
+
+    .notes-content::-webkit-scrollbar-thumb:hover {
+        background: #6b7280;
+    }
+
+    textarea {
+        font-family: inherit;
+    }
+
+    .preview-content h3 {
+        margin-top: 0;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int SessionId { get; set; }
+
+    private string chiefComplaint = string.Empty;
+    private string historyOfPresentIllness = string.Empty;
+    private string physicalExamination = string.Empty;
+    private string assessment = string.Empty;
+    private string plan = string.Empty;
+    private string additionalNotes = string.Empty;
+
+    private string selectedTemplate = string.Empty;
+    private bool isPreviewMode = false;
+    private bool isSaving = false;
+    private bool isAutoSaving = false;
+    private DateTime? lastSavedTime;
+    private System.Threading.Timer? autoSaveTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotes();
+        StartAutoSave();
+    }
+
+    private Task LoadNotes()
+    {
+        if (SessionId <= 0) return Task.CompletedTask;
+
+        try
+        {
+            // TODO: Load existing notes from server
+            // var sessionData = await ConsultationRoomService.GetConsultationSessionByIdAsync(SessionId);
+            // if (sessionData != null)
+            // {
+            //     chiefComplaint = sessionData.ChiefComplaint ?? string.Empty;
+            //     historyOfPresentIllness = sessionData.Observations ?? string.Empty;
+            //     assessment = sessionData.Diagnosis ?? string.Empty;
+            //     plan = sessionData.TreatmentPlan ?? string.Empty;
+            // }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading notes: {ex.Message}");
+        }
+        return Task.CompletedTask;
+    }
+
+    private void StartAutoSave()
+    {
+        autoSaveTimer = new System.Threading.Timer(async _ =>
+        {
+            await AutoSave();
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private void QueueAutoSave()
+    {
+        // Input changed, will be auto-saved in 30 seconds
+        StateHasChanged();
+    }
+
+    private async Task AutoSave()
+    {
+        if (SessionId <= 0) return;
+
+        isAutoSaving = true;
+        try
+        {
+            await SaveNotesToServer();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Auto-save error: {ex.Message}");
+        }
+        finally
+        {
+            isAutoSaving = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SaveNotes()
+    {
+        if (SessionId <= 0)
+        {
+            ToastService.ShowWarning("No active session");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            await SaveNotesToServer();
+            lastSavedTime = DateTime.UtcNow;
+            ToastService.ShowSuccess("Notes saved successfully");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to save notes: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task SaveNotesToServer()
+    {
+        // TODO: Implement save via GraphQL
+        // await ConsultationRoomService.UpdateConsultationNotesAsync(
+        //     SessionId,
+        //     chiefComplaint,
+        //     historyOfPresentIllness,
+        //     assessment,
+        //     plan,
+        //     additionalNotes,
+        //     null
+        // );
+        await Task.CompletedTask;
+    }
+
+    private void TogglePreview()
+    {
+        isPreviewMode = !isPreviewMode;
+    }
+
+    private void ApplyTemplate()
+    {
+        switch (selectedTemplate)
+        {
+            case "soap":
+                if (string.IsNullOrWhiteSpace(chiefComplaint))
+                    chiefComplaint = "[Patient's main complaint]";
+                if (string.IsNullOrWhiteSpace(historyOfPresentIllness))
+                    historyOfPresentIllness = "**Subjective:**\n- \n\n**Objective:**\n- Vital Signs:\n- Physical Exam:";
+                if (string.IsNullOrWhiteSpace(assessment))
+                    assessment = "**Assessment:**\n1. [Diagnosis/ICD-10]\n2. ";
+                if (string.IsNullOrWhiteSpace(plan))
+                    plan = "**Plan:**\n1. Medications:\n2. Follow-up:\n3. Patient Education:";
+                break;
+
+            case "detailed":
+                if (string.IsNullOrWhiteSpace(historyOfPresentIllness))
+                    historyOfPresentIllness = "**Onset:** \n**Duration:** \n**Location:** \n**Character:** \n**Associated Symptoms:** \n**Relieving Factors:** \n**Exacerbating Factors:** ";
+                if (string.IsNullOrWhiteSpace(physicalExamination))
+                    physicalExamination = "**General:** \n**HEENT:** \n**Cardiovascular:** \n**Respiratory:** \n**Abdomen:** \n**Extremities:** \n**Neurological:** ";
+                break;
+
+            case "followup":
+                if (string.IsNullOrWhiteSpace(chiefComplaint))
+                    chiefComplaint = "Follow-up visit for [condition]";
+                if (string.IsNullOrWhiteSpace(historyOfPresentIllness))
+                    historyOfPresentIllness = "**Interval History:**\n- Previous visit: \n- Treatment compliance: \n- Current symptoms: \n- Medication side effects: ";
+                break;
+        }
+    }
+
+    private string GetTimeSince(DateTime time)
+    {
+        var diff = DateTime.UtcNow - time;
+        if (diff.TotalSeconds < 60)
+            return "just now";
+        else if (diff.TotalMinutes < 60)
+            return $"{(int)diff.TotalMinutes}m ago";
+        else if (diff.TotalHours < 24)
+            return $"{(int)diff.TotalHours}h ago";
+        else
+            return time.ToString("MMM dd, h:mm tt");
+    }
+
+    public void Dispose()
+    {
+        autoSaveTimer?.Dispose();
+    }
+}

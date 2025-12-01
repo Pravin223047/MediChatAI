@@ -1,0 +1,492 @@
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Services
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@inject IPrescriptionService PrescriptionService
+@inject IToastService ToastService
+
+<div class="prescription-writer h-full flex flex-col bg-gray-850">
+
+    <!-- Header -->
+    <div class="px-4 py-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
+        <div class="flex items-center space-x-2">
+            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            <h3 class="text-white font-semibold text-sm">Prescriptions</h3>
+        </div>
+        <button @onclick="ToggleAddMode" class="btn btn-primary btn-xs">
+            @if (!isAddingPrescription)
+            {
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                <span>Add</span>
+            }
+            else
+            {
+                <span>Cancel</span>
+            }
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4">
+        @if (isAddingPrescription)
+        {
+            <!-- Add Prescription Form -->
+            <div class="add-prescription-form bg-gray-800 rounded-lg p-4 border border-gray-700 mb-4">
+                <h4 class="text-white font-semibold text-sm mb-4">New Prescription Item</h4>
+
+                <!-- Drug Selection -->
+                <div class="form-group mb-3">
+                    <label class="text-gray-400 text-xs mb-1 block">Medication Name</label>
+                    <div class="relative">
+                        <input @bind="currentItem.DrugName"
+                               @bind:event="oninput"
+                               @bind:after="SearchDrugs"
+                               placeholder="Start typing drug name..."
+                               class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500" />
+
+                        @if (drugSearchResults.Any() && !string.IsNullOrWhiteSpace(currentItem.DrugName))
+                        {
+                            <div class="absolute w-full mt-1 bg-gray-700 rounded-lg border border-gray-600 max-h-48 overflow-y-auto z-20 shadow-lg">
+                                @foreach (var drug in drugSearchResults.Take(5))
+                                {
+                                    <button @onclick="() => SelectDrug(drug)"
+                                            class="w-full text-left px-3 py-2 hover:bg-gray-600 transition-colors text-sm">
+                                        <div class="text-white font-medium">@drug.Name</div>
+                                        <div class="text-gray-400 text-xs">@drug.GenericName</div>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Dosage -->
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="form-group">
+                        <label class="text-gray-400 text-xs mb-1 block">Dosage</label>
+                        <input @bind="currentItem.Dosage"
+                               placeholder="e.g., 500mg"
+                               class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500" />
+                    </div>
+                    <div class="form-group">
+                        <label class="text-gray-400 text-xs mb-1 block">Route</label>
+                        <select @bind="currentItem.Route"
+                                class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <option value="Oral">Oral</option>
+                            <option value="Topical">Topical</option>
+                            <option value="Injection">Injection</option>
+                            <option value="Inhalation">Inhalation</option>
+                            <option value="Sublingual">Sublingual</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Frequency -->
+                <div class="form-group mb-3">
+                    <label class="text-gray-400 text-xs mb-1 block">Frequency</label>
+                    <select @bind="frequencyPreset"
+                            @bind:after="ApplyFrequencyPreset"
+                            class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 mb-2">
+                        <option value="">Select frequency...</option>
+                        <option value="Once daily">Once daily</option>
+                        <option value="Twice daily">Twice daily</option>
+                        <option value="Three times daily">Three times daily</option>
+                        <option value="Four times daily">Four times daily</option>
+                        <option value="Every 6 hours">Every 6 hours</option>
+                        <option value="Every 8 hours">Every 8 hours</option>
+                        <option value="Every 12 hours">Every 12 hours</option>
+                        <option value="As needed">As needed (PRN)</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                    @if (frequencyPreset == "custom")
+                    {
+                        <input @bind="currentItem.Frequency"
+                               placeholder="Enter custom frequency..."
+                               class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500" />
+                    }
+                </div>
+
+                <!-- Duration and Quantity -->
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="form-group">
+                        <label class="text-gray-400 text-xs mb-1 block">Duration (days)</label>
+                        <input @bind="currentItem.DurationDays"
+                               type="number"
+                               min="1"
+                               max="365"
+                               class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                    </div>
+                    <div class="form-group">
+                        <label class="text-gray-400 text-xs mb-1 block">Quantity</label>
+                        <input @bind="currentItem.Quantity"
+                               type="number"
+                               min="1"
+                               class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                    </div>
+                </div>
+
+                <!-- Timing Instructions -->
+                <div class="form-group mb-3">
+                    <label class="text-gray-400 text-xs mb-1 block">Timing</label>
+                    <select @bind="currentItem.TimingInstructions"
+                            class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="">Select timing...</option>
+                        <option value="Before meals">Before meals</option>
+                        <option value="After meals">After meals</option>
+                        <option value="With food">With food</option>
+                        <option value="On empty stomach">On empty stomach</option>
+                        <option value="At bedtime">At bedtime</option>
+                        <option value="In the morning">In the morning</option>
+                    </select>
+                </div>
+
+                <!-- Instructions -->
+                <div class="form-group mb-4">
+                    <label class="text-gray-400 text-xs mb-1 block">Additional Instructions</label>
+                    <textarea @bind="currentItem.Instructions"
+                              rows="2"
+                              placeholder="e.g., Take with plenty of water, avoid alcohol..."
+                              class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"></textarea>
+                </div>
+
+                <!-- Warnings -->
+                @if (allergyWarnings.Any())
+                {
+                    <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-3 mb-3">
+                        <div class="flex items-start">
+                            <svg class="w-5 h-5 text-yellow-400 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                            <div class="flex-1">
+                                <h5 class="text-yellow-400 font-semibold text-sm mb-1">Allergy Warning</h5>
+                                <ul class="text-yellow-300 text-xs space-y-1">
+                                    @foreach (var warning in allergyWarnings)
+                                    {
+                                        <li>• @warning</li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Form Actions -->
+                <div class="flex space-x-2">
+                    <button @onclick="AddPrescriptionItem" disabled="@(!IsCurrentItemValid())" class="btn btn-primary btn-sm flex-1">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Add Item
+                    </button>
+                    <button @onclick="ClearCurrentItem" class="btn btn-ghost btn-sm">
+                        Clear
+                    </button>
+                </div>
+            </div>
+        }
+
+        <!-- Prescription Items List -->
+        @if (prescriptionItems.Any())
+        {
+            <div class="prescription-items space-y-3">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-white font-semibold text-sm">
+                        Items in this Prescription (@prescriptionItems.Count)
+                    </h4>
+                </div>
+
+                @foreach (var item in prescriptionItems)
+                {
+                    <div class="prescription-item bg-gray-800 rounded-lg p-3 border border-gray-700">
+                        <div class="flex items-start justify-between mb-2">
+                            <div class="flex-1">
+                                <h5 class="text-white font-semibold text-sm">@item.DrugName</h5>
+                                <p class="text-gray-400 text-xs mt-1">@item.Dosage • @item.Route</p>
+                            </div>
+                            <button @onclick="() => RemovePrescriptionItem(item)"
+                                    class="text-red-400 hover:text-red-300 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+                            <div>
+                                <span class="text-gray-500">Frequency:</span>
+                                <span class="text-gray-300 ml-1">@item.Frequency</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Duration:</span>
+                                <span class="text-gray-300 ml-1">@item.DurationDays days</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Quantity:</span>
+                                <span class="text-gray-300 ml-1">@item.Quantity</span>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(item.TimingInstructions))
+                            {
+                                <div>
+                                    <span class="text-gray-500">Timing:</span>
+                                    <span class="text-gray-300 ml-1">@item.TimingInstructions</span>
+                                </div>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(item.Instructions))
+                        {
+                            <div class="bg-gray-750 rounded px-2 py-1 text-xs text-gray-300 mt-2">
+                                <span class="text-gray-500">Instructions:</span> @item.Instructions
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Save Prescription -->
+            <div class="mt-4 pt-4 border-t border-gray-700">
+                <div class="mb-3">
+                    <label class="text-gray-400 text-xs mb-1 block">Diagnosis (Optional)</label>
+                    <input @bind="diagnosis"
+                           placeholder="Enter diagnosis or condition..."
+                           class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500" />
+                </div>
+                <div class="mb-3">
+                    <label class="text-gray-400 text-xs mb-1 block">Special Instructions (Optional)</label>
+                    <textarea @bind="specialInstructions"
+                              rows="2"
+                              placeholder="Any special notes or instructions for pharmacy..."
+                              class="w-full bg-gray-750 text-white rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-gray-500"></textarea>
+                </div>
+                <button @onclick="SavePrescription" disabled="@isSaving" class="btn btn-primary w-full">
+                    @if (isSaving)
+                    {
+                        <span class="loading loading-spinner loading-sm mr-2"></span>
+                    }
+                    Save Prescription (Pending Signature)
+                </button>
+            </div>
+        }
+        else if (!isAddingPrescription)
+        {
+            <div class="text-center py-12">
+                <svg class="w-16 h-16 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                </svg>
+                <p class="text-gray-500 text-sm mb-2">No prescription items added yet</p>
+                <p class="text-gray-600 text-xs">Click "Add" to create a prescription</p>
+            </div>
+        }
+
+        <!-- Session Prescriptions -->
+        @if (sessionPrescriptions.Any())
+        {
+            <div class="session-prescriptions mt-6 pt-6 border-t-2 border-gray-700">
+                <h4 class="text-white font-semibold text-sm mb-3">
+                    Prescriptions in this Session (@sessionPrescriptions.Count)
+                </h4>
+                <div class="space-y-2">
+                    @foreach (var rx in sessionPrescriptions)
+                    {
+                        <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2 mb-1">
+                                        <span class="text-white font-medium text-sm">@rx.PrescriptionId</span>
+                                        <span class="badge badge-xs @(rx.Status == "Pending" ? "bg-yellow-900/30 text-yellow-400 border-yellow-700" : "bg-green-900/30 text-green-400 border-green-700")">
+                                            @rx.Status
+                                        </span>
+                                    </div>
+                                    <p class="text-gray-400 text-xs">
+                                        @rx.Items.Count item(s) • Created @rx.PrescriptionDate.ToString("h:mm tt")
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public string PatientId { get; set; } = string.Empty;
+
+    [Parameter]
+    public int ConsultationSessionId { get; set; }
+
+    private List<PrescriptionItemModel> prescriptionItems = new();
+    private PrescriptionItemModel currentItem = new();
+    private List<DrugModel> drugSearchResults = new();
+    private List<string> allergyWarnings = new();
+    private List<PrescriptionModel> sessionPrescriptions = new();
+
+    private bool isAddingPrescription = false;
+    private bool isSaving = false;
+    private string frequencyPreset = string.Empty;
+    private string diagnosis = string.Empty;
+    private string specialInstructions = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSessionPrescriptions();
+    }
+
+    private async Task LoadSessionPrescriptions()
+    {
+        if (ConsultationSessionId > 0)
+        {
+            try
+            {
+                sessionPrescriptions = await PrescriptionService.GetConsultationPrescriptionsAsync(ConsultationSessionId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading session prescriptions: {ex.Message}");
+            }
+        }
+    }
+
+    private void SearchDrugs()
+    {
+        if (string.IsNullOrWhiteSpace(currentItem.DrugName) || currentItem.DrugName.Length < 2)
+        {
+            drugSearchResults.Clear();
+            return;
+        }
+
+        // TODO: Implement actual drug search via service
+        // For now, mock some common drugs
+        var mockDrugs = new List<DrugModel>
+        {
+            new DrugModel { DrugId = "1", Name = "Amoxicillin", GenericName = "Amoxicillin", Category = "Antibiotic" },
+            new DrugModel { DrugId = "2", Name = "Ibuprofen", GenericName = "Ibuprofen", Category = "Analgesic" },
+            new DrugModel { DrugId = "3", Name = "Metformin", GenericName = "Metformin HCl", Category = "Antidiabetic" },
+            new DrugModel { DrugId = "4", Name = "Lisinopril", GenericName = "Lisinopril", Category = "Antihypertensive" },
+            new DrugModel { DrugId = "5", Name = "Atorvastatin", GenericName = "Atorvastatin", Category = "Statin" }
+        };
+
+        drugSearchResults = mockDrugs
+            .Where(d => d.Name.Contains(currentItem.DrugName, StringComparison.OrdinalIgnoreCase) ||
+                       d.GenericName.Contains(currentItem.DrugName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private void SelectDrug(DrugModel drug)
+    {
+        currentItem.DrugId = drug.DrugId;
+        currentItem.DrugName = drug.Name;
+        drugSearchResults.Clear();
+
+        // Check for allergy warnings
+        // TODO: Load patient allergies and check against drug
+        allergyWarnings.Clear();
+    }
+
+    private void ApplyFrequencyPreset()
+    {
+        if (frequencyPreset != "custom" && !string.IsNullOrEmpty(frequencyPreset))
+        {
+            currentItem.Frequency = frequencyPreset;
+        }
+    }
+
+    private bool IsCurrentItemValid()
+    {
+        return !string.IsNullOrWhiteSpace(currentItem.DrugName) &&
+               !string.IsNullOrWhiteSpace(currentItem.Dosage) &&
+               !string.IsNullOrWhiteSpace(currentItem.Frequency) &&
+               currentItem.DurationDays > 0 &&
+               currentItem.Quantity > 0;
+    }
+
+    private void AddPrescriptionItem()
+    {
+        if (!IsCurrentItemValid()) return;
+
+        prescriptionItems.Add(currentItem);
+        ClearCurrentItem();
+        isAddingPrescription = false;
+        ToastService.ShowSuccess("Item added to prescription");
+    }
+
+    private void RemovePrescriptionItem(PrescriptionItemModel item)
+    {
+        prescriptionItems.Remove(item);
+        ToastService.ShowInfo("Item removed");
+    }
+
+    private void ClearCurrentItem()
+    {
+        currentItem = new PrescriptionItemModel();
+        frequencyPreset = string.Empty;
+        drugSearchResults.Clear();
+        allergyWarnings.Clear();
+    }
+
+    private void ToggleAddMode()
+    {
+        isAddingPrescription = !isAddingPrescription;
+        if (!isAddingPrescription)
+        {
+            ClearCurrentItem();
+        }
+    }
+
+    private async Task SavePrescription()
+    {
+        if (!prescriptionItems.Any())
+        {
+            ToastService.ShowWarning("Add at least one medication");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(PatientId))
+        {
+            ToastService.ShowError("Patient ID is required");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            var createModel = new CreatePrescriptionModel
+            {
+                PatientId = PatientId,
+                Items = prescriptionItems,
+                Diagnosis = diagnosis,
+                SpecialInstructions = specialInstructions,
+                RefillsAllowed = 0
+            };
+
+            var result = await PrescriptionService.CreatePrescriptionDuringConsultationAsync(
+                ConsultationSessionId,
+                createModel
+            );
+
+            if (result != null)
+            {
+                ToastService.ShowSuccess("Prescription saved (pending signature)");
+                prescriptionItems.Clear();
+                diagnosis = string.Empty;
+                specialInstructions = string.Empty;
+                await LoadSessionPrescriptions();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to save prescription");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}
