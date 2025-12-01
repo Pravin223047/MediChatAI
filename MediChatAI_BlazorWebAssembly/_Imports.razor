@@ -1,0 +1,69 @@
+@using System.Net.Http
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.AspNetCore.Components.WebAssembly.Http
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@using MediChatAI_BlazorWebAssembly
+
+@* Shared Layout *@
+@using MediChatAI_BlazorWebAssembly.Shared.Layout
+
+@* Core Namespaces *@
+@using MediChatAI_BlazorWebAssembly.Core.Components.Guards
+@using MediChatAI_BlazorWebAssembly.Core.Components.Guards.Base
+@using MediChatAI_BlazorWebAssembly.Core.Components.UI
+@using MediChatAI_BlazorWebAssembly.Core.Services.GraphQL
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@using MediChatAI_BlazorWebAssembly.Core.Services.Session
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@using MediChatAI_BlazorWebAssembly.Core.Services.State
+@using MediChatAI_BlazorWebAssembly.Core.Models
+@using MediChatAI_BlazorWebAssembly.Core.Utilities
+
+@* Feature: Authentication *@
+@using MediChatAI_BlazorWebAssembly.Features.Authentication.Pages
+@using MediChatAI_BlazorWebAssembly.Features.Authentication.Components
+@using MediChatAI_BlazorWebAssembly.Features.Authentication.Services
+@using MediChatAI_BlazorWebAssembly.Features.Authentication.Models
+
+@* Feature: Admin *@
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Pages
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Pages.Settings
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Components
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Services
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Models
+
+@* Feature: Doctor *@
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Pages
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Components
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Services
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+
+@* Feature: Patient *@
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Pages
+
+@* Feature: Emergency *@
+@using MediChatAI_BlazorWebAssembly.Features.Emergency.Pages
+@using MediChatAI_BlazorWebAssembly.Features.Emergency.Components
+@using MediChatAI_BlazorWebAssembly.Features.Emergency.Services
+@using MediChatAI_BlazorWebAssembly.Features.Emergency.Models
+
+@* Feature: Profile *@
+@using MediChatAI_BlazorWebAssembly.Features.Profile.Pages
+@using MediChatAI_BlazorWebAssembly.Features.Profile.Services
+@using MediChatAI_BlazorWebAssembly.Features.Profile.Models
+
+@* Feature: Notifications *@
+@using MediChatAI_BlazorWebAssembly.Features.Notifications.Pages
+@using MediChatAI_BlazorWebAssembly.Features.Notifications.Components
+@using MediChatAI_BlazorWebAssembly.Features.Notifications.Services
+@using MediChatAI_BlazorWebAssembly.Features.Notifications.Models
+
+@* Shared Public Pages *@
+@using MediChatAI_BlazorWebAssembly.Shared.Pages

@@ -1,0 +1,143 @@
+﻿@inject ThemeState ThemeState
+@implements IDisposable
+<CascadingAuthenticationState>
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <DoctorRouteGuard CurrentPath="@Navigation.ToBaseRelativePath(Navigation.Uri)">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </DoctorRouteGuard>
+    </Found>
+    <NotFound>
+        <PageTitle>Not found</PageTitle>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <p role="alert">Sorry, there's nothing at this address.</p>
+        </LayoutView>
+    </NotFound>
+</Router>
+</CascadingAuthenticationState>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+    [Inject] private AppSettingsState AppSettings { get; set; } = default!;
+    [Inject] private ISettingsService SettingsService { get; set; } = default!;
+    [Inject] private IThemeService ThemeService { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        // Subscribe to theme changes
+        ThemeState.OnChange += OnThemeChanged;
+
+        // IMPORTANT: UI renders immediately with default settings (defined in AppSettingsState constructor)
+        // Default theme is already applied via:
+        // 1. CSS variables in index.html (instant, before Blazor loads)
+        // 2. ThemeState constructor (centralized defaults via DefaultThemeConfiguration)
+        // 3. AppSettingsState constructor (comprehensive default settings)
+
+        // Settings and theme are loaded from database in the background for better UX
+        // When data arrives, the UI automatically updates via OnChange events
+        // If database is slow or unavailable, defaults remain active - no loading indicators shown
+
+        // Ensure default theme is applied to ThemeState immediately
+        ThemeService.ApplyThemeAsync(ThemeState.CurrentTheme).ContinueWith(_ => { }, TaskScheduler.Default);
+
+        // Load settings in background (non-blocking, silent failures)
+        _ = LoadSettingsInBackgroundAsync();
+    }
+
+    private async Task LoadSettingsInBackgroundAsync()
+    {
+        // Load all system settings from database (accessible to all users, no auth required)
+        // This includes site name, description, contact info, theme settings, etc.
+        // If database is slow or unavailable, defaults remain visible with NO loading indicators
+
+        // STRATEGY: Aggressive timeout with graceful degradation
+        // - 3 second timeout (reduced from 5 for faster fallback)
+        // - Silent failures (user never sees errors)
+        // - Defaults are comprehensive and professional
+        // - Database settings enhance but don't block UX
+
+        try
+        {
+            // Load general settings (site name, description, contact info, etc.)
+            var settingsTask = AppSettings.LoadSettingsAsync(SettingsService);
+            var timeoutTask = Task.Delay(3000); // 3 second timeout (aggressive)
+
+            var completedTask = await Task.WhenAny(settingsTask, timeoutTask);
+
+            if (completedTask == settingsTask)
+            {
+                try
+                {
+                    await settingsTask; // Await to catch any exceptions
+                    Console.WriteLine("✓ System settings loaded from database");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠ Settings load failed: {ex.Message} - using defaults");
+                }
+            }
+            else
+            {
+                Console.WriteLine("⚠ Database timeout (3s) - using default settings");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠ Settings error: {ex.Message} - using defaults");
+        }
+
+        // Load PUBLIC appearance settings from database
+        try
+        {
+            var appearanceTask = SettingsService.GetAppearanceSettingsAsync();
+            var timeoutTask = Task.Delay(3000); // 3 second timeout
+
+            var completedTask = await Task.WhenAny(appearanceTask, timeoutTask);
+
+            if (completedTask == appearanceTask)
+            {
+                try
+                {
+                    var appearanceSettings = await appearanceTask;
+
+                    if (appearanceSettings != null)
+                    {
+                        // Apply theme from database settings (overrides defaults)
+                        await ThemeService.LoadThemeFromAppearanceSettingsAsync(appearanceSettings);
+                        Console.WriteLine("✓ Theme loaded from database");
+                    }
+                    else
+                    {
+                        Console.WriteLine("⚠ Appearance settings null - using defaults");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠ Theme load failed: {ex.Message} - using defaults");
+                }
+            }
+            else
+            {
+                Console.WriteLine("⚠ Theme query timeout - using defaults");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠ Theme error: {ex.Message} - using defaults");
+        }
+
+        // Note: No loading indicators shown during this process
+        // User sees default theme immediately, database theme applies seamlessly when ready
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}
