@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <title>Email Verification</title>
+</head>
+<body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;'>
+    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; text-align: center; color: white; border-radius: 10px 10px 0 0;'>
+        <h1 style='margin: 0; font-size: 28px;'>MediChat.AI</h1>
+        <p style='margin: 10px 0 0 0; font-size: 16px;'>Healthcare Communication Platform</p>
+    </div>
+
+    <div style='background: white; padding: 30px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 10px 10px;'>
+        <h2 style='color: #667eea; margin-top: 0;'>Welcome {{FirstName}}!</h2>
+
+        <p>Thank you for registering with MediChat.AI. To complete your registration, please verify your email address by clicking the button below:</p>
+
+        <div style='text-align: center; margin: 30px 0;'>
+            <a href='{{VerificationLink}}' style='background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;'>Verify Email Address</a>
+        </div>
+
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style='word-break: break-all; color: #667eea;'>{{VerificationLink}}</p>
+
+        <p><strong>This verification link will expire in 24 hours.</strong></p>
+
+        <hr style='border: none; border-top: 1px solid #eee; margin: 30px 0;'>
+
+        <p style='font-size: 14px; color: #666;'>
+            If you didn't create an account with MediChat.AI, please ignore this email.
+        </p>
+    </div>
+</body>
+</html>

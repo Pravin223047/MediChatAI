@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <title>Two-Factor Authentication Enabled</title>
+</head>
+<body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;'>
+    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; text-align: center; color: white; border-radius: 10px 10px 0 0;'>
+        <h1 style='margin: 0; font-size: 28px;'>MediChat.AI</h1>
+        <p style='margin: 10px 0 0 0; font-size: 16px;'>Security Alert</p>
+    </div>
+
+    <div style='background: white; padding: 30px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 10px 10px;'>
+        <h2 style='color: #10b981; margin-top: 0;'>✓ Two-Factor Authentication Enabled</h2>
+
+        <p>Hello {{FirstName}},</p>
+
+        <p>Great news! Two-Factor Authentication (2FA) has been successfully enabled on your MediChat.AI account.</p>
+
+        <div style='background: #f0fdf4; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 5px;'>
+            <h3 style='margin: 0 0 10px 0; color: #10b981; font-size: 16px;'>🔒 Your Account is Now More Secure</h3>
+            <p style='margin: 0; font-size: 14px;'>Your account now requires both your password and an authenticator app code to sign in, providing an extra layer of security against unauthorized access.</p>
+        </div>
+
+        <h3 style='color: #667eea; margin-top: 25px;'>What This Means:</h3>
+        <ul style='line-height: 1.8;'>
+            <li>Every time you log in, you'll need to enter a 6-digit code from your authenticator app</li>
+            <li>This code changes every 30 seconds, making your account much more secure</li>
+            <li>Even if someone knows your password, they cannot access your account without your authenticator</li>
+        </ul>
+
+        <h3 style='color: #667eea; margin-top: 25px;'>Important Reminders:</h3>
+        <ul style='line-height: 1.8;'>
+            <li><strong>Keep your authenticator app secure</strong> - Don't share your device or backup codes</li>
+            <li><strong>Save your backup codes</strong> - Store them in a safe place in case you lose access to your authenticator</li>
+            <li><strong>Update your recovery contact</strong> - Ensure your recovery email is up to date</li>
+        </ul>
+
+        <div style='background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 5px;'>
+            <p style='margin: 0; font-size: 14px;'><strong>Didn't enable 2FA?</strong> If you did not enable this feature, please contact our support team immediately at <a href='mailto:support@medichat.ai' style='color: #667eea;'>support@medichat.ai</a></p>
+        </div>
+
+        <hr style='border: none; border-top: 1px solid #eee; margin: 30px 0;'>
+
+        <p style='font-size: 14px; color: #666;'>
+            <strong>Date & Time:</strong> {{DateTime}}<br>
+            <strong>Action:</strong> Two-Factor Authentication Enabled
+        </p>
+
+        <p style='font-size: 14px; color: #666; margin-top: 20px;'>
+            Thank you for taking steps to secure your MediChat.AI account!
+        </p>
+    </div>
+</body>
+</html>
