@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MediChat.AI - Healthcare Communication Platform</title>
+    <base href="/" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            DEFAULT: 'var(--color-primary, #3b82f6)',
+                            50: 'rgb(var(--color-primary-rgb, 59 130 246) / 0.05)',
+                            100: 'rgb(var(--color-primary-rgb, 59 130 246) / 0.1)',
+                            200: 'rgb(var(--color-primary-rgb, 59 130 246) / 0.2)',
+                            300: 'rgb(var(--color-primary-rgb, 59 130 246) / 0.3)',
+                            400: 'rgb(var(--color-primary-rgb, 59 130 246) / 0.4)',
+                            500: 'var(--color-primary, #3b82f6)',
+                            600: 'rgb(var(--color-primary-rgb, 59 130 246) / 0.8)',
+                            700: 'rgb(var(--color-primary-rgb, 59 130 246) / 0.9)',
+                            800: 'rgb(var(--color-primary-rgb, 59 130 246) / 0.95)',
+                            900: 'rgb(var(--color-primary-rgb, 59 130 246) / 1)',
+                        },
+                        accent: {
+                            DEFAULT: 'var(--color-accent, #8b5cf6)',
+                            50: 'rgb(var(--color-accent-rgb, 139 92 246) / 0.05)',
+                            100: 'rgb(var(--color-accent-rgb, 139 92 246) / 0.1)',
+                            200: 'rgb(var(--color-accent-rgb, 139 92 246) / 0.2)',
+                            300: 'rgb(var(--color-accent-rgb, 139 92 246) / 0.3)',
+                            400: 'rgb(var(--color-accent-rgb, 139 92 246) / 0.4)',
+                            500: 'var(--color-accent, #8b5cf6)',
+                            600: 'rgb(var(--color-accent-rgb, 139 92 246) / 0.8)',
+                            700: 'rgb(var(--color-accent-rgb, 139 92 246) / 0.9)',
+                            800: 'rgb(var(--color-accent-rgb, 139 92 246) / 0.95)',
+                            900: 'rgb(var(--color-accent-rgb, 139 92 246) / 1)',
+                        },
+                    },
+                    backgroundColor: {
+                        'app': 'var(--color-background, #f8fafc)',
+                        'app-dark': 'var(--color-background-dark, #111827)',
+                    },
+                    textColor: {
+                        'app': 'var(--color-text, #1f2937)',
+                        'app-dark': 'var(--color-text-dark, #f9fafb)',
+                    },
+                    borderColor: {
+                        'theme': 'var(--color-border, #e5e7eb)',
+                        'theme-dark': 'var(--color-border-dark, #374151)',
+                    },
+                    borderRadius: {
+                        'theme': 'var(--border-radius, 0.5rem)',
+                    },
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="MediChatAI_BlazorWebAssembly.styles.css" rel="stylesheet" />
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- Apply default theme immediately before Blazor loads -->
+    <style>
+        :root {
+            /* Default Theme Colors - Applied immediately, no waiting for database */
+            --color-primary: #6366f1;
+            --color-primary-rgb: 99, 102, 241;
+            --color-accent: #8b5cf6;
+            --color-accent-rgb: 139, 92, 246;
+            --color-background: #f8fafc;
+            --color-background-dark: #111827;
+            --color-text: #0f172a;
+            --color-text-dark: #f9fafb;
+            --color-border: #e5e7eb;
+            --color-border-dark: #374151;
+            --border-radius: 0.75rem;
+            --font-size-base: 16px;
+        }
+
+        /* Ensure smooth theme transitions */
+        * {
+            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+        }
+
+        /* Apply default background and text color immediately */
+        body {
+            background-color: var(--color-background);
+            color: var(--color-text);
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            font-size: var(--font-size-base);
+            overflow-y: auto;
+        }
+
+        /* Hide all scrollbars globally while maintaining scroll functionality */
+        /* Using only well-supported standard methods */
+        * {
+            -ms-overflow-style: none;  /* IE and Edge */
+        }
+
+        *::-webkit-scrollbar {
+            display: none;  /* Chrome, Safari, Opera, Edge */
+            width: 0;
+            height: 0;
+        }
+
+        /* Firefox - using standard property */
+        @supports (scrollbar-width: none) {
+            * {
+                scrollbar-width: none;
+            }
+        }
+
+        html, body {
+            -ms-overflow-style: none;
+        }
+
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+
+        /* Dark mode support */
+        body.dark {
+            background-color: var(--color-background-dark);
+            color: var(--color-text-dark);
+        }
+
+        /* Improved loading indicator styles */
+        #app {
+            display: flex;
+            flex-direction: column;
+            /* align-items: center; */
+            width: 100%;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: var(--color-background);
+        }
+
+        .loading-progress {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+        }
+
+        .loading-progress circle {
+            fill: none;
+            stroke: var(--color-primary);
+            stroke-width: 4px;
+            transform-origin: 50% 50%;
+            animation: loading-spin 2s linear infinite;
+        }
+
+        .loading-progress circle:last-child {
+            stroke: var(--color-accent);
+            stroke-dasharray: 150%;
+            animation: loading-progress 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loading-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes loading-progress {
+            0% { stroke-dashoffset: 150%; }
+            50% { stroke-dashoffset: 50%; }
+            100% { stroke-dashoffset: 150%; }
+        }
+
+        .loading-progress-text {
+            color: var(--color-text);
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .loading-progress-text::after {
+            content: 'Loading Healthcare Platform';
+            display: block;
+            animation: loading-text 1.5s steps(4) infinite;
+        }
+
+        @keyframes loading-text {
+            0% { content: 'Loading Healthcare Platform'; }
+            25% { content: 'Loading Healthcare Platform.'; }
+            50% { content: 'Loading Healthcare Platform..'; }
+            75% { content: 'Loading Healthcare Platform...'; }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <script>
+        // Helper function to download files from base64 data or plain text
+        window.downloadFile = function(filename, data, mimeType) {
+            try {
+                let blob;
+
+                // Check if data is base64 or plain text
+                if (mimeType && mimeType.includes('application/octet-stream')) {
+                    // Decode base64 to binary
+                    const binaryString = atob(data);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    blob = new Blob([bytes], { type: mimeType });
+                } else {
+                    // Plain text content (like CSV)
+                    blob = new Blob([data], { type: mimeType || 'text/csv' });
+                }
+
+                // Create blob and download
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Error downloading file:', error);
+                alert('Failed to download file. Please try again.');
+            }
+        };
+
+        // Direct file upload function
+        window.uploadFileDirectly = async function(inputId, uploadUrl) {
+            try {
+                const input = document.getElementById(inputId);
+                const file = input.files[0];
+                if (!file) return null;
+
+                const token = localStorage.getItem('token');
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch(`http://localhost:5095/${uploadUrl}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    return result.filePath;
+                }
+                return null;
+            } catch (error) {
+                console.error('Upload error:', error);
+                return null;
+            }
+        };
+    </script>
+
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- Excel Export Library -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- Application Scripts -->
+    <script src="js/image-service.js"></script>
+    <script src="js/image-fallback.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/reports.js"></script>
+    <script src="js/modal-focus.js"></script>
+    <script src="js/geolocation.js"></script>
+    <script src="js/emergencyChat.js"></script>
+    <script src="js/multimodal.js"></script>
+    <script src="js/voiceRecorder.js"></script>
+    <script src="js/webrtc.js"></script>
+    <script src="js/attachments.js"></script>
+    <script src="js/fileDownload.js"></script>
+    <script src="js/scroll-helper.js"></script>
+    <script src="js/speech-recognition.js"></script>
+    <script src="js/speechSynthesis.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>
