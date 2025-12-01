@@ -1,0 +1,151 @@
+@page "/verify-email"
+@using Microsoft.AspNetCore.WebUtilities
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject AppSettingsState AppSettings
+
+<PageTitle>Verify Email - @AppSettings.Settings.SiteName</PageTitle>
+
+<AnonymousOnly>
+
+<div class="flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
+    <div class="max-w-xl w-full space-y-8">
+        <div>
+            <div class="mx-auto h-12 w-auto flex items-center justify-center">
+                <h1 class="text-3xl font-bold text-primary dark:text-primary">@AppSettings.Settings.SiteName</h1>
+            </div>
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+                Email Verification
+            </h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="text-center">
+                <svg class="animate-spin mx-auto h-12 w-12 text-primary dark:text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-4 text-gray-600 dark:text-gray-400">Verifying your email address...</p>
+            </div>
+        }
+        else if (verificationSuccess)
+        {
+            <div class="rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 transition-colors duration-300">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-green-400 dark:text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-green-800 dark:text-green-300">Email Verified Successfully!</h3>
+                        <p class="text-sm text-green-700 dark:text-green-400 mt-1">Your email address has been verified. You can now sign in to your account.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <a href="/login"
+                   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-accent dark:hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
+                    Continue to Login
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 transition-colors duration-300">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800 dark:text-red-300">Email Verification Failed</h3>
+                        <p class="text-sm text-red-700 dark:text-red-400 mt-1">@errorMessage</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center space-y-4">
+                <a href="/register"
+                   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-primary dark:text-primary bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
+                    Register New Account
+                </a>
+                <div>
+                    <a href="/login" class="text-sm text-primary dark:text-primary hover:text-accent dark:hover:text-accent transition-colors">
+                        Back to Login
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private bool verificationSuccess = false;
+    private string errorMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var queryParams = QueryHelpers.ParseQuery(uri.Query);
+
+        if (queryParams.TryGetValue("userId", out var userIdValue) &&
+            queryParams.TryGetValue("token", out var tokenValue))
+        {
+            var userId = userIdValue.FirstOrDefault() ?? string.Empty;
+            var token = tokenValue.FirstOrDefault() ?? string.Empty;
+
+            if (!string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(token))
+            {
+                await VerifyUserEmail(userId, token);
+            }
+            else
+            {
+                errorMessage = "Invalid verification link.";
+                isLoading = false;
+            }
+        }
+        else
+        {
+            errorMessage = "Invalid verification link.";
+            isLoading = false;
+        }
+    }
+
+    private async Task VerifyUserEmail(string userId, string token)
+    {
+        try
+        {
+            var request = new VerifyEmailRequest
+            {
+                Email = userId,
+                Token = token
+            };
+            var result = await AuthService.VerifyEmailAsync(request);
+            
+            if (result)
+            {
+                verificationSuccess = true;
+            }
+            else
+            {
+                errorMessage = "The verification link is invalid or has expired.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "An unexpected error occurred during verification.";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}
+
+</AnonymousOnly>

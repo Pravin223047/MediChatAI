@@ -1,0 +1,33 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+@if (!IsAuthenticated)
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool IsAuthenticated { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        IsAuthenticated = authState.User?.Identity?.IsAuthenticated == true;
+
+        if (IsAuthenticated)
+        {
+            var userRole = authState.User?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var dashboardUrl = userRole switch
+            {
+                "Admin" => "/admin/dashboard",
+                "Doctor" => "/doctor/dashboard",
+                "Patient" => "/patient/dashboard",
+                _ => "/patient/dashboard"
+            };
+            NavigationManager.NavigateTo(dashboardUrl);
+        }
+    }
+}

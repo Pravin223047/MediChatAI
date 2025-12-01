@@ -1,0 +1,232 @@
+@page "/verify-otp"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AppSettingsState AppSettings
+@inject IToastService ToastService
+
+<PageTitle>Verify Email - @AppSettings.Settings.SiteName</PageTitle>
+
+<AnonymousOnly>
+
+<div class="flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
+    <div class="max-w-xl w-full">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-primary/10 dark:bg-primary/20 rounded-2xl mb-4">
+                <svg class="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">@AppSettings.Settings.SiteName</h1>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                Verify Your Email
+            </h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+                We've sent a verification code to<br />
+                <span class="font-semibold text-primary dark:text-primary">@email</span>
+            </p>
+        </div>
+
+        <!-- Auth Card -->
+        <div class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-xl dark:shadow-2xl border border-gray-200 dark:border-gray-700 p-8 transition-all duration-300">
+            <EditForm Model="@otpModel" OnValidSubmit="@HandleVerifyOtp" class="space-y-6">
+                <DataAnnotationsValidator />
+
+                <!-- OTP Input -->
+                <div class="space-y-3">
+                    <label for="otpCode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 text-center">Verification Code</label>
+                    <div class="relative">
+                        <InputText id="otpCode" @bind-Value="otpModel.OtpCode"
+                                  class="block w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-center text-3xl font-mono tracking-widest transition-all duration-200"
+                                  placeholder="000000"
+                                  maxlength="6"
+                                  autocomplete="one-time-code" />
+                    </div>
+                    <ValidationMessage For="@(() => otpModel.OtpCode)" class="text-red-500 dark:text-red-400 text-xs mt-1 text-center" />
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">
+                        Enter the 6-digit code from your email
+                    </p>
+                </div>
+
+                <!-- Submit Button -->
+                <div>
+                    <button type="submit" disabled="@isLoading"
+                            class="group relative w-full flex items-center justify-center py-3.5 px-4 border border-transparent text-base font-semibold rounded-xl text-white bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl">
+                        @if (isLoading)
+                        {
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Verifying...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span>Verify Code</span>
+                        }
+                    </button>
+                </div>
+
+                <!-- Resend & Back Links -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <button type="button" @onclick="ResendOtp" disabled="@(isLoading || resendCooldown > 0)"
+                            class="inline-flex items-center text-sm font-medium text-primary hover:text-primary dark:text-primary dark:hover:text-primary disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed transition-colors">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        @if (resendCooldown > 0)
+                        {
+                            <span>Resend in @resendCooldown s</span>
+                        }
+                        else
+                        {
+                            <span>Resend code</span>
+                        }
+                    </button>
+                    <a href="/login" class="inline-flex items-center text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        Back to Login
+                    </a>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email = string.Empty;
+    private VerifyOtpModel otpModel = new();
+    private bool isLoading = false;
+    private int resendCooldown = 0;
+    private Timer? cooldownTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        var uri = new Uri(Navigation.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("email", out var emailValue))
+        {
+            email = emailValue.ToString();
+            otpModel.Email = email;
+        }
+        else
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    private async Task HandleVerifyOtp()
+    {
+        isLoading = true;
+
+        try
+        {
+            var request = new VerifyOtpRequest
+            {
+                Email = otpModel.Email,
+                OtpCode = otpModel.OtpCode
+            };
+            var result = await AuthService.VerifyOtpAsync(request);
+
+            if (result.Success && result.User != null)
+            {
+                ToastService.ShowSuccess("Email verified successfully! Redirecting to your dashboard...");
+                StateHasChanged();
+
+                await Task.Delay(2000);
+
+                var dashboardUrl = result.User.Role switch
+                {
+                    "Admin" => "/admin/dashboard",
+                    "Doctor" => "/doctor/dashboard",
+                    "Patient" => "/patient/dashboard",
+                    _ => "/patient/dashboard"
+                };
+
+                Navigation.NavigateTo(dashboardUrl);
+            }
+            else
+            {
+                ToastService.ShowError(string.Join(", ", result.Errors));
+            }
+        }
+        catch (Exception)
+        {
+            ToastService.ShowError("An unexpected error occurred. Please try again.");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResendOtp()
+    {
+        if (resendCooldown > 0 || isLoading) return;
+
+        isLoading = true;
+
+        try
+        {
+            var result = await AuthService.SendOtpAsync(email);
+
+            if (result.Success)
+            {
+                ToastService.ShowSuccess("New verification code sent to your email.");
+                StartResendCooldown();
+            }
+            else
+            {
+                ToastService.ShowError(string.Join(", ", result.Errors));
+            }
+        }
+        catch (Exception)
+        {
+            ToastService.ShowError("Failed to resend verification code. Please try again.");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void StartResendCooldown()
+    {
+        resendCooldown = 60;
+        cooldownTimer?.Dispose();
+        cooldownTimer = new Timer(async _ =>
+        {
+            resendCooldown--;
+            await InvokeAsync(StateHasChanged);
+
+            if (resendCooldown <= 0)
+            {
+                cooldownTimer?.Dispose();
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    public void Dispose()
+    {
+        cooldownTimer?.Dispose();
+    }
+}
+
+</AnonymousOnly>
