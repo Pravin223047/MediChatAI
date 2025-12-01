@@ -1,0 +1,449 @@
+@page "/services"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AppSettingsState AppSettings
+@inject ThemeState ThemeState
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@implements IDisposable
+
+<PageTitle>Services - @AppSettings.Settings.SiteName</PageTitle>
+
+<div class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-black text-gray-900 dark:text-white transition-colors duration-300 min-h-screen">
+
+    <!-- Hero Section with 3D Animation -->
+    <section class="pt-20 pb-16 px-6 relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/5 animate-gradient-slow"></div>
+        
+        <!-- 3D Floating Medical Icons -->
+        <div class="absolute inset-0">
+            <div class="absolute top-1/4 left-1/4 w-32 h-32 bg-primary/20 rounded-full blur-2xl animate-float-3d"></div>
+            <div class="absolute bottom-1/3 right-1/4 w-48 h-48 bg-accent/20 rounded-full blur-3xl animate-float-3d-reverse"></div>
+            <div class="absolute top-1/2 right-1/3 w-24 h-24 bg-primary/15 rounded-full blur-xl animate-pulse-3d"></div>
+        </div>
+
+        <div class="container mx-auto text-center relative z-10">
+            <div class="max-w-4xl mx-auto animate-fade-in">
+                <div class="mb-6 animate-slide-down">
+                    <span class="inline-block px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-full text-sm font-semibold uppercase tracking-wide shadow-lg animate-glow">
+                        Our Healthcare Services 🏥
+                    </span>
+                </div>
+                
+                <h1 class="text-4xl md:text-6xl lg:text-7xl font-black mb-8 animate-slide-up leading-tight">
+                    <span class="gradient-text bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+                        Comprehensive Care
+                    </span>
+                    <br>
+                    <span class="text-2xl lg:text-4xl text-gray-600 dark:text-gray-300">At Your Fingertips</span>
+                </h1>
+                
+                <p class="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-12 animate-slide-up leading-relaxed">
+                    Experience the future of healthcare with our AI-powered services designed for every medical need
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Service Categories -->
+    <section class="py-20 px-6">
+        <div class="container mx-auto">
+            @SectionHeader("Service Categories", "Explore our comprehensive range of healthcare solutions", "🎯")
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12 max-w-6xl mx-auto">
+                @ServiceCategoryCard("Emergency Care", "🚨", emergencyServices, "accent", "Access Now", async () => await HandleServiceClick("Emergency"))
+                @ServiceCategoryCard("Telemedicine", "📹", telemedicineServices, "primary", "Start Consultation", async () => await HandleServiceClick("Telemedicine"))
+                @ServiceCategoryCard("AI Diagnostics", "🤖", aiServices, "accent", "Try AI Assistant", async () => await HandleServiceClick("AI"))
+                @ServiceCategoryCard("Health Records", "📊", recordServices, "primary", "Manage Records", async () => await HandleServiceClick("Records"))
+                @ServiceCategoryCard("Preventive Care", "🛡️", preventiveServices, "accent", "Learn More", async () => await HandleServiceClick("Preventive"))
+                @ServiceCategoryCard("Specialist Care", "👨⚕️", specialistServices, "primary", "Find Specialist", async () => await HandleServiceClick("Specialist"))
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Features Showcase -->
+    <section class="py-20 px-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+        <div class="container mx-auto">
+            @SectionHeader("Advanced Features", "Cutting-edge technology for superior healthcare", "⚡")
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 mt-12 max-w-6xl mx-auto">
+                @InteractiveFeatureCard("AI-Powered Health Assistant", "🧠", "Real-time health monitoring and personalized recommendations", "primary", async () => await HandleFeatureDemo("AI"))
+                @InteractiveFeatureCard("24/7 Emergency Response", "🚨", "Instant emergency alerts with GPS tracking and hospital coordination", "accent", async () => await HandleFeatureDemo("Emergency"))
+                @InteractiveFeatureCard("Multilingual Voice Support", "🗣️", "Voice commands and responses in 12+ Indian languages", "primary", async () => await HandleFeatureDemo("Voice"))
+                @InteractiveFeatureCard("Secure Data Encryption", "🔐", "HIPAA-compliant security with 256-bit encryption", "accent", async () => await HandleFeatureDemo("Security"))
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Plans -->
+    <section class="py-20 px-6">
+        <div class="container mx-auto">
+            @SectionHeader("Service Plans", "Choose the perfect plan for your healthcare needs", "💎")
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12 max-w-5xl mx-auto">
+                @PricingCard("Basic", "Free", "Essential healthcare features", basicFeatures, "Get Started", false, async () => await HandlePlanSelect("Basic"))
+                @PricingCard("Premium", "$29/month", "Advanced AI-powered features", premiumFeatures, "Upgrade Now", true, async () => await HandlePlanSelect("Premium"))
+                @PricingCard("Enterprise", "Custom", "Full-scale healthcare solutions", enterpriseFeatures, "Contact Sales", false, async () => await HandlePlanSelect("Enterprise"))
+            </div>
+        </div>
+    </section>
+
+    <!-- Call to Action -->
+    <section class="py-16 px-6 bg-gradient-to-r from-primary to-accent text-white relative overflow-hidden">
+        <div class="absolute inset-0 bg-black/10"></div>
+        <div class="container mx-auto text-center relative z-10">
+            <h2 class="text-3xl md:text-4xl font-bold mb-6">Ready to Experience Next-Gen Healthcare?</h2>
+            <p class="text-xl mb-8 opacity-90">Join thousands who trust our platform for their medical needs</p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <button class="bg-white text-primary px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+                        @onclick="HandleGetStarted">
+                    🚀 Start Your Journey
+                </button>
+                <button class="border-2 border-white px-8 py-4 rounded-xl font-semibold hover:bg-white hover:text-primary transition-all duration-300"
+                        @onclick="HandleContactUs">
+                    📞 Contact Us
+                </button>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    #region Service Data
+    private readonly List<string> emergencyServices = new()
+    {
+        "24/7 Emergency Response System",
+        "GPS-based Hospital Location",
+        "Automated Alert Dispatch",
+        "Critical Care Coordination",
+        "Emergency Medical Records Access"
+    };
+
+    private readonly List<string> telemedicineServices = new()
+    {
+        "HD Video Consultations",
+        "Secure Audio Calls",
+        "Digital Prescription System",
+        "Remote Health Monitoring",
+        "Specialist Referrals"
+    };
+
+    private readonly List<string> aiServices = new()
+    {
+        "Symptom Analysis & Assessment",
+        "Personalized Health Insights",
+        "Drug Interaction Checking",
+        "Health Risk Predictions",
+        "Treatment Recommendations"
+    };
+
+    private readonly List<string> recordServices = new()
+    {
+        "Secure Medical Records Storage",
+        "AI-Powered Health Analytics",
+        "Lab Results Integration",
+        "Medication History Tracking",
+        "Health Timeline Visualization"
+    };
+
+    private readonly List<string> preventiveServices = new()
+    {
+        "Health Screening Reminders",
+        "Vaccination Tracking",
+        "Lifestyle Recommendations",
+        "Wellness Programs",
+        "Preventive Care Planning"
+    };
+
+    private readonly List<string> specialistServices = new()
+    {
+        "Specialist Directory",
+        "Appointment Scheduling",
+        "Second Opinion Services",
+        "Care Team Coordination",
+        "Treatment Plan Management"
+    };
+
+    private readonly List<string> basicFeatures = new()
+    {
+        "Basic Health Records",
+        "Emergency Alerts",
+        "Telemedicine Access",
+        "Mobile App Support",
+        "Email Support"
+    };
+
+    private readonly List<string> premiumFeatures = new()
+    {
+        "AI Health Assistant",
+        "Advanced Analytics",
+        "Priority Support",
+        "Specialist Consultations",
+        "Custom Health Plans",
+        "Family Account Management"
+    };
+
+    private readonly List<string> enterpriseFeatures = new()
+    {
+        "Custom Integration",
+        "Advanced Security",
+        "Dedicated Support",
+        "Multi-location Support",
+        "Custom Reporting",
+        "API Access"
+    };
+    #endregion
+
+    #region Lifecycle Methods
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+        AppSettings.OnChange += OnSettingsChanged;
+    }
+
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+    private void OnSettingsChanged() => InvokeAsync(StateHasChanged);
+    #endregion
+
+    #region Event Handlers
+    private async Task HandleServiceClick(string service)
+    {
+        await JSRuntime.InvokeVoidAsync("showToast", $"Accessing {service} services...", "info");
+        await Task.Delay(1000);
+        
+        var route = service switch
+        {
+            "Emergency" => "/emergency",
+            "Telemedicine" => "/telemedicine",
+            "AI" => "/ai-assistant",
+            "Records" => "/health-records",
+            "Preventive" => "/preventive-care",
+            "Specialist" => "/specialists",
+            _ => "/services"
+        };
+        
+        Navigation.NavigateTo(route);
+    }
+
+    private async Task HandleFeatureDemo(string feature)
+    {
+        await JSRuntime.InvokeVoidAsync("showToast", $"Launching {feature} demo...", "success");
+    }
+
+    private async Task HandlePlanSelect(string plan)
+    {
+        await JSRuntime.InvokeVoidAsync("showToast", $"Selected {plan} plan. Redirecting...", "success");
+        await Task.Delay(1500);
+        Navigation.NavigateTo("/pricing");
+    }
+
+    private async Task HandleGetStarted()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated == true)
+        {
+            var role = authState.User?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Patient";
+            var dashboardUrl = role switch
+            {
+                "Admin" => "/admin/dashboard",
+                "Doctor" => "/doctor/dashboard",
+                _ => "/patient/dashboard"
+            };
+            Navigation.NavigateTo(dashboardUrl);
+        }
+        else
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    private void HandleContactUs()
+    {
+        Navigation.NavigateTo("/contact");
+    }
+    #endregion
+
+    #region Component Methods
+    private RenderFragment SectionHeader(string title, string subtitle, string icon) =>
+    @<div class="text-center mb-16">
+        <h2 class="text-4xl md:text-5xl font-bold text-primary dark:text-accent mb-4">
+            <span class="text-3xl animate-bounce">@icon</span> @title <span class="text-3xl animate-bounce">@icon</span>
+        </h2>
+        <p class="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+            @subtitle
+        </p>
+    </div>;
+
+    private RenderFragment ServiceCategoryCard(string title, string icon, List<string> services, string colorTheme, string buttonText, Func<Task> onClick) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl hover-card-3d border border-gray-200 dark:border-gray-700 group relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-@(colorTheme)/5 to-@(colorTheme)/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        
+        <div class="relative z-10">
+            <div class="text-center mb-6">
+                <div class="w-20 h-20 bg-gradient-to-br from-@(colorTheme) to-@(colorTheme == "primary" ? "accent" : "primary") rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <span class="text-4xl animate-pulse">@icon</span>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">@title</h3>
+            </div>
+            
+            <div class="space-y-3 mb-6">
+                @foreach (var service in services)
+                {
+                    <div class="flex items-center space-x-3">
+                        <div class="w-2 h-2 bg-@(colorTheme) rounded-full animate-pulse"></div>
+                        <span class="text-gray-700 dark:text-gray-300 text-sm">@service</span>
+                    </div>
+                }
+            </div>
+            
+            <button class="w-full bg-@(colorTheme) hover:bg-@(colorTheme)/90 text-white py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+                    @onclick="onClick">
+                ✨ @buttonText
+            </button>
+        </div>
+    </div>;
+
+    private RenderFragment InteractiveFeatureCard(string title, string icon, string description, string colorTheme, Func<Task> onClick) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl hover-card-3d border border-gray-200 dark:border-gray-700 group cursor-pointer"
+         @onclick="onClick">
+        <div class="flex items-start space-x-6">
+            <div class="w-16 h-16 bg-gradient-to-br from-@(colorTheme) to-@(colorTheme == "primary" ? "accent" : "primary") rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <span class="text-3xl">@icon</span>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3 group-hover:text-@(colorTheme) transition-colors">@title</h3>
+                <p class="text-gray-600 dark:text-gray-300 leading-relaxed">@description</p>
+                <div class="mt-4">
+                    <span class="text-@(colorTheme) font-semibold group-hover:underline">Try Interactive Demo →</span>
+                </div>
+            </div>
+        </div>
+    </div>;
+
+    private RenderFragment PricingCard(string plan, string price, string description, List<string> features, string buttonText, bool isPopular, Func<Task> onClick) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl hover-card-3d border @(isPopular ? "border-primary dark:border-accent ring-4 ring-primary/20 dark:ring-accent/20" : "border-gray-200 dark:border-gray-700") relative">
+        @if (isPopular)
+        {
+            <div class="absolute w-full -top-5 left-[78%] transform -translate-x-1/2">
+                <span class="bg-gradient-to-r w-full from-primary to-accent text-white px-4 py-2 rounded-full text-sm font-semibold shadow-lg">
+                    ⭐ Most Popular
+                </span>
+            </div>
+        }
+        
+        <div class="text-center mb-6">
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">@plan</h3>
+            <div class="text-4xl font-black text-primary dark:text-accent mb-2">@price</div>
+            <p class="text-gray-600 dark:text-gray-300">@description</p>
+        </div>
+        
+        <div class="space-y-3 mb-8">
+            @foreach (var feature in features)
+            {
+                <div class="flex items-center space-x-3">
+                    <div class="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                        <span class="text-white text-xs">✓</span>
+                    </div>
+                    <span class="text-gray-700 dark:text-gray-300">@feature</span>
+                </div>
+            }
+        </div>
+        
+        <button class="w-full @(isPopular ? "bg-gradient-to-r from-primary to-accent" : "bg-gray-600 hover:bg-gray-700") text-white py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+                @onclick="onClick">
+            @buttonText
+        </button>
+    </div>;
+    #endregion
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+        AppSettings.OnChange -= OnSettingsChanged;
+    }
+}
+
+<style>
+    /* 3D Animations */
+    @@keyframes float-3d {
+        0%, 100% { transform: translateY(0) translateX(0) rotateX(0deg) rotateY(0deg); }
+        25% { transform: translateY(-20px) translateX(10px) rotateX(5deg) rotateY(5deg); }
+        50% { transform: translateY(-10px) translateX(-10px) rotateX(-5deg) rotateY(10deg); }
+        75% { transform: translateY(-30px) translateX(5px) rotateX(10deg) rotateY(-5deg); }
+    }
+
+    @@keyframes float-3d-reverse {
+        0%, 100% { transform: translateY(0) translateX(0) rotateX(0deg) rotateY(0deg); }
+        25% { transform: translateY(20px) translateX(-10px) rotateX(-5deg) rotateY(-5deg); }
+        50% { transform: translateY(10px) translateX(10px) rotateX(5deg) rotateY(-10deg); }
+        75% { transform: translateY(30px) translateX(-5px) rotateX(-10deg) rotateY(5deg); }
+    }
+
+    @@keyframes pulse-3d {
+        0%, 100% { transform: scale(1) rotateZ(0deg); opacity: 0.7; }
+        50% { transform: scale(1.2) rotateZ(180deg); opacity: 1; }
+    }
+
+    @@keyframes glow {
+        0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+        50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.6); }
+    }
+
+    .animate-float-3d { animation: float-3d 10s ease-in-out infinite; }
+    .animate-float-3d-reverse { animation: float-3d-reverse 12s ease-in-out infinite; }
+    .animate-pulse-3d { animation: pulse-3d 8s ease-in-out infinite; }
+    .animate-glow { animation: glow 3s ease-in-out infinite; }
+
+    .hover-card-3d {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transform-style: preserve-3d;
+    }
+
+    .hover-card-3d:hover {
+        transform: translateY(-12px) rotateX(5deg) rotateY(5deg);
+        box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Reuse other animations */
+    @@keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes slide-down {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @@keyframes slide-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @@keyframes gradient-slow {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 0.6; }
+    }
+
+    .animate-fade-in { animation: fade-in 1s ease-out; }
+    .animate-slide-down { animation: slide-down 0.8s ease-out; }
+    .animate-slide-up { animation: slide-up 0.8s ease-out; }
+    .animate-gradient-slow { animation: gradient-slow 8s ease-in-out infinite; }
+
+    .gradient-text {
+        background-size: 200% auto;
+        animation: gradient-shift 3s linear infinite;
+    }
+
+    @@keyframes gradient-shift {
+        0%, 100% { background-position: 0% center; }
+        50% { background-position: 100% center; }
+    }
+</style>
+
+<script>
+    window.showToast = function(message, type) {
+        console.log(`${type.toUpperCase()}: ${message}`);
+        // Toast implementation would go here
+    };
+</script>

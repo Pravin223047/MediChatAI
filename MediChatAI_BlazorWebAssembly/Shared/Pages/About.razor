@@ -1,0 +1,411 @@
+@page "/about"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AppSettingsState AppSettings
+@inject ThemeState ThemeState
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@implements IDisposable
+
+<PageTitle>About - @AppSettings.Settings.SiteName</PageTitle>
+
+<div class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-black text-gray-900 dark:text-white transition-colors duration-300 min-h-screen">
+
+    <!-- Hero Section -->
+    <section class="pt-20 pb-16 px-6 relative overflow-hidden">
+        <!-- Animated Background -->
+        <div class="absolute inset-0 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/5 animate-gradient-slow"></div>
+        
+        <!-- Floating Particles -->
+        <div class="absolute inset-0">
+            <div class="absolute top-1/4 left-1/4 w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-float-slow"></div>
+            <div class="absolute bottom-1/3 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl animate-float-slower"></div>
+        </div>
+
+        <div class="container mx-auto text-center relative z-10">
+            <div class="max-w-4xl mx-auto animate-fade-in">
+                <div class="mb-6 animate-slide-down">
+                    <span class="inline-block px-6 py-3 bg-primary text-white rounded-full text-sm font-semibold uppercase tracking-wide shadow-lg">
+                        About Our Platform 🏥
+                    </span>
+                </div>
+                
+                <h1 class="text-4xl md:text-6xl lg:text-7xl font-black mb-8 animate-slide-up leading-tight">
+                    <span class="gradient-text bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+                        @AppSettings.Settings.SiteName
+                    </span>
+                </h1>
+                
+                <p class="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-12 animate-slide-up leading-relaxed">
+                    Revolutionizing healthcare through AI-powered technology and compassionate care
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Mission & Vision Section -->
+    <section class="py-20 px-6 bg-white/50 dark:bg-gray-800/30 backdrop-blur-sm">
+        <div class="container mx-auto">
+            <div class="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto">
+                @MissionCard("Our Mission", "🎯", "To democratize healthcare access through innovative AI technology, making quality medical care available to everyone, everywhere, at any time.")
+                @VisionCard("Our Vision", "🌟", "A world where healthcare barriers are eliminated, and every individual has instant access to personalized, intelligent medical assistance.")
+            </div>
+        </div>
+    </section>
+
+    <!-- Platform Features Section -->
+    <section class="py-20 px-6">
+        <div class="container mx-auto">
+            @SectionHeader("Platform Capabilities", "Comprehensive healthcare solutions powered by cutting-edge technology", "⚡")
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mt-12 max-w-6xl mx-auto">
+                @FeatureCard("AI-Powered Diagnostics", "🤖", "Advanced machine learning algorithms provide intelligent health insights and preliminary diagnostic assistance.", "primary")
+                @FeatureCard("Emergency Response", "🚨", "24/7 emergency support system with instant hospital location and automated alert dispatch.", "accent")
+                @FeatureCard("Telemedicine Integration", "📹", "Secure video consultations with certified healthcare professionals worldwide.", "primary")
+                @FeatureCard("Smart Health Records", "📊", "Intelligent medical record management with AI-driven analysis and insights.", "accent")
+                @FeatureCard("Multilingual Support", "🌍", "Support for 12+ Indian languages with voice recognition and text-to-speech capabilities.", "primary")
+                @FeatureCard("HIPAA Compliance", "🔒", "Enterprise-grade security with 256-bit encryption and full HIPAA compliance.", "accent")
+            </div>
+        </div>
+    </section>
+
+    <!-- Technology Stack Section -->
+    <section class="py-20 px-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+        <div class="container mx-auto">
+            @SectionHeader("Technology Stack", "Built with modern, scalable technologies for optimal performance", "🛠️")
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-12 max-w-6xl mx-auto">
+                @TechCard("Frontend", "Blazor WebAssembly", "⚡", "Modern, responsive web application with real-time capabilities")
+                @TechCard("Backend", "ASP.NET Core & GraphQL", "🔧", "High-performance API with flexible data querying")
+                @TechCard("AI Engine", "Google Gemini AI", "🧠", "Advanced natural language processing and medical knowledge")
+                @TechCard("Security", "Enterprise-Grade", "🛡️", "Multi-layer security with encryption and compliance")
+            </div>
+        </div>
+    </section>
+
+    <!-- User Roles Section -->
+    <section class="py-20 px-6">
+        <div class="container mx-auto">
+            @SectionHeader("User Ecosystem", "Tailored experiences for every healthcare stakeholder", "👥")
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mt-12 max-w-6xl mx-auto">
+                @RoleCard("Patients", "👤", patientFeatures, "For individuals seeking quality healthcare")
+                @RoleCard("Healthcare Providers", "👨⚕️", doctorFeatures, "For medical professionals and clinics")
+                @RoleCard("Administrators", "⚙️", adminFeatures, "For healthcare system management")
+            </div>
+        </div>
+    </section>
+
+    <!-- Statistics Section -->
+    <section class="py-20 px-6 bg-gradient-to-br from-primary/5 to-accent/5 dark:from-primary/10 dark:to-accent/10">
+        <div class="container mx-auto text-center">
+            @SectionHeader("Platform Impact", "Making a difference in healthcare accessibility", "📈")
+            
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 mt-12 max-w-4xl mx-auto">
+                @StatCard("24/7", "Emergency Support", "🚨")
+                @StatCard("12+", "Languages Supported", "🌍")
+                @StatCard("99.9%", "Uptime Guarantee", "⚡")
+                @StatCard("256-bit", "SSL Encryption", "🔒")
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Information -->
+    <section class="py-20 px-6 bg-white dark:bg-gray-800">
+        <div class="container mx-auto text-center">
+            @SectionHeader("Get In Touch", "We're here to help you on your healthcare journey", "📞")
+            
+            <div class="max-w-4xl mx-auto">
+                <div class="flex flex-col sm:flex-row gap-8 mt-12 justify-center items-stretch max-w-2xl mx-auto">
+                    @if (!string.IsNullOrEmpty(AppSettings.Settings.ContactEmail))
+                    {
+                        @ContactCard("Email Support", AppSettings.Settings.ContactEmail, "mailto:" + AppSettings.Settings.ContactEmail, "📧", "Get technical support and general inquiries")
+                    }
+                    @if (!string.IsNullOrEmpty(AppSettings.Settings.ContactPhone))
+                    {
+                        @ContactCard("Phone Support", AppSettings.Settings.ContactPhone, "tel:" + AppSettings.Settings.ContactPhone, "📱", "24/7 emergency and urgent care assistance")
+                    }
+                </div>
+                
+                <div class="mt-12 p-8 bg-gradient-to-r from-primary/10 to-accent/10 dark:from-primary/20 dark:to-accent/20 rounded-2xl border border-primary/20">
+                    <h3 class="text-2xl font-bold mb-4 text-primary dark:text-accent">Emergency Services</h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-6">
+                        Our emergency response system is available 24/7 with instant hospital location and automated dispatch.
+                    </p>
+                    <button class="bg-accent hover:bg-accent/90 text-white px-8 py-4 rounded-xl font-semibold transition-colors shadow-lg"
+                            @onclick="HandleEmergencyAccess">
+                        🚨 Access Emergency Services
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer CTA -->
+    <section class="py-16 px-6 bg-gradient-to-r from-primary to-accent text-white">
+        <div class="container mx-auto text-center">
+            <h2 class="text-3xl md:text-4xl font-bold mb-6">Ready to Transform Your Healthcare Experience?</h2>
+            <p class="text-xl mb-8 opacity-90">Join thousands who trust @AppSettings.Settings.SiteName for their healthcare needs</p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button class="bg-white text-primary px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors shadow-lg"
+                        @onclick="HandleGetStarted">
+                    🚀 Get Started Today
+                </button>
+                <button class="border-2 border-white px-8 py-4 rounded-xl font-semibold hover:bg-white hover:text-primary transition-colors"
+                        @onclick="HandleContactSupport">
+                    📞 Contact Support
+                </button>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    #region Feature Data
+    private readonly List<string> patientFeatures = new()
+    {
+        "Personal Health Records with AI insights",
+        "24/7 Emergency response system",
+        "Telemedicine consultations",
+        "Medication reminders and tracking",
+        "Health monitoring and analytics",
+        "Multilingual voice support"
+    };
+
+    private readonly List<string> doctorFeatures = new()
+    {
+        "Patient management dashboard",
+        "AI-powered diagnostic assistance",
+        "Secure video consultations",
+        "Electronic prescription system",
+        "Medical record analysis",
+        "Appointment scheduling system"
+    };
+
+    private readonly List<string> adminFeatures = new()
+    {
+        "System-wide analytics and reporting",
+        "User management and access control",
+        "Security and compliance monitoring",
+        "Platform configuration settings",
+        "Audit logs and activity tracking",
+        "Performance optimization tools"
+    };
+    #endregion
+
+    #region Lifecycle Methods
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+        AppSettings.OnChange += OnSettingsChanged;
+    }
+
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+    private void OnSettingsChanged() => InvokeAsync(StateHasChanged);
+    #endregion
+
+    #region Button Handlers
+    private async Task HandleGetStarted()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated == true)
+        {
+            var role = authState.User?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Patient";
+            var dashboardUrl = role switch
+            {
+                "Admin" => "/admin/dashboard",
+                "Doctor" => "/doctor/dashboard",
+                _ => "/patient/dashboard"
+            };
+            Navigation.NavigateTo(dashboardUrl);
+        }
+        else
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    private void HandleContactSupport()
+    {
+        if (!string.IsNullOrEmpty(AppSettings.Settings.ContactEmail))
+        {
+            Navigation.NavigateTo($"mailto:{AppSettings.Settings.ContactEmail}", true);
+        }
+    }
+
+    private void HandleEmergencyAccess()
+    {
+        Navigation.NavigateTo("/emergency");
+    }
+    #endregion
+
+    #region Component Methods
+    private RenderFragment SectionHeader(string title, string subtitle, string icon) =>
+    @<div class="text-center mb-16">
+        <h2 class="text-4xl md:text-5xl font-bold text-primary dark:text-accent mb-4">
+            <span class="text-3xl">@icon</span> @title <span class="text-3xl">@icon</span>
+        </h2>
+        <p class="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+            @subtitle
+        </p>
+    </div>;
+
+    private RenderFragment MissionCard(string title, string icon, string description) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl hover-card border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center mb-6">
+            <div class="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                <span class="text-3xl">@icon</span>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white">@title</h3>
+        </div>
+        <p class="text-gray-600 dark:text-gray-300 text-lg leading-relaxed">@description</p>
+    </div>;
+
+    private RenderFragment VisionCard(string title, string icon, string description) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl hover-card border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center mb-6">
+            <div class="w-16 h-16 bg-gradient-to-br from-accent to-primary rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                <span class="text-3xl">@icon</span>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white">@title</h3>
+        </div>
+        <p class="text-gray-600 dark:text-gray-300 text-lg leading-relaxed">@description</p>
+    </div>;
+
+    private RenderFragment FeatureCard(string title, string icon, string description, string colorTheme) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl hover-card border border-gray-200 dark:border-gray-700 hover:border-@(colorTheme == "primary" ? "primary" : "accent")/30 transition-all duration-300">
+        <div class="flex items-center mb-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-@(colorTheme == "primary" ? "primary" : "accent") to-@(colorTheme == "primary" ? "accent" : "primary") rounded-lg flex items-center justify-center mr-3 shadow-md">
+                <span class="text-2xl">@icon</span>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">@title</h3>
+        </div>
+        <p class="text-gray-600 dark:text-gray-300 leading-relaxed">@description</p>
+    </div>;
+
+    private RenderFragment TechCard(string category, string technology, string icon, string description) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg hover-card border border-gray-200 dark:border-gray-700">
+        <div class="text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span class="text-2xl">@icon</span>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">@category</h3>
+            <p class="text-primary dark:text-accent font-semibold mb-3">@technology</p>
+            <p class="text-sm text-gray-600 dark:text-gray-300">@description</p>
+        </div>
+    </div>;
+
+    private RenderFragment RoleCard(string role, string icon, List<string> features, string subtitle) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl hover-card border border-gray-200 dark:border-gray-700">
+        <div class="text-center mb-6">
+            <div class="w-20 h-20 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span class="text-4xl">@icon</span>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">@role</h3>
+            <p class="text-gray-600 dark:text-gray-300">@subtitle</p>
+        </div>
+        <div class="space-y-3">
+            @foreach (var feature in features)
+            {
+                <div class="flex items-center space-x-3">
+                    <div class="w-2 h-2 bg-primary dark:bg-accent rounded-full"></div>
+                    <span class="text-gray-700 dark:text-gray-300">@feature</span>
+                </div>
+            }
+        </div>
+    </div>;
+
+    private RenderFragment StatCard(string value, string label, string icon) =>
+    @<div class="text-center">
+        <div class="w-20 h-20 bg-white/10 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
+            <span class="text-3xl">@icon</span>
+        </div>
+        <div class="text-3xl font-bold text-primary dark:text-accent mb-2">@value</div>
+        <div class="text-gray-600 dark:text-gray-300 font-medium">@label</div>
+    </div>;
+
+    private RenderFragment ContactCard(string title, string contact, string href, string icon, string description) =>
+    @<div class="bg-gray-50 dark:bg-gray-700 rounded-xl p-6 hover-card flex-1 min-w-0">
+        <div class="text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span class="text-2xl">@icon</span>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">@title</h3>
+            <a href="@href" class="text-primary dark:text-accent font-semibold text-lg hover:underline mb-3 block break-all">@contact</a>
+            <p class="text-gray-600 dark:text-gray-300 text-sm">@description</p>
+        </div>
+    </div>;
+    #endregion
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+        AppSettings.OnChange -= OnSettingsChanged;
+    }
+}
+
+<style>
+    /* Reuse animations from Index.razor */
+    @@keyframes float {
+        0%, 100% { transform: translateY(0) translateX(0); }
+        25% { transform: translateY(-20px) translateX(10px); }
+        50% { transform: translateY(-10px) translateX(-10px); }
+        75% { transform: translateY(-30px) translateX(5px); }
+    }
+
+    @@keyframes float-slow {
+        0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+        50% { transform: translateY(-40px) translateX(20px) scale(1.1); }
+    }
+
+    @@keyframes float-slower {
+        0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+        50% { transform: translateY(-60px) translateX(-30px) scale(1.15); }
+    }
+
+    @@keyframes gradient-slow {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 0.6; }
+    }
+
+    @@keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes slide-down {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @@keyframes slide-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-float-slow { animation: float-slow 12s ease-in-out infinite; }
+    .animate-float-slower { animation: float-slower 15s ease-in-out infinite; }
+    .animate-gradient-slow { animation: gradient-slow 8s ease-in-out infinite; }
+    .animate-fade-in { animation: fade-in 1s ease-out; }
+    .animate-slide-down { animation: slide-down 0.8s ease-out; }
+    .animate-slide-up { animation: slide-up 0.8s ease-out; }
+
+    .hover-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .hover-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+
+    .gradient-text {
+        background-size: 200% auto;
+        animation: gradient-shift 3s linear infinite;
+    }
+
+    @@keyframes gradient-shift {
+        0%, 100% { background-position: 0% center; }
+        50% { background-position: 100% center; }
+    }
+</style>

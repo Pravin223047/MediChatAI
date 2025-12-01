@@ -1,0 +1,192 @@
+﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IThemeService ThemeService
+@inject ISettingsService SettingsService
+@inject ISessionMonitorService SessionMonitor
+@inject ISessionTimerService SessionTimer
+@inject SessionNotificationState NotificationState
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IToastService ToastService
+@inject ThemeState ThemeState
+@implements IDisposable
+
+<div class="min-h-screen flex flex-col bg-theme text-theme transition-colors duration-200">
+    <Navbar />
+
+    <main class="flex-1">
+        <div class="w-full py-6 px-4">
+            @Body
+        </div>
+    </main>
+
+    <Footer />
+</div>
+
+<ToastContainer />
+
+@code {
+    private bool _isSessionMonitoringInitialized = false;
+    private bool _isSessionTimerInitialized = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Subscribe to theme changes
+        ThemeState.OnChange += OnThemeChanged;
+
+        // Subscribe to auth state changes
+        if (AuthStateProvider is CustomAuthStateProvider customAuthProvider)
+        {
+            customAuthProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        }
+
+        // Theme is already loaded in App.razor from database
+        // Just ensure it's persisted to localStorage for this session
+        await ThemeService.EnsureThemePersistedAsync();
+
+        // Initialize session monitoring for authenticated users
+        await InitializeSessionMonitoringAsync();
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        try
+        {
+            var authState = await task;
+            if (authState.User?.Identity?.IsAuthenticated == true)
+            {
+                // User logged in - initialize session monitoring
+                await InitializeSessionMonitoringAsync();
+            }
+            else
+            {
+                // User logged out - cleanup
+                CleanupSessionMonitoring();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling auth state change: {ex.Message}");
+        }
+    }
+
+    private async Task InitializeSessionMonitoringAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user?.Identity?.IsAuthenticated == true)
+            {
+                // Initialize session monitor if not already running (check global state)
+                // This prevents re-initialization when MainLayout is recreated during navigation
+                if (!NotificationState.IsMonitoring)
+                {
+                    SessionMonitor.SessionStarted += OnSessionStarted;
+                    SessionMonitor.SessionExpiringSoon += OnSessionExpiringSoon;
+                    SessionMonitor.SessionExpired += OnSessionExpired;
+                    await SessionMonitor.StartMonitoringAsync();
+                    _isSessionMonitoringInitialized = true;
+                    Console.WriteLine("Session monitoring started - global state checked");
+                }
+                else if (!_isSessionMonitoringInitialized)
+                {
+                    // Monitoring is already running globally, just subscribe to events
+                    SessionMonitor.SessionStarted += OnSessionStarted;
+                    SessionMonitor.SessionExpiringSoon += OnSessionExpiringSoon;
+                    SessionMonitor.SessionExpired += OnSessionExpired;
+                    _isSessionMonitoringInitialized = true;
+                    Console.WriteLine("Session monitoring already active - subscribed to events");
+                }
+
+                // Initialize session timer if not already done
+                if (!_isSessionTimerInitialized)
+                {
+                    await SessionTimer.StartTimerAsync();
+                    _isSessionTimerInitialized = true;
+                    Console.WriteLine("Session timer started");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing session monitoring: {ex.Message}");
+        }
+    }
+
+    private void CleanupSessionMonitoring()
+    {
+        if (_isSessionMonitoringInitialized)
+        {
+            SessionMonitor.SessionStarted -= OnSessionStarted;
+            SessionMonitor.SessionExpiringSoon -= OnSessionExpiringSoon;
+            SessionMonitor.SessionExpired -= OnSessionExpired;
+            SessionMonitor.StopMonitoring();
+            _isSessionMonitoringInitialized = false;
+            Console.WriteLine("Session monitoring stopped");
+        }
+
+        if (_isSessionTimerInitialized)
+        {
+            SessionTimer.StopTimer();
+            _isSessionTimerInitialized = false;
+            Console.WriteLine("Session timer stopped");
+        }
+    }
+
+    private void OnSessionStarted(object? sender, TimeSpan timeRemaining)
+    {
+        InvokeAsync(() =>
+        {
+            var minutes = (int)timeRemaining.TotalMinutes;
+            // Show initial session notification
+            ToastService.ShowInfo(
+                $"Your session will expire in {minutes} minute{(minutes != 1 ? "s" : "")}.",
+                5000
+            );
+            StateHasChanged();
+        });
+    }
+
+    private void OnSessionExpiringSoon(object? sender, TimeSpan timeRemaining)
+    {
+        InvokeAsync(() =>
+        {
+            // Show warning toast - only once (managed by SessionMonitorService)
+            ToastService.ShowWarning(
+                "⚠️ Just 1 minute left in your session.",
+                10000
+            );
+            StateHasChanged();
+        });
+    }
+
+    private void OnSessionExpired(object? sender, EventArgs e)
+    {
+        InvokeAsync(() =>
+        {
+            ToastService.ShowError(
+                "Your session has expired. You will be redirected to the login page.",
+                5000
+            );
+        });
+    }
+
+    public void Dispose()
+    {
+        // Unsubscribe from events
+        ThemeState.OnChange -= OnThemeChanged;
+
+        if (AuthStateProvider is CustomAuthStateProvider customAuthProvider)
+        {
+            customAuthProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+        }
+
+        CleanupSessionMonitoring();
+    }
+}

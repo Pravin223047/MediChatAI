@@ -1,0 +1,65 @@
+
+<!-- Patient-specific navigation links with dropdowns -->
+
+<!-- Dashboard Link (No Dropdown) -->
+<NavLink href="/patient/dashboard" class="border-transparent text-gray-500 hover:border-primary hover:text-primary dark:text-gray-300 dark:hover:text-primary inline-flex items-center px-4 pt-1 border-b-2 text-sm font-medium transition-all duration-200 group">
+    <svg class="w-4 h-4 mr-2 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+    </svg>
+    Dashboard
+</NavLink>
+
+<!-- AI Health Assistant Link -->
+<NavLink href="/patient/ai-chatbot" class="border-transparent text-gray-500 hover:border-primary hover:text-primary dark:text-gray-300 dark:hover:text-primary inline-flex items-center px-4 pt-1 border-b-2 text-sm font-medium transition-all duration-200 group relative">
+    <svg class="w-4 h-4 mr-2 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+    </svg>
+    AI Assistant
+    <span class="ml-1.5 px-1.5 py-0.5 text-xs font-bold bg-gradient-to-r from-emerald-400 to-cyan-500 text-white rounded-full">New</span>
+</NavLink>
+
+<!-- Health Metrics Link -->
+<NavLink href="/patient/health-metrics" class="border-transparent text-gray-500 hover:border-primary hover:text-primary dark:text-gray-300 dark:hover:text-primary inline-flex items-center px-4 pt-1 border-b-2 text-sm font-medium transition-all duration-200 group">
+    <svg class="w-4 h-4 mr-2 group-hover:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+    </svg>
+    Health Metrics
+</NavLink>
+
+<!-- Care Dropdown -->
+<NavDropdown Title="Care" Icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>'>
+
+    <NavDropdownItem
+        Href="/patient/consultations"
+        Text="My Consultations"
+        Description="View consultation history"
+        Icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>'
+        IsFirst="true" />
+
+    <NavDropdownItem
+        Href="/patient/appointments"
+        Text="Appointments"
+        Description="Book and manage appointments"
+        Icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>' />
+
+    <NavDropdownItem
+        Href="/patient/prescriptions"
+        Text="Prescriptions"
+        Description="View prescriptions & medications"
+        Icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>'
+        IsLast="true" />
+
+</NavDropdown>
+
+<!-- Records Dropdown -->
+<NavDropdown Title="Records" Icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'>
+
+    <NavDropdownItem
+        Href="/patient/health-records"
+        Text="Health Records"
+        Description="Access medical records & history"
+        Icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
+        IsFirst="true"
+        IsLast="true" />
+
+</NavDropdown>

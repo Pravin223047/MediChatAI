@@ -1,0 +1,466 @@
+@page "/contact"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AppSettingsState AppSettings
+@inject ThemeState ThemeState
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>Contact Us - @AppSettings.Settings.SiteName</PageTitle>
+
+<div class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-black text-gray-900 dark:text-white transition-colors duration-300 min-h-screen">
+
+    <!-- Hero Section with 3D Contact Animation -->
+    <section class="pt-20 pb-16 px-6 relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/5 animate-gradient-slow"></div>
+        
+        <!-- 3D Floating Communication Icons -->
+        <div class="absolute inset-0">
+            <div class="absolute top-1/4 left-1/6 w-16 h-16 bg-primary/30 rounded-full animate-float-contact"></div>
+            <div class="absolute bottom-1/3 right-1/6 w-24 h-24 bg-accent/30 rounded-full animate-float-contact-reverse"></div>
+            <div class="absolute top-1/2 left-1/2 w-12 h-12 bg-primary/20 rounded-full animate-orbit"></div>
+        </div>
+
+        <div class="container mx-auto text-center relative z-10">
+            <div class="max-w-4xl mx-auto animate-fade-in">
+                <div class="mb-6 animate-slide-down">
+                    <span class="inline-block px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-full text-sm font-semibold uppercase tracking-wide shadow-lg animate-glow">
+                        Get In Touch 📞
+                    </span>
+                </div>
+                
+                <h1 class="text-4xl md:text-6xl lg:text-7xl font-black mb-8 animate-slide-up leading-tight">
+                    <span class="gradient-text bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+                        We're Here to Help
+                    </span>
+                </h1>
+                
+                <p class="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-12 animate-slide-up leading-relaxed">
+                    Connect with our healthcare experts 24/7 for support, consultations, and emergency assistance
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Contact Methods -->
+    <section class="py-20 px-6">
+        <div class="container mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
+                @ContactMethodCard("Emergency Hotline", "🚨", "24/7 Immediate Response", "+1-800-EMERGENCY", "tel:+18003637436", "accent", true)
+                @ContactMethodCard("General Support", "📞", "Business Hours Support", !string.IsNullOrEmpty(AppSettings.Settings.ContactPhone) ? AppSettings.Settings.ContactPhone : "+1-800-SUPPORT", "tel:" + (!string.IsNullOrEmpty(AppSettings.Settings.ContactPhone) ? AppSettings.Settings.ContactPhone : "+18007877678"), "primary", false)
+                @ContactMethodCard("Email Support", "📧", "Technical & General Inquiries", !string.IsNullOrEmpty(AppSettings.Settings.ContactEmail) ? AppSettings.Settings.ContactEmail : "support@medichat.ai", "mailto:" + (!string.IsNullOrEmpty(AppSettings.Settings.ContactEmail) ? AppSettings.Settings.ContactEmail : "support@medichat.ai"), "primary", false)
+                @ContactMethodCard("Live Chat", "💬", "Instant Online Support", "Chat Now", "#", "accent", false)
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Contact Form with 3D Effects -->
+    <section class="py-20 px-6 bg-white/50 dark:bg-gray-800/30 backdrop-blur-sm">
+        <div class="container mx-auto">
+            @SectionHeader("Send Us a Message", "Fill out the form below and we'll get back to you within 24 hours", "✉️")
+            
+            <div class="max-w-4xl mx-auto">
+                <div class="grid lg:grid-cols-2 gap-12">
+                    <!-- Contact Form -->
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl hover-card-3d border border-gray-200 dark:border-gray-700">
+                        <form @onsubmit="HandleFormSubmit" @onsubmit:preventDefault="true">
+                            <div class="space-y-6">
+                                <div class="grid md:grid-cols-2 gap-6">
+                                    <div class="form-group">
+                                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">First Name *</label>
+                                        <input @bind="contactForm.FirstName" type="text" required
+                                               class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary dark:focus:ring-accent focus:border-transparent transition-all duration-300" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Last Name *</label>
+                                        <input @bind="contactForm.LastName" type="text" required
+                                               class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary dark:focus:ring-accent focus:border-transparent transition-all duration-300" />
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Email Address *</label>
+                                    <input @bind="contactForm.Email" type="email" required
+                                           class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary dark:focus:ring-accent focus:border-transparent transition-all duration-300" />
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Phone Number</label>
+                                    <input @bind="contactForm.Phone" type="tel"
+                                           class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary dark:focus:ring-accent focus:border-transparent transition-all duration-300" />
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Subject *</label>
+                                    <select @bind="contactForm.Subject" required
+                                            class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary dark:focus:ring-accent focus:border-transparent transition-all duration-300">
+                                        <option value="">Select a subject</option>
+                                        <option value="General Inquiry">General Inquiry</option>
+                                        <option value="Technical Support">Technical Support</option>
+                                        <option value="Medical Consultation">Medical Consultation</option>
+                                        <option value="Emergency Support">Emergency Support</option>
+                                        <option value="Billing Question">Billing Question</option>
+                                        <option value="Partnership">Partnership Opportunity</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Message *</label>
+                                    <textarea @bind="contactForm.Message" required rows="5"
+                                              class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary dark:focus:ring-accent focus:border-transparent transition-all duration-300 resize-none"></textarea>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="flex items-center space-x-3">
+                                        <input @bind="contactForm.IsUrgent" type="checkbox"
+                                               class="w-5 h-5 text-primary dark:text-accent bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-primary dark:focus:ring-accent" />
+                                        <span class="text-sm text-gray-700 dark:text-gray-300">This is an urgent matter</span>
+                                    </label>
+                                </div>
+                                
+                                <button type="submit" disabled="@isSubmitting"
+                                        class="w-full bg-gradient-to-r from-primary to-accent text-white py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    @if (isSubmitting)
+                                    {
+                                        <span class="flex items-center justify-center space-x-2">
+                                            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                            <span>Sending...</span>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>🚀 Send Message</span>
+                                    }
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Contact Information & 3D Visual -->
+                    <div class="space-y-8">
+                        @ContactInfoCard("Office Hours", "🕒", officeHours)
+                        @ContactInfoCard("Emergency Services", "🚨", emergencyInfo)
+                        @ContactInfoCard("Location", "📍", locationInfo)
+                        
+                        <!-- 3D Interactive Element -->
+                        <div class="bg-gradient-to-br from-primary/10 to-accent/10 dark:from-primary/20 dark:to-accent/20 rounded-2xl p-8 text-center">
+                            <div class="w-32 h-32 mx-auto mb-6 relative">
+                                <div class="absolute inset-0 bg-gradient-to-br from-primary to-accent rounded-full animate-pulse-3d"></div>
+                                <div class="absolute inset-4 bg-white dark:bg-gray-800 rounded-full flex items-center justify-center">
+                                    <span class="text-4xl animate-bounce">🏥</span>
+                                </div>
+                            </div>
+                            <h3 class="text-xl font-bold text-primary dark:text-accent mb-2">24/7 Healthcare Support</h3>
+                            <p class="text-gray-600 dark:text-gray-300">Always here when you need us most</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="py-20 px-6">
+        <div class="container mx-auto">
+            @SectionHeader("Frequently Asked Questions", "Quick answers to common questions", "❓")
+            
+            <div class="max-w-4xl mx-auto space-y-6">
+                @foreach (var faq in faqs)
+                {
+                    @FaqCard(faq.Question, faq.Answer, faq.Id)
+                }
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    #region Models and State
+    private ContactFormModel contactForm = new();
+    private bool isSubmitting = false;
+    private HashSet<int> expandedFaqs = new();
+
+    public class ContactFormModel
+    {
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string Subject { get; set; } = "";
+        public string Message { get; set; } = "";
+        public bool IsUrgent { get; set; } = false;
+    }
+
+    public class FaqItem
+    {
+        public int Id { get; set; }
+        public string Question { get; set; } = "";
+        public string Answer { get; set; } = "";
+    }
+    #endregion
+
+    #region Data
+    private readonly List<string> officeHours = new()
+    {
+        "Monday - Friday: 8:00 AM - 8:00 PM",
+        "Saturday: 9:00 AM - 6:00 PM",
+        "Sunday: 10:00 AM - 4:00 PM",
+        "Emergency: 24/7 Available"
+    };
+
+    private readonly List<string> emergencyInfo = new()
+    {
+        "Call: +1-800-EMERGENCY",
+        "Text: HELP to 911",
+        "App: Emergency Button",
+        "Response Time: < 5 minutes"
+    };
+
+    private readonly List<string> locationInfo = new()
+    {
+        "Headquarters: San Francisco, CA",
+        "Regional Offices: 50+ Cities",
+        "Telemedicine: Global Coverage",
+        "Emergency Network: Nationwide"
+    };
+
+    private readonly List<FaqItem> faqs = new()
+    {
+        new() { Id = 1, Question = "How quickly will I receive a response?", Answer = "We typically respond to general inquiries within 24 hours. Emergency requests are handled immediately, and urgent matters are prioritized within 2-4 hours." },
+        new() { Id = 2, Question = "Is my medical information secure?", Answer = "Yes, we use enterprise-grade 256-bit encryption and are fully HIPAA compliant. Your medical data is protected with the highest security standards." },
+        new() { Id = 3, Question = "Can I schedule a consultation through this form?", Answer = "While you can request a consultation through this form, we recommend using our dedicated booking system for faster scheduling and real-time availability." },
+        new() { Id = 4, Question = "What should I do in a medical emergency?", Answer = "For immediate medical emergencies, call 911 or your local emergency number. Our emergency hotline is for urgent healthcare guidance and coordination with local services." },
+        new() { Id = 5, Question = "Do you offer support in multiple languages?", Answer = "Yes, we provide support in 12+ Indian languages plus English. Our AI assistant and human support team can communicate in your preferred language." }
+    };
+    #endregion
+
+    #region Lifecycle Methods
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+        AppSettings.OnChange += OnSettingsChanged;
+    }
+
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+    private void OnSettingsChanged() => InvokeAsync(StateHasChanged);
+    #endregion
+
+    #region Event Handlers
+    private async Task HandleFormSubmit()
+    {
+        if (string.IsNullOrWhiteSpace(contactForm.FirstName) || 
+            string.IsNullOrWhiteSpace(contactForm.LastName) || 
+            string.IsNullOrWhiteSpace(contactForm.Email) || 
+            string.IsNullOrWhiteSpace(contactForm.Subject) || 
+            string.IsNullOrWhiteSpace(contactForm.Message))
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", "Please fill in all required fields", "error");
+            return;
+        }
+
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Simulate form submission
+            await Task.Delay(2000);
+            
+            await JSRuntime.InvokeVoidAsync("showToast", "Message sent successfully! We'll get back to you soon.", "success");
+            
+            // Reset form
+            contactForm = new ContactFormModel();
+        }
+        catch
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", "Failed to send message. Please try again.", "error");
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleFaq(int faqId)
+    {
+        if (expandedFaqs.Contains(faqId))
+            expandedFaqs.Remove(faqId);
+        else
+            expandedFaqs.Add(faqId);
+    }
+    #endregion
+
+    #region Component Methods
+    private RenderFragment SectionHeader(string title, string subtitle, string icon) =>
+    @<div class="text-center mb-16">
+        <h2 class="text-4xl md:text-5xl font-bold text-primary dark:text-accent mb-4">
+            <span class="text-3xl animate-bounce">@icon</span> @title <span class="text-3xl animate-bounce">@icon</span>
+        </h2>
+        <p class="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+            @subtitle
+        </p>
+    </div>;
+
+    private RenderFragment ContactMethodCard(string title, string icon, string description, string contact, string href, string colorTheme, bool isEmergency) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl hover-card-3d border border-gray-200 dark:border-gray-700 group @(isEmergency ? "ring-2 ring-red-500/50" : "")">
+        <div class="text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-@(colorTheme) to-@(colorTheme == "primary" ? "accent" : "primary") rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300 @(isEmergency ? "animate-pulse" : "")">
+                <span class="text-3xl">@icon</span>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">@title</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">@description</p>
+            <a href="@href" class="inline-block bg-@(colorTheme) hover:bg-@(colorTheme)/90 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
+                @contact
+            </a>
+        </div>
+    </div>;
+
+    private RenderFragment ContactInfoCard(string title, string icon, List<string> info) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl hover-card border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center mb-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center mr-4 shadow-md">
+                <span class="text-2xl">@icon</span>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">@title</h3>
+        </div>
+        <div class="space-y-2">
+            @foreach (var item in info)
+            {
+                <div class="flex items-center space-x-2">
+                    <div class="w-2 h-2 bg-primary dark:bg-accent rounded-full"></div>
+                    <span class="text-gray-700 dark:text-gray-300 text-sm">@item</span>
+                </div>
+            }
+        </div>
+    </div>;
+
+    private RenderFragment FaqCard(string question, string answer, int id) =>
+    @<div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <button class="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                @onclick="() => ToggleFaq(id)">
+            <span class="font-semibold text-gray-900 dark:text-white">@question</span>
+            <span class="text-primary dark:text-accent transform transition-transform @(expandedFaqs.Contains(id) ? "rotate-180" : "")">
+                ▼
+            </span>
+        </button>
+        @if (expandedFaqs.Contains(id))
+        {
+            <div class="px-6 pb-4 text-gray-600 dark:text-gray-300 animate-slide-down">
+                @answer
+            </div>
+        }
+    </div>;
+    #endregion
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+        AppSettings.OnChange -= OnSettingsChanged;
+    }
+}
+
+<style>
+    /* 3D Contact Animations */
+    @@keyframes float-contact {
+        0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+        33% { transform: translateY(-15px) translateX(10px) scale(1.1); }
+        66% { transform: translateY(5px) translateX(-5px) scale(0.9); }
+    }
+
+    @@keyframes float-contact-reverse {
+        0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+        33% { transform: translateY(15px) translateX(-10px) scale(0.9); }
+        66% { transform: translateY(-5px) translateX(5px) scale(1.1); }
+    }
+
+    @@keyframes orbit {
+        0% { transform: rotate(0deg) translateX(50px) rotate(0deg); }
+        100% { transform: rotate(360deg) translateX(50px) rotate(-360deg); }
+    }
+
+    @@keyframes pulse-3d {
+        0%, 100% { transform: scale(1) rotateY(0deg); opacity: 0.8; }
+        50% { transform: scale(1.1) rotateY(180deg); opacity: 1; }
+    }
+
+    @@keyframes glow {
+        0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+        50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.6); }
+    }
+
+    .animate-float-contact { animation: float-contact 8s ease-in-out infinite; }
+    .animate-float-contact-reverse { animation: float-contact-reverse 10s ease-in-out infinite; }
+    .animate-orbit { animation: orbit 20s linear infinite; }
+    .animate-pulse-3d { animation: pulse-3d 6s ease-in-out infinite; }
+    .animate-glow { animation: glow 3s ease-in-out infinite; }
+
+    .hover-card-3d {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transform-style: preserve-3d;
+    }
+
+    .hover-card-3d:hover {
+        transform: translateY(-10px) rotateX(5deg) rotateY(5deg);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+
+    .hover-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .hover-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Form Enhancements */
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        transform: scale(1.02);
+    }
+
+    /* Reuse other animations */
+    @@keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes slide-down {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @@keyframes slide-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @@keyframes gradient-slow {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 0.6; }
+    }
+
+    .animate-fade-in { animation: fade-in 1s ease-out; }
+    .animate-slide-down { animation: slide-down 0.8s ease-out; }
+    .animate-slide-up { animation: slide-up 0.8s ease-out; }
+    .animate-gradient-slow { animation: gradient-slow 8s ease-in-out infinite; }
+
+    .gradient-text {
+        background-size: 200% auto;
+        animation: gradient-shift 3s linear infinite;
+    }
+
+    @@keyframes gradient-shift {
+        0%, 100% { background-position: 0% center; }
+        50% { background-position: 100% center; }
+    }
+</style>
+
+<script>
+    window.showToast = function(message, type) {
+        console.log(`${type.toUpperCase()}: ${message}`);
+        // Toast implementation would go here
+    };
+</script>

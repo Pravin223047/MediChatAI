@@ -1,0 +1,335 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inherits NavbarBase
+
+<nav class="bg-card dark:bg-gray-900 shadow-lg border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+    <div class="px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+            <!-- Logo and Brand -->
+            <div class="flex items-center">
+                <div class="flex-shrink-0 flex items-center">
+                    <div class="flex items-center space-x-2">
+                        <!-- Medical Icon -->
+                        <div class="bg-gradient-to-r from-primary to-accent p-2 rounded-lg">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                                @AppSettings.Settings.SiteName
+                            </h1>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 -mt-1">@AppSettings.Settings.SiteDescription</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Desktop Navigation Links -->
+                <div class="hidden md:ml-10 md:flex md:space-x-8">
+                    <AuthorizeView>
+                        <Authorized>
+                            @if (userRole == "Patient")
+                            {
+                                <PatientNavLinks />
+                            }
+                            else if (userRole == "Doctor")
+                            {
+                                <DoctorNavLinks />
+                            }
+                            else if (userRole == "Admin")
+                            {
+                                <AdminNavLinks />
+                            }
+                        </Authorized>
+                        <NotAuthorized>
+                            <CommonNavLinks />
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </div>
+            </div>
+
+            <!-- Right side - User menu and actions -->
+            <div class="flex items-center space-x-4">
+                <!-- Emergency Button (Always Visible) -->
+                <a href="/emergency" class="group relative flex items-center space-x-2 px-2 py-2 font-sm bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 dark:from-red-600 dark:to-red-700 dark:hover:from-red-700 dark:hover:to-red-800 text-white text-sm rounded-xl font-bold transition-all duration-300 hover:shadow-2xl hover:scale-105 animate-pulse">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+                    </svg>
+                    <span class="hidden md:inline text-sm font-sm">EMERGENCY</span>
+                    <!-- Pulse indicator -->
+                    <span class="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    </span>
+                </a>
+
+                <AuthorizeView>
+                    <Authorized>
+                        <!-- Session Timer Countdown -->
+                        @if (!string.IsNullOrEmpty(sessionTimeDisplay))
+                        {
+                            <div class="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 border border-blue-200 dark:border-gray-600">
+                                <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span class="text-sm font-medium text-gray-700 dark:text-gray-200">@sessionTimeDisplay</span>
+                            </div>
+                        }
+
+                        <!-- Notifications -->
+                        <NotificationBell />
+
+                        <!-- User Profile Dropdown -->
+                        <div class="relative" @onclick="ToggleUserMenu" @onclick:stopPropagation>
+                            <button class="bg-white rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200 hover:ring-4 hover:ring-primary dark:ring-primary bg-gradient-to-br from-primary to-accent" id="user-menu-button">
+                                @if (!string.IsNullOrEmpty(userProfileImage))
+                                {
+                                    <img class="profile-image h-8 w-8 rounded-full object-cover border-2 border-primary-200 dark:border-primary-700"
+                                         src="@GetImageUrl(userProfileImage)"
+                                         alt="@userName"
+                                         data-initials="@GetUserInitials()"
+                                         onerror="window.handleImageError(this, '@GetUserInitials()')" />
+                                }
+                                else
+                                {
+                                    <div class="h-8 w-8 rounded-full bg-gradient-to-r @GetRoleGradient() flex items-center justify-center text-white font-medium text-xs">
+                                        @GetUserInitials()
+                                    </div>
+                                }
+                            </button>
+
+                            <!-- Dropdown menu -->
+                            @if (isUserMenuOpen)
+                            {
+                                <div id="user-menu-dropdown" @onclick:stopPropagation class="origin-top-right absolute right-0 mt-2 w-72 rounded-xl shadow-xl py-2 bg-card dark:bg-gray-800 ring-1 ring-black ring-opacity-5 backdrop-blur-sm">
+                                    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                                        <div class="flex items-center space-x-3">
+                                            @if (!string.IsNullOrEmpty(userProfileImage))
+                                            {
+                                                <img class="h-10 w-10 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600" src="@GetImageUrl(userProfileImage)" alt="@userName" />
+                                            }
+                                            else
+                                            {
+                                                <div class="h-10 w-10 rounded-full bg-gradient-to-r @GetRoleGradient() flex items-center justify-center text-white font-medium">
+                                                    @GetUserInitials()
+                                                </div>
+                                            }
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-sm font-medium text-gray-900 dark:text-white truncate">@userName</p>
+                                                <p class="text-xs text-gray-500 dark:text-gray-400 break-words" title="@userEmail">@userEmail</p>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium @GetRoleBadgeColor() mt-1">
+                                                    @GetRoleDisplayName()
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <a href="@GetProfileUrl()" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-primary hover:text-white transition-all duration-200 group">
+                                        <svg class="w-4 h-4 inline mr-3 hover:text-white text-gray-900 hover:text-white dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                        </svg>
+                                        Your Profile
+                                    </a>
+                                    <a href="/settings" class="block px-4 py-2 text-sm hover:text-white text-gray-700 dark:text-gray-300 hover:bg-primary hover:text-white transition-all duration-200 group">
+                                        <svg class="w-4 h-4 inline mr-3 hover:text-white text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        </svg>
+                                        Settings
+                                    </a>
+                                    <div class="border-t border-gray-100 my-1"></div>
+                                    <button @onclick="HandleLogout" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-200 group">
+                                        <svg class="w-4 h-4 inline mr-3 group-hover:text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                        </svg>
+                                        Sign out
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </Authorized>
+                    <NotAuthorized>
+                        <div class="flex items-center space-x-3">
+                            <a href="/login" class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
+                                Sign in
+                            </a>
+                            <a href="/register" class="bg-gradient-to-r from-primary to-accent hover:from-accent hover:to-primary text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg">
+                                Get Started
+                            </a>
+                        </div>
+                    </NotAuthorized>
+                </AuthorizeView>
+
+                <!-- Mobile menu button -->
+                <div class="md:hidden">
+                    <button @onclick="ToggleMobileMenu" class="bg-white inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="@(isMobileMenuOpen ? "hidden" : "block") h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        <svg class="@(isMobileMenuOpen ? "block" : "hidden") h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile menu -->
+    @if (isMobileMenuOpen)
+    {
+        <div class="md:hidden border-t border-gray-200 dark:border-gray-700 bg-card dark:bg-gray-800">
+            <!-- Emergency Link (Mobile - Always at Top) -->
+            <div class="p-3">
+                <a href="/emergency" class="flex items-center justify-center space-x-3 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-bold transition-all duration-300 shadow-lg hover:shadow-2xl animate-pulse">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+                    </svg>
+                    <span class="text-lg">EMERGENCY</span>
+                    <svg class="w-5 h-5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.99-.833-2.76 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                    </svg>
+                </a>
+            </div>
+
+            <div class="pt-2 pb-3 space-y-1">
+                <AuthorizeView>
+                    <Authorized>
+                        @if (userRole == "Patient")
+                        {
+                            <NavLink href="/patient/dashboard" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Dashboard
+                            </NavLink>
+
+                            <!-- Care Section -->
+                            <div class="px-3 pt-3 pb-1">
+                                <h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Care</h3>
+                            </div>
+                            <NavLink href="/patient/consultations" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                My Consultations
+                            </NavLink>
+                            <NavLink href="/patient/appointments" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Appointments
+                            </NavLink>
+                            <NavLink href="/patient/prescriptions" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Prescriptions
+                            </NavLink>
+
+                            <!-- Records Section -->
+                            <div class="px-3 pt-3 pb-1">
+                                <h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Records</h3>
+                            </div>
+                            <NavLink href="/patient/health-records" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Health Records
+                            </NavLink>
+                        }
+                        else if (userRole == "Doctor")
+                        {
+                            <NavLink href="/doctor/dashboard" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Dashboard
+                            </NavLink>
+
+                            <!-- Practice Section -->
+                            <div class="px-3 pt-3 pb-1">
+                                <h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Practice</h3>
+                            </div>
+                            <NavLink href="/doctor/patients" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                My Patients
+                            </NavLink>
+                            <NavLink href="/doctor/consultations" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Consultations
+                            </NavLink>
+                            <NavLink href="/doctor/reports" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Reports
+                            </NavLink>
+
+                            <!-- Schedule Section -->
+                            <div class="px-3 pt-3 pb-1">
+                                <h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Schedule</h3>
+                            </div>
+                            <NavLink href="/doctor/schedule" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                My Schedule
+                            </NavLink>
+                            <NavLink href="/doctor/appointments" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Appointments
+                            </NavLink>
+                        }
+                        else if (userRole == "Admin")
+                        {
+                            <NavLink href="/admin/dashboard" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Dashboard
+                            </NavLink>
+
+                            <!-- Management Section -->
+                            <div class="px-3 pt-3 pb-1">
+                                <h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Management</h3>
+                            </div>
+                            <NavLink href="/admin/users" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                User Management
+                            </NavLink>
+                            <NavLink href="/admin/settings" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                System Settings
+                            </NavLink>
+                            <NavLink href="/admin/notifications" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Notifications
+                            </NavLink>
+
+                            <!-- Analytics & Reports Section -->
+                            <div class="px-3 pt-3 pb-1">
+                                <h3 class="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Analytics & Reports</h3>
+                            </div>
+                            <NavLink href="/admin/analytics" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Analytics Dashboard
+                            </NavLink>
+                            <NavLink href="/admin/reports" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Reports
+                            </NavLink>
+                            <NavLink href="/admin/audit-logs" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-primary dark:text-gray-300 dark:hover:text-primary transition-all duration-200">
+                                Audit Logs
+                            </NavLink>
+                        }
+                    </Authorized>
+                    <NotAuthorized>
+                        <NavLink href="/about" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors duration-200">
+                            About
+                        </NavLink>
+                        <NavLink href="/features" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors duration-200">
+                            Features
+                        </NavLink>
+                        <NavLink href="/services" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors duration-200">
+                            Services
+                        </NavLink>
+                        <NavLink href="/contact" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors duration-200">
+                            Contact
+                        </NavLink>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+            <div class="pt-4 pb-3 border-t border-gray-200 dark:border-gray-700">
+                <AuthorizeView>
+                    <Authorized>
+                        <div class="flex items-center px-4">
+                            <div class="flex-shrink-0">
+                                <img class="h-10 w-10 rounded-full bg-gradient-to-r from-primary to-accent p-0.5" src="data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='white' viewBox='0 0 24 24'%3e%3cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3e%3c/svg%3e" alt="User avatar">
+                            </div>
+                            <div class="ml-3 flex-1 min-w-0">
+                                <div class="text-base font-medium text-gray-800 dark:text-white truncate">@userName</div>
+                                <div class="text-sm font-medium text-gray-500 dark:text-gray-400 break-words">@userEmail</div>
+                            </div>
+                        </div>
+                        <div class="mt-3 space-y-1">
+                            <a href="@GetProfileUrl()" class="block px-4 py-2 text-base font-medium text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">Your Profile</a>
+                            <a href="/settings" class="block px-4 py-2 text-base font-medium text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">Settings</a>
+                            <button @onclick="HandleLogout" class="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">Sign out</button>
+                        </div>
+                    </Authorized>
+                    <NotAuthorized>
+                        <div class="mt-3 space-y-1">
+                            <a href="/login" class="block px-4 py-2 text-base font-medium text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">Sign in</a>
+                            <a href="/register" class="block px-4 py-2 text-base font-medium text-primary dark:text-primary hover:text-primary dark:hover:text-primary hover:bg-primary dark:hover:bg-primary transition-colors duration-200">Get Started</a>
+                        </div>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    }
+</nav>
+

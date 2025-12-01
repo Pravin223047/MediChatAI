@@ -1,0 +1,18 @@
+@page "/toast-test"
+@inject IToastService ToastService
+
+<h3>Toast Notification Test</h3>
+
+<button class="btn btn-success" @onclick="ShowToast">Show Success Toast</button>
+
+@code {
+    protected override void OnInitialized()
+    {
+        ToastService.ShowSuccess("MainLayout loaded!");
+    }
+
+    private void ShowToast()
+    {
+        ToastService.ShowSuccess("This is a success toast!");
+    }
+}
