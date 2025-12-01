@@ -1,0 +1,311 @@
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject IJSRuntime JSRuntime
+
+<style>
+    .disclaimer-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    .disclaimer-modal {
+        background: white;
+        max-width: 600px;
+        width: 100%;
+        border-radius: 1.5rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        max-height: 90vh;
+        overflow-y: auto;
+        animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        position: relative;
+
+        /* Hide scrollbar but keep functionality */
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE/Edge */
+    }
+
+    .disclaimer-modal::-webkit-scrollbar {
+        display: none; /* Chrome/Safari/Edge */
+    }
+
+    .dark .disclaimer-modal {
+        background: #1f2937;
+        color: #f9fafb;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(2rem) scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    .disclaimer-header {
+        background: linear-gradient(135deg, var(--color-primary, #ef4444), color-mix(in srgb, var(--color-primary, #dc2626) 80%, black 20%));
+        color: white;
+        padding: 2rem;
+        border-radius: 1.5rem 1.5rem 0 0;
+    }
+
+    .disclaimer-content {
+        padding: 2rem;
+        line-height: 1.7;
+    }
+
+    .disclaimer-content ul {
+        margin: 1rem 0;
+        padding-left: 1.5rem;
+    }
+
+    .disclaimer-content li {
+        margin: 0.75rem 0;
+    }
+
+    .disclaimer-footer {
+        padding: 1.5rem 2rem;
+        background: #f9fafb;
+        border-radius: 0 0 1.5rem 1.5rem;
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+    }
+
+    .dark .disclaimer-footer {
+        background: #111827;
+    }
+
+    .btn-disclaimer {
+        padding: 0.75rem 2rem;
+        border-radius: 0.75rem;
+        font-weight: 600;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        border: none;
+        font-size: 1rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .btn-disclaimer::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+    }
+
+    .btn-disclaimer:active::before {
+        width: 300px;
+        height: 300px;
+        transition: width 0s, height 0s;
+    }
+
+    .btn-decline {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-decline:hover {
+        background: #d1d5db;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-decline:active {
+        transform: translateY(0);
+    }
+
+    .dark .btn-decline {
+        background: #374151;
+        color: #f9fafb;
+    }
+
+    .dark .btn-decline:hover {
+        background: #4b5563;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-accept {
+        background: var(--color-primary, #ef4444);
+        color: white;
+        box-shadow: 0 4px 12px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+    }
+
+    .btn-accept:hover {
+        filter: brightness(1.1);
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 12px 28px -5px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5);
+    }
+
+    .btn-accept:active {
+        transform: translateY(-1px) scale(0.98);
+    }
+
+    .warning-box {
+        background: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1.5rem 0;
+    }
+
+    .dark .warning-box {
+        background: rgba(245, 158, 11, 0.1);
+        border-left-color: #fbbf24;
+    }
+
+    .important-text {
+        font-weight: 700;
+        color: #dc2626;
+        font-size: 1.125rem;
+    }
+
+    .dark .important-text {
+        color: #fca5a5;
+    }
+</style>
+
+@if (showDisclaimer)
+{
+    <div class="disclaimer-overlay" @onclick:stopPropagation="true">
+        <div class="disclaimer-modal">
+            <div class="disclaimer-header">
+                <div class="flex items-center gap-3 mb-2">
+                    <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2v-2zm0-6h2v4h-2v-4z"/>
+                    </svg>
+                    <h2 class="text-3xl font-bold">⚠️ Medical Disclaimer</h2>
+                </div>
+                <p class="text-sm opacity-90">Please read carefully before using Emergency AI Assistant</p>
+            </div>
+
+            <div class="disclaimer-content">
+                <div class="warning-box">
+                    <p class="important-text mb-2">THIS IS NOT MEDICAL ADVICE</p>
+                    <p class="text-sm dark:text-gray-300">This AI assistant provides general information only and should NOT be used as a substitute for professional medical advice, diagnosis, or treatment.</p>
+                </div>
+
+                <h3 class="text-xl font-bold mb-3 text-gray-900 dark:text-white">Important Information:</h3>
+
+                <ul class="text-gray-700 dark:text-gray-300 space-y-2">
+                    <li class="flex items-start gap-2">
+                        <span class="text-2xl flex-shrink-0">🚨</span>
+                        <span><strong>Call 911 immediately</strong> for life-threatening emergencies (chest pain, difficulty breathing, severe bleeding, stroke symptoms, etc.)</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-2xl flex-shrink-0">👨‍⚕️</span>
+                        <span><strong>Always consult a qualified healthcare provider</strong> for medical concerns and before making health decisions</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-2xl flex-shrink-0">⚕️</span>
+                        <span><strong>Never disregard professional medical advice</strong> or delay seeking it because of information from this AI</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-2xl flex-shrink-0">🤖</span>
+                        <span><strong>AI responses may contain errors</strong> or be incomplete. Do not rely solely on AI-generated information</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-2xl flex-shrink-0">🏥</span>
+                        <span><strong>Hospital recommendations</strong> are based on proximity and general data, not real-time capacity or specialized care availability</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-2xl flex-shrink-0">📞</span>
+                        <span><strong>In case of emergency</strong>, always prioritize calling emergency services (911 in US) over using this chatbot</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-2xl flex-shrink-0">🔒</span>
+                        <span><strong>Privacy:</strong> Do not share highly sensitive personal health information. Conversations may be stored for service improvement</span>
+                    </li>
+                </ul>
+
+                <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p class="text-sm text-blue-900 dark:text-blue-200">
+                        <strong>Intended Use:</strong> This tool is designed to help you find nearby medical facilities, understand basic emergency procedures, and get general health information. It is NOT a replacement for emergency services or professional medical care.
+                    </p>
+                </div>
+
+                <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    <p>By using this Emergency AI Assistant, you acknowledge that you have read and understood this disclaimer. If you do not agree with these terms, please do not use this feature.</p>
+                    <p class="mt-2">For full Terms of Service, visit <a href="/terms" class="text-blue-600 dark:text-blue-400 underline" target="_blank">Terms & Conditions</a></p>
+                </div>
+            </div>
+
+            <div class="disclaimer-footer">
+                <button @onclick="DeclineDisclaimer" class="btn-disclaimer btn-decline">
+                    I Don't Accept
+                </button>
+                <button @onclick="AcceptDisclaimer" class="btn-disclaimer btn-accept">
+                    I Understand & Accept
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback<bool> OnDisclaimerResponse { get; set; }
+
+    private bool showDisclaimer = false;
+    private const string DISCLAIMER_STORAGE_KEY = "emergency_disclaimer_accepted";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if user has already accepted disclaimer
+        var hasAccepted = await LocalStorage.GetItemAsync<bool?>(DISCLAIMER_STORAGE_KEY);
+        showDisclaimer = !(hasAccepted ?? false);
+    }
+
+    public async Task ShowDisclaimer()
+    {
+        showDisclaimer = true;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task AcceptDisclaimer()
+    {
+        // Store acceptance in localStorage
+        await LocalStorage.SetItemAsync(DISCLAIMER_STORAGE_KEY, true);
+        showDisclaimer = false;
+
+        // Notify parent component
+        await OnDisclaimerResponse.InvokeAsync(true);
+        StateHasChanged();
+    }
+
+    private async Task DeclineDisclaimer()
+    {
+        showDisclaimer = false;
+
+        // Notify parent component
+        await OnDisclaimerResponse.InvokeAsync(false);
+
+        // Optionally show a message
+        await JSRuntime.InvokeVoidAsync("alert",
+            "You must accept the disclaimer to use the Emergency AI Assistant.\n\nFor immediate emergencies, please call 911.");
+
+        StateHasChanged();
+    }
+}

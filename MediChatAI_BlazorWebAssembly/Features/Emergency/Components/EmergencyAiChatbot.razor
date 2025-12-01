@@ -1,0 +1,2490 @@
+@using Microsoft.JSInterop
+@using MediChatAI_BlazorWebAssembly.Core.Components.UI
+@using MediChatAI_BlazorWebAssembly.Features.Emergency.Services
+@inject IJSRuntime JSRuntime
+@inject IEmergencyChatService ChatService
+@inject HospitalCacheService HospitalCache
+@inject ThemeState ThemeState
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@implements IDisposable
+@implements IAsyncDisposable
+
+<style>
+    @@keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    @@keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @@keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+
+    .animate-shake {
+        animation: shake 0.5s ease-in-out;
+    }
+
+    @@keyframes pulse-ring {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+        50% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    @@keyframes typing {
+        0%, 100% { opacity: 0.3; transform: translateY(0); }
+        50% { opacity: 1; transform: translateY(-3px); }
+    }
+
+    @@keyframes voice-pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.15); opacity: 0.7; }
+    }
+
+    @@keyframes shimmer {
+        0% { background-position: -200% center; }
+        100% { background-position: 200% center; }
+    }
+
+    @@keyframes bounce-subtle {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+    }
+
+    @@keyframes pulse-subtle {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.85; }
+    }
+
+    .animate-pulse-subtle {
+        animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .animate-heartbeat {
+        animation: heartbeat 2s ease-in-out infinite;
+    }
+
+    @@keyframes heartbeat {
+        0%, 100% { transform: scale(1); }
+        10%, 30% { transform: scale(0.9); }
+        20%, 40% { transform: scale(1.1); }
+    }
+
+    .chat-enter {
+        animation: messageEnter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @@keyframes messageEnter {
+        0% {
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+            filter: blur(4px);
+        }
+        60% {
+            transform: translateY(-5px) scale(1.02);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+        }
+    }
+
+    .slide-in-right {
+        animation: slideIn 0.3s ease-out;
+    }
+
+    .fade-in {
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    .glass-morphism {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(25px) saturate(180%);
+        -webkit-backdrop-filter: blur(25px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .dark .glass-morphism {
+        background: rgba(17, 24, 39, 0.95);
+        backdrop-filter: blur(25px) saturate(180%);
+        -webkit-backdrop-filter: blur(25px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .message-user {
+        background: linear-gradient(135deg,
+            rgba(var(--color-primary-rgb, 239, 68, 68), 0.95),
+            rgba(var(--color-primary-rgb, 220, 38, 38), 0.9));
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        color: white;
+        box-shadow:
+            0 8px 32px rgba(var(--color-primary-rgb, 239, 68, 68), 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .message-user::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        animation: shimmer 3s infinite;
+    }
+
+    .message-ai {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        color: var(--color-text, #1f2937);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        box-shadow:
+            0 4px 16px rgba(0, 0, 0, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .dark .message-ai {
+        background: rgba(55, 65, 81, 0.5);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        color: var(--color-text-dark, #f9fafb);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow:
+            0 4px 20px rgba(0, 0, 0, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .chat-toggle-btn {
+        animation: pulse-ring 2.5s infinite;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .chat-toggle-btn::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+        transform: translateX(-100%);
+        transition: transform 0.6s;
+    }
+
+    .chat-toggle-btn:hover::after {
+        transform: translateX(100%);
+    }
+
+    .typing-indicator span {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--color-primary, #ef4444);
+        margin: 0 4px;
+        animation: typingWave 1.4s ease-in-out infinite;
+        box-shadow:
+            0 0 10px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5),
+            0 2px 6px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+    }
+
+    .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+    @@keyframes typingWave {
+        0%, 60%, 100% {
+            transform: translateY(0) scale(1);
+            opacity: 0.7;
+        }
+        30% {
+            transform: translateY(-12px) scale(1.2);
+            opacity: 1;
+            box-shadow:
+                0 0 15px rgba(var(--color-primary-rgb, 239, 68, 68), 0.8),
+                0 4px 8px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4);
+        }
+    }
+
+    .voice-recording {
+        animation: voice-pulse 1s infinite;
+    }
+
+    .quick-action-btn {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .quick-action-btn::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.05);
+        transform: translate(-50%, -50%);
+        transition: width 0.4s, height 0.4s;
+    }
+
+    .quick-action-btn:hover::before {
+        width: 300px;
+        height: 300px;
+    }
+
+    .quick-action-btn:hover {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.25);
+    }
+
+    .quick-action-btn:active {
+        transform: translateY(-1px) scale(0.98);
+    }
+
+    /* Glassmorphism Hospital Cards */
+    .hospital-card-mini {
+        background: rgba(255, 255, 255, 0.8) !important;
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        box-shadow:
+            0 4px 16px rgba(0, 0, 0, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .dark .hospital-card-mini {
+        background: rgba(55, 65, 81, 0.7) !important;
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow:
+            0 4px 20px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    /* Shimmer effect on hover */
+    .hospital-card-mini::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg,
+            transparent,
+            rgba(255, 255, 255, 0.3),
+            transparent);
+        transition: left 0.5s ease;
+    }
+
+    .hospital-card-mini:hover::before {
+        left: 100%;
+    }
+
+    .hospital-card-mini:hover {
+        transform: translateX(6px) scale(1.02) translateY(-2px);
+        box-shadow:
+            0 12px 28px rgba(0, 0, 0, 0.12),
+            0 0 0 1px rgba(var(--color-primary-rgb, 239, 68, 68), 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.6);
+        border-color: rgba(var(--color-primary-rgb, 239, 68, 68), 0.2);
+    }
+
+    .dark .hospital-card-mini:hover {
+        box-shadow:
+            0 12px 32px rgba(0, 0, 0, 0.4),
+            0 0 0 1px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        border-color: rgba(var(--color-primary-rgb, 239, 68, 68), 0.4);
+    }
+
+    /* Hospital card buttons enhanced */
+    .hospital-card-mini button {
+        position: relative;
+        z-index: 2;
+        box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .hospital-card-mini button:hover {
+        transform: translateY(-2px) scale(1.05);
+        box-shadow:
+            0 4px 12px rgba(0, 0, 0, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .hospital-card-mini button:active {
+        transform: translateY(0) scale(0.98);
+    }
+
+    .scroll-smooth::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .scroll-smooth::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.02);
+        border-radius: 10px;
+    }
+
+    .scroll-smooth::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg,
+            rgba(var(--color-primary-rgb, 239, 68, 68), 0.6),
+            rgba(var(--color-primary-rgb, 220, 38, 38), 0.6));
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+        transition: background 0.3s;
+    }
+
+    .scroll-smooth::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg,
+            rgba(var(--color-primary-rgb, 239, 68, 68), 0.8),
+            rgba(var(--color-primary-rgb, 220, 38, 38), 0.8));
+        background-clip: content-box;
+    }
+
+    .dark .scroll-smooth::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .dark .scroll-smooth::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(75, 85, 99, 0.6), rgba(107, 114, 128, 0.6));
+        background-clip: content-box;
+    }
+
+    .dark .scroll-smooth::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, rgba(75, 85, 99, 0.8), rgba(107, 114, 128, 0.8));
+        background-clip: content-box;
+    }
+
+    /* Modern Input Field Styling */
+    .chat-input-modern {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border: 2px solid transparent;
+        box-shadow:
+            inset 2px 2px 5px rgba(0, 0, 0, 0.05),
+            inset -2px -2px 5px rgba(255, 255, 255, 0.5),
+            0 2px 8px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .chat-input-modern:focus {
+        border-color: var(--color-primary);
+        background: white;
+        box-shadow:
+            0 0 0 4px rgba(var(--color-primary-rgb, 239, 68, 68), 0.1),
+            inset 2px 2px 5px rgba(0, 0, 0, 0.05),
+            0 8px 24px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2);
+        transform: translateY(-2px);
+    }
+
+    .dark .chat-input-modern {
+        background: rgba(31, 41, 55, 0.8);
+        box-shadow:
+            inset 2px 2px 5px rgba(0, 0, 0, 0.3),
+            inset -2px -2px 5px rgba(255, 255, 255, 0.03),
+            0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .dark .chat-input-modern:focus {
+        background: rgba(31, 41, 55, 0.95);
+        box-shadow:
+            0 0 0 4px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+            0 8px 32px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3),
+            inset 2px 2px 5px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Input transcription ready glow */
+    .chat-input-ready {
+        border-color: #10b981 !important;
+        box-shadow:
+            0 0 0 4px rgba(16, 185, 129, 0.15),
+            0 8px 24px rgba(16, 185, 129, 0.25) !important;
+        animation: pulse-green 2s ease-in-out infinite;
+    }
+
+    @@keyframes pulse-green {
+        0%, 100% {
+            box-shadow:
+                0 0 0 4px rgba(16, 185, 129, 0.15),
+                0 8px 24px rgba(16, 185, 129, 0.25);
+        }
+        50% {
+            box-shadow:
+                0 0 0 6px rgba(16, 185, 129, 0.2),
+                0 12px 32px rgba(16, 185, 129, 0.35);
+        }
+    }
+
+    /* 3D Button Effects */
+    .btn-3d {
+        position: relative;
+        transform-style: preserve-3d;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: perspective(1000px) translateZ(0);
+    }
+
+    .btn-3d::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.2) 0%,
+            rgba(255, 255, 255, 0) 100%);
+        transform: translateZ(-2px);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+    }
+
+    .btn-3d::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: rgba(0, 0, 0, 0.1);
+        transform: translateZ(-4px);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+        filter: blur(2px);
+    }
+
+    .btn-3d:hover:not(:disabled) {
+        transform: perspective(1000px) translateZ(8px) translateY(-4px);
+    }
+
+    .btn-3d:hover:not(:disabled)::before {
+        transform: translateZ(-2px);
+        opacity: 0.8;
+    }
+
+    .btn-3d:hover:not(:disabled)::after {
+        transform: translateZ(-6px) translateY(2px);
+        filter: blur(8px);
+        opacity: 0.4;
+    }
+
+    .btn-3d:active:not(:disabled) {
+        transform: perspective(1000px) translateZ(2px) translateY(-1px);
+        transition-duration: 0.05s;
+    }
+
+    .btn-3d:active:not(:disabled)::after {
+        transform: translateZ(-3px) translateY(1px);
+        filter: blur(4px);
+    }
+
+    /* Send button specific 3D effect */
+    .btn-send-3d {
+        box-shadow:
+            0 10px 15px -3px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3),
+            0 4px 6px -2px rgba(var(--color-primary-rgb, 239, 68, 68), 0.15),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-send-3d:hover:not(:disabled) {
+        box-shadow:
+            0 20px 25px -5px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4),
+            0 10px 10px -5px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.15),
+            0 0 0 3px rgba(var(--color-primary-rgb, 239, 68, 68), 0.1);
+    }
+
+    /* Voice button specific 3D effect */
+    .btn-voice-3d {
+        box-shadow:
+            0 8px 12px -2px rgba(var(--color-primary-rgb, 239, 68, 68), 0.25),
+            0 4px 6px -2px rgba(var(--color-primary-rgb, 239, 68, 68), 0.1),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .btn-voice-3d:hover:not(:disabled) {
+        box-shadow:
+            0 16px 20px -4px rgba(var(--color-primary-rgb, 239, 68, 68), 0.35),
+            0 8px 10px -4px rgba(var(--color-primary-rgb, 239, 68, 68), 0.15),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.12),
+            0 0 0 3px rgba(var(--color-primary-rgb, 239, 68, 68), 0.08);
+    }
+
+    /* Recording button 3D glow effect */
+    .btn-recording-3d {
+        box-shadow:
+            0 12px 20px -4px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4),
+            0 6px 8px -2px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+            inset 0 1px 2px rgba(255, 255, 255, 0.2),
+            0 0 30px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+        animation: btn-pulse-3d 2s ease-in-out infinite;
+    }
+
+    @@keyframes btn-pulse-3d {
+        0%, 100% {
+            box-shadow:
+                0 12px 20px -4px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4),
+                0 6px 8px -2px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+                inset 0 1px 2px rgba(255, 255, 255, 0.2),
+                0 0 30px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+        }
+        50% {
+            box-shadow:
+                0 16px 28px -6px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5),
+                0 8px 12px -3px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3),
+                inset 0 1px 2px rgba(255, 255, 255, 0.3),
+                0 0 40px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5);
+        }
+    }
+
+    /* Voice Waveform Visualization */
+    .voice-waveform {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        height: 48px;
+    }
+
+    .waveform-bar {
+        width: 4px;
+        border-radius: 2px;
+        background: linear-gradient(180deg,
+            var(--color-primary),
+            color-mix(in srgb, var(--color-primary) 70%, white 30%));
+        box-shadow:
+            0 0 8px rgba(var(--color-primary-rgb, 239, 68, 68), 0.6),
+            0 2px 4px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+        animation: waveform-pulse 1.2s ease-in-out infinite;
+        transform-origin: center;
+    }
+
+    .waveform-bar:nth-child(1) {
+        animation-delay: 0s;
+        height: 20px;
+    }
+
+    .waveform-bar:nth-child(2) {
+        animation-delay: 0.1s;
+        height: 32px;
+    }
+
+    .waveform-bar:nth-child(3) {
+        animation-delay: 0.2s;
+        height: 44px;
+    }
+
+    .waveform-bar:nth-child(4) {
+        animation-delay: 0.3s;
+        height: 36px;
+    }
+
+    .waveform-bar:nth-child(5) {
+        animation-delay: 0.4s;
+        height: 48px;
+    }
+
+    .waveform-bar:nth-child(6) {
+        animation-delay: 0.5s;
+        height: 28px;
+    }
+
+    .waveform-bar:nth-child(7) {
+        animation-delay: 0.6s;
+        height: 40px;
+    }
+
+    .waveform-bar:nth-child(8) {
+        animation-delay: 0.7s;
+        height: 24px;
+    }
+
+    @@keyframes waveform-pulse {
+        0%, 100% {
+            transform: scaleY(0.3);
+            opacity: 0.6;
+        }
+        50% {
+            transform: scaleY(1);
+            opacity: 1;
+        }
+    }
+
+    /* Waveform container styling */
+    .waveform-container {
+        background: linear-gradient(135deg,
+            rgba(var(--color-primary-rgb, 239, 68, 68), 0.1),
+            rgba(var(--color-primary-rgb, 239, 68, 68), 0.05));
+        backdrop-filter: blur(10px);
+        border: 2px solid rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+        box-shadow:
+            0 4px 16px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+            inset 0 1px 2px rgba(255, 255, 255, 0.1);
+        animation: waveform-glow 2s ease-in-out infinite;
+    }
+
+    @@keyframes waveform-glow {
+        0%, 100% {
+            box-shadow:
+                0 4px 16px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+                inset 0 1px 2px rgba(255, 255, 255, 0.1),
+                0 0 20px rgba(var(--color-primary-rgb, 239, 68, 68), 0.15);
+        }
+        50% {
+            box-shadow:
+                0 8px 24px rgba(var(--color-primary-rgb, 239, 68, 68), 0.35),
+                inset 0 1px 2px rgba(255, 255, 255, 0.2),
+                0 0 30px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+        }
+    }
+
+    .dark .waveform-container {
+        background: linear-gradient(135deg,
+            rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+            rgba(var(--color-primary-rgb, 239, 68, 68), 0.1));
+        border-color: rgba(var(--color-primary-rgb, 239, 68, 68), 0.5);
+    }
+
+    /* Animated Gradient Text */
+    .gradient-text-animated {
+        background: linear-gradient(
+            90deg,
+            var(--color-primary),
+            var(--color-accent, color-mix(in srgb, var(--color-primary) 70%, #ff6b9d 30%)),
+            color-mix(in srgb, var(--color-primary) 80%, white 20%),
+            var(--color-primary)
+        );
+        background-size: 300% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: gradient-shift 4s ease-in-out infinite;
+        font-weight: 800;
+        text-shadow: 0 0 30px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+    }
+
+    @@keyframes gradient-shift {
+        0%, 100% {
+            background-position: 0% 50%;
+        }
+        50% {
+            background-position: 100% 50%;
+        }
+    }
+
+    /* Welcome icon floating animation */
+    .welcome-icon-float {
+        animation: float-icon 3s ease-in-out infinite;
+    }
+
+    @@keyframes float-icon {
+        0%, 100% {
+            transform: translateY(0) rotate(0deg) scale(1);
+        }
+        25% {
+            transform: translateY(-10px) rotate(2deg) scale(1.05);
+        }
+        50% {
+            transform: translateY(-5px) rotate(-2deg) scale(1.02);
+        }
+        75% {
+            transform: translateY(-12px) rotate(1deg) scale(1.03);
+        }
+    }
+
+    /* Welcome icon glow pulse */
+    .welcome-icon-glow {
+        box-shadow:
+            0 25px 50px -12px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3),
+            0 0 40px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4),
+            inset 0 2px 4px rgba(255, 255, 255, 0.2);
+        animation: glow-pulse 2s ease-in-out infinite;
+    }
+
+    @@keyframes glow-pulse {
+        0%, 100% {
+            box-shadow:
+                0 25px 50px -12px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3),
+                0 0 40px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4),
+                inset 0 2px 4px rgba(255, 255, 255, 0.2);
+        }
+        50% {
+            box-shadow:
+                0 30px 60px -15px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5),
+                0 0 60px rgba(var(--color-primary-rgb, 239, 68, 68), 0.6),
+                inset 0 2px 4px rgba(255, 255, 255, 0.3);
+        }
+    }
+
+    /* Welcome description subtle animation */
+    .welcome-description {
+        animation: fade-in-up 1s ease-out 0.3s both;
+    }
+
+    @@keyframes fade-in-up {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Quick action buttons shimmer */
+    .quick-action-shimmer {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .quick-action-shimmer::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg,
+            transparent,
+            rgba(var(--color-primary-rgb, 239, 68, 68), 0.1),
+            transparent);
+        animation: shimmer-slide 3s ease-in-out infinite;
+    }
+
+    @@keyframes shimmer-slide {
+        0% {
+            left: -100%;
+        }
+        50%, 100% {
+            left: 200%;
+        }
+    }
+
+    /* Dark Mode Glow Effects */
+
+    /* Enhanced dark mode chat bubbles with glow */
+    .dark .message-user {
+        box-shadow:
+            0 8px 32px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25),
+            0 0 20px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+    }
+
+    .dark .message-ai {
+        box-shadow:
+            0 4px 20px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            0 0 15px rgba(var(--color-primary-rgb, 239, 68, 68), 0.15);
+    }
+
+    /* Dark mode buttons with neon glow */
+    .dark .btn-3d:hover:not(:disabled) {
+        box-shadow:
+            0 20px 25px -5px rgba(0, 0, 0, 0.6),
+            0 10px 10px -5px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.2),
+            0 0 30px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4);
+    }
+
+    /* Dark mode input field glow */
+    .dark .chat-input-modern {
+        background: rgba(31, 41, 55, 0.8);
+        border-color: rgba(75, 85, 99, 0.5);
+        box-shadow:
+            inset 2px 2px 5px rgba(0, 0, 0, 0.3),
+            inset -2px -2px 5px rgba(255, 255, 255, 0.02),
+            0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .dark .chat-input-modern:focus {
+        background: rgba(31, 41, 55, 0.95);
+        box-shadow:
+            0 0 0 4px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+            inset 2px 2px 5px rgba(0, 0, 0, 0.3),
+            0 8px 24px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3),
+            0 0 30px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2);
+        border-color: var(--color-primary);
+    }
+
+    /* Dark mode hospital cards neon accent */
+    .dark .hospital-card-mini {
+        box-shadow:
+            0 4px 20px rgba(0, 0, 0, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            0 0 15px rgba(var(--color-primary-rgb, 239, 68, 68), 0.1);
+    }
+
+    .dark .hospital-card-mini:hover {
+        box-shadow:
+            0 12px 32px rgba(0, 0, 0, 0.5),
+            0 0 0 1px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.12),
+            0 0 30px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+        border-color: rgba(var(--color-primary-rgb, 239, 68, 68), 0.5);
+    }
+
+    /* Dark mode typing indicator glow */
+    .dark .typing-indicator span {
+        box-shadow:
+            0 0 15px rgba(var(--color-primary-rgb, 239, 68, 68), 0.7),
+            0 2px 8px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5);
+    }
+
+    /* Dark mode waveform enhanced glow */
+    .dark .waveform-bar {
+        box-shadow:
+            0 0 12px rgba(var(--color-primary-rgb, 239, 68, 68), 0.8),
+            0 2px 6px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5),
+            0 0 20px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4);
+    }
+
+    /* Dark mode welcome icon super glow */
+    .dark .welcome-icon-glow {
+        box-shadow:
+            0 25px 50px -12px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5),
+            0 0 60px rgba(var(--color-primary-rgb, 239, 68, 68), 0.6),
+            inset 0 2px 4px rgba(255, 255, 255, 0.25),
+            0 0 100px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+    }
+
+    .dark .welcome-icon-glow:hover {
+        box-shadow:
+            0 30px 60px -15px rgba(var(--color-primary-rgb, 239, 68, 68), 0.7),
+            0 0 80px rgba(var(--color-primary-rgb, 239, 68, 68), 0.8),
+            inset 0 2px 4px rgba(255, 255, 255, 0.3),
+            0 0 120px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5);
+    }
+
+    /* Dark mode quick action buttons glow */
+    .dark .quick-action-shimmer {
+        border-color: rgba(75, 85, 99, 0.5);
+        box-shadow:
+            0 4px 12px rgba(0, 0, 0, 0.4),
+            0 0 10px rgba(var(--color-primary-rgb, 239, 68, 68), 0.05);
+    }
+
+    .dark .quick-action-shimmer:hover {
+        box-shadow:
+            0 8px 20px rgba(0, 0, 0, 0.5),
+            0 0 20px rgba(var(--color-primary-rgb, 239, 68, 68), 0.2),
+            0 0 0 1px rgba(var(--color-primary-rgb, 239, 68, 68), 0.3);
+        border-color: rgba(var(--color-primary-rgb, 239, 68, 68), 0.4);
+    }
+
+    /* Dark mode chat toggle button mega glow */
+    .dark .chat-toggle-btn {
+        box-shadow:
+            0 25px 50px -12px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4),
+            0 0 40px rgba(var(--color-primary-rgb, 239, 68, 68), 0.4);
+    }
+
+    .dark .chat-toggle-btn:hover {
+        box-shadow:
+            0 30px 60px -15px rgba(var(--color-primary-rgb, 239, 68, 68), 0.6),
+            0 0 60px rgba(var(--color-primary-rgb, 239, 68, 68), 0.6);
+    }
+
+    /* Dark mode text glow for important elements */
+    .dark .gradient-text-animated {
+        filter: drop-shadow(0 0 20px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5));
+    }
+
+    /* Dark mode scrollbar glow */
+    .dark .scroll-smooth::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg,
+            var(--color-primary),
+            color-mix(in srgb, var(--color-primary) 70%, black 30%));
+        box-shadow:
+            0 0 10px rgba(var(--color-primary-rgb, 239, 68, 68), 0.5),
+            inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    }
+
+    .dark .scroll-smooth::-webkit-scrollbar-thumb:hover {
+        box-shadow:
+            0 0 15px rgba(var(--color-primary-rgb, 239, 68, 68), 0.7),
+            inset 0 1px 2px rgba(255, 255, 255, 0.3);
+    }
+
+    /* Dark mode error/warning glow */
+    .dark .bg-red-50 {
+        background: rgba(220, 38, 38, 0.15) !important;
+        border-color: rgba(239, 68, 68, 0.4);
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+    }
+
+    .dark .bg-yellow-50 {
+        background: rgba(245, 158, 11, 0.15) !important;
+        border-color: rgba(251, 191, 36, 0.4);
+        box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+    }
+
+    .dark .bg-green-50 {
+        background: rgba(16, 185, 129, 0.15) !important;
+        border-color: rgba(16, 185, 129, 0.4);
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+    }
+
+    .dark .bg-blue-50 {
+        background: rgba(59, 130, 246, 0.15) !important;
+        border-color: rgba(59, 130, 246, 0.4);
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+    }
+</style>
+
+<!-- Medical Disclaimer Modal -->
+<EmergencyDisclaimer @ref="disclaimerRef" OnDisclaimerResponse="HandleDisclaimerResponse" />
+
+<!-- Floating Chat Toggle Button -->
+<div class="fixed @(isOpen ? "bottom-6 right-6" : "bottom-6 right-6") z-50 transition-all duration-300">
+    @if (!isOpen)
+    {
+        <button @onclick="ToggleChat"
+                style="background: var(--color-primary); box-shadow: 0 25px 50px -12px rgba(var(--color-primary-rgb, 239, 68, 68), 0.25);"
+                class="chat-toggle-btn group w-20 h-20 rounded-full text-white shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 flex items-center justify-center relative hover:brightness-110">
+            @if (hasUnreadMessages)
+            {
+                <span class="absolute -top-2 -right-2 min-w-[28px] h-7 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full border-3 border-white dark:border-gray-900 flex items-center justify-center text-xs font-bold text-gray-900 shadow-lg animate-bounce">
+                    @unreadCount
+                </span>
+            }
+            <svg class="w-9 h-9 group-hover:scale-110 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+            </svg>
+            <div class="absolute inset-0 rounded-full bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+        </button>
+    }
+</div>
+
+<!-- Backdrop Overlay (Desktop Only) -->
+@if (isOpen)
+{
+    <div class="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm z-40 hidden md:block" @onclick="ToggleChat"></div>
+}
+
+<!-- Chat Window -->
+<div class="@(isOpen ? "fixed inset-0 md:inset-auto md:bottom-6 md:right-6 w-[520px] h-[720px]" : "hidden") z-50 transition-all duration-500 ease-in-out chat-enter">
+    <div class="glass-morphism rounded-none md:rounded-3xl shadow-2xl h-full flex flex-col overflow-hidden border-0 md:border">
+
+        <!-- Chat Header -->
+        <div class="relative p-5 text-white overflow-hidden"
+             style="background: linear-gradient(135deg, var(--color-primary, #ef4444), color-mix(in srgb, var(--color-primary, #dc2626) 80%, black 20%), color-mix(in srgb, var(--color-primary, #b91c1c) 60%, black 40%));">
+            <!-- Animated Background Pattern -->
+            <div class="absolute inset-0 opacity-10">
+                <div class="absolute inset-0" style="background-image: radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.3) 1px, transparent 1px); background-size: 20px 20px;"></div>
+            </div>
+
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/30">
+                            <svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-xl">Emergency AI Assistant</h3>
+                            <p class="text-sm opacity-90 flex items-center gap-2">
+                                @if (isTyping)
+                                {
+                                    <span class="flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                                        <span>Typing...</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>Always here to help</span>
+                                }
+                            </p>
+                        </div>
+                    </div>
+                    <button @onclick="ToggleChat" class="group hover:bg-white/20 p-2.5 rounded-xl transition-all duration-300 hover:rotate-90">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="absolute top-5 right-20">
+                    <select @bind="currentLanguage" @bind:after="LanguageChanged" class="bg-white/10 dark:bg-black/20 text-white text-xs rounded-lg py-1.5 pl-3 pr-8 border-none focus:ring-2 focus:ring-white/50 appearance-none cursor-pointer">
+                        <option value="en" class="bg-gray-700 text-white">English</option>
+                        <option value="hi" class="bg-gray-700 text-white">हिंदी (Hindi)</option>
+                        <option value="bn" class="bg-gray-700 text-white">বাংলা (Bengali)</option>
+                        <option value="te" class="bg-gray-700 text-white">తెలుగు (Telugu)</option>
+                        <option value="mr" class="bg-gray-700 text-white">मराठी (Marathi)</option>
+                        <option value="ta" class="bg-gray-700 text-white">தமிழ் (Tamil)</option>
+                        <option value="gu" class="bg-gray-700 text-white">ગુજરાતી (Gujarati)</option>
+                        <option value="kn" class="bg-gray-700 text-white">ಕನ್ನಡ (Kannada)</option>
+                        <option value="ml" class="bg-gray-700 text-white">മലയാളം (Malayalam)</option>
+                        <option value="pa" class="bg-gray-700 text-white">ਪੰਜਾਬੀ (Punjabi)</option>
+                        <option value="or" class="bg-gray-700 text-white">ଓଡ଼ିଆ (Odia)</option>
+                        <option value="as" class="bg-gray-700 text-white">অসমীয়া (Assamese)</option>
+                        <option value="ur" class="bg-gray-700 text-white">اردو (Urdu)</option>
+                    </select>
+                </div>
+
+                <!-- Feature Pills -->
+                <div class="flex flex-wrap gap-2">
+                    <span class="text-xs px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 hover:bg-white/30 transition-all duration-300 cursor-default shadow-sm">
+                        🎤 Voice Input
+                    </span>
+                    <button @onclick="ToggleVoiceOutput" class="text-xs px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 hover:bg-white/30 transition-all duration-300 cursor-pointer shadow-sm @(voiceOutputEnabled ? "ring-2 ring-white/50" : "")">
+                        @(voiceOutputEnabled ? "🔊" : "🔇") Voice @(voiceOutputEnabled ? "ON" : "OFF")
+                    </button>
+                    <span class="text-xs px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 hover:bg-white/30 transition-all duration-300 cursor-default shadow-sm">
+                        🏥 Hospital Finder
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth bg-gray-50 dark:bg-gray-900">
+            @if (!messages.Any())
+            {
+                <!-- Welcome Message -->
+                <div class="text-center py-10 fade-in">
+                    <div class="relative inline-block mb-6">
+                        <div class="w-20 h-20 rounded-full mx-auto flex items-center justify-center welcome-icon-float welcome-icon-glow"
+                             style="background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 80%, black 20%));">
+                            <svg class="w-11 h-11 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                            </svg>
+                        </div>
+                        <div class="absolute inset-0 w-20 h-20 mx-auto rounded-full animate-ping"
+                             style="background: rgba(var(--color-primary-rgb, 239, 68, 68), 0.2);"></div>
+                    </div>
+
+                    <h4 class="text-3xl gradient-text-animated mb-4">
+                        @GetLocalizedText("welcome_title")
+                    </h4>
+                    <p class="text-base text-gray-600 dark:text-gray-400 max-w-md mx-auto mb-6 leading-relaxed welcome-description">
+                        @GetLocalizedText("welcome_description")
+                    </p>
+
+                    <div class="mt-6 space-y-3 max-w-sm mx-auto">
+                        <button @onclick='() => SendQuickMessage(GetLocalizedText("find_hospital_query"))'
+                                class="quick-action-shimmer group text-sm px-5 py-3.5 bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 text-gray-900 dark:text-white w-full font-medium hover:scale-105 active:scale-95 border border-gray-200 dark:border-gray-700">
+                            <span class="flex items-center justify-center gap-2 relative z-10">
+                                <span class="text-lg group-hover:scale-110 transition-transform duration-300">🏥</span>
+                                <span>@GetLocalizedText("find_hospital")</span>
+                            </span>
+                        </button>
+                        <button @onclick='() => SendQuickMessage(GetLocalizedText("heart_attack_query"))'
+                                class="quick-action-shimmer group text-sm px-5 py-3.5 bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 text-gray-900 dark:text-white w-full font-medium hover:scale-105 active:scale-95 border border-gray-200 dark:border-gray-700">
+                            <span class="flex items-center justify-center gap-2 relative z-10">
+                                <span class="text-lg group-hover:scale-110 transition-transform duration-300">💔</span>
+                                <span>@GetLocalizedText("heart_attack")</span>
+                            </span>
+                        </button>
+                        <button @onclick='() => SendQuickMessage(GetLocalizedText("trauma_centers_query"))'
+                                class="quick-action-shimmer group text-sm px-5 py-3.5 bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 text-gray-900 dark:text-white w-full font-medium hover:scale-105 active:scale-95 border border-gray-200 dark:border-gray-700">
+                            <span class="flex items-center justify-center gap-2 relative z-10">
+                                <span class="text-lg group-hover:scale-110 transition-transform duration-300">🚑</span>
+                                <span>@GetLocalizedText("trauma_centers")</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @foreach (var message in messages)
+                {
+                    <div class="@(message.IsUserMessage ? "flex justify-end" : "flex justify-start") chat-enter">
+                        <div class="@(message.IsUserMessage ? "message-user" : "message-ai") max-w-[85%] rounded-2xl px-5 py-3.5 shadow-lg hover:shadow-xl transition-all duration-300">
+                            @if (message.IsUserMessage)
+                            {
+                                <div class="text-sm leading-relaxed whitespace-pre-wrap relative z-10">@message.Content</div>
+                            }
+                            else
+                            {
+                                <div class="text-sm leading-relaxed relative z-10">
+                                    <MarkdownRenderer Content="@message.Content" />
+                                </div>
+                            }
+                            <div class="text-xs @(message.IsUserMessage ? "opacity-80" : "opacity-60") mt-2 flex items-center gap-1 relative z-10">
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span>@message.Timestamp.ToLocalTime().ToString("h:mm tt")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!message.IsUserMessage && currentResponse != null && message.Id == currentResponse.MessageId)
+                    {
+                        <!-- Quick Actions -->
+                        @if (currentResponse.SuggestedActions?.Any() == true)
+                        {
+                            <div class="flex flex-wrap gap-2 pl-4 chat-enter">
+                                @foreach (var action in currentResponse.SuggestedActions)
+                                {
+                                    <button @onclick="() => HandleQuickAction(action)"
+                                            class="quick-action-btn flex items-center space-x-2 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-all text-sm">
+                                        <span>@action.Icon</span>
+                                        <span class="text-gray-900 dark:text-white">@action.Label</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        <!-- Hospital Recommendations -->
+                        @if (currentResponse.HospitalRecommendations?.Any() == true)
+                        {
+                            <div class="space-y-2 pl-4 chat-enter">
+                                <p class="text-xs text-gray-600 dark:text-gray-400 font-semibold">Recommended Hospitals:</p>
+                                @foreach (var hospital in currentResponse.HospitalRecommendations.OrderBy(h => h.Priority))
+                                {
+                                    <div class="hospital-card-mini bg-white dark:bg-gray-800 rounded-lg p-3 shadow hover:shadow-md transition-all">
+                                        <div class="flex items-start justify-between relative z-10">
+                                            <div class="flex-1">
+                                                <h5 class="font-bold text-sm text-gray-900 dark:text-white">@hospital.HospitalName</h5>
+                                                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">@hospital.ReasonForRecommendation</p>
+                                                <div class="flex items-center space-x-3 mt-2">
+                                                    @if (hospital.DistanceInKm.HasValue)
+                                                    {
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400">📍 @hospital.DistanceInKm.Value.ToString("F1") km</span>
+                                                    }
+                                                    @if (hospital.Rating.HasValue)
+                                                    {
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400">⭐ @hospital.Rating.Value.ToString("F1")</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="flex flex-col space-y-1 ml-2">
+                                                @if (!string.IsNullOrEmpty(hospital.PhoneNumber))
+                                                {
+                                                    <button @onclick="() => CallHospital(hospital.PhoneNumber)" class="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                                @if (hospital.Latitude.HasValue && hospital.Longitude.HasValue)
+                                                {
+                                                    <button @onclick="() => GetDirections(hospital.Latitude.Value, hospital.Longitude.Value, hospital.HospitalName)" class="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        
+                        <!-- Show All Available Hospitals -->
+                        @if (AvailableHospitals?.Any() == true && !message.IsUserMessage)
+                        {
+                            <div class="space-y-2 pl-4 chat-enter mt-4">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-xs text-gray-600 dark:text-gray-400 font-semibold">All Nearby Hospitals (@AvailableHospitals.Count):</p>
+                                    <button @onclick="() => ScrollToHospitals()" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                                        View on Main Page →
+                                    </button>
+                                </div>
+                                @foreach (var hospital in AvailableHospitals.Take(5))
+                                {
+                                    <div class="hospital-card-mini bg-gray-50 dark:bg-gray-700 rounded-lg p-2 shadow-sm hover:shadow-md transition-all">
+                                        <div class="flex items-center justify-between relative z-10">
+                                            <div class="flex-1">
+                                                <h6 class="font-semibold text-xs text-gray-900 dark:text-white">@hospital.Name</h6>
+                                                <div class="flex items-center space-x-2 mt-1">
+                                                    @if (hospital.DistanceInKm.HasValue)
+                                                    {
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400">📍 @hospital.DistanceInKm.Value.ToString("F1")km</span>
+                                                    }
+                                                    @if (hospital.Rating.HasValue)
+                                                    {
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400">⭐ @hospital.Rating.Value.ToString("F1")</span>
+                                                    }
+                                                    <span class="text-xs @(hospital.IsOpen ? "text-green-600" : "text-red-600")">
+                                                        @(hospital.IsOpen ? "Open" : "Closed")
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="flex space-x-1">
+                                                @if (!string.IsNullOrEmpty(hospital.PhoneNumber))
+                                                {
+                                                    <button @onclick="() => CallHospital(hospital.PhoneNumber)" class="p-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors">
+                                                        📞
+                                                    </button>
+                                                }
+                                                @if (hospital.Latitude.HasValue && hospital.Longitude.HasValue)
+                                                {
+                                                    <button @onclick="() => GetDirections(hospital.Latitude.Value, hospital.Longitude.Value, hospital.Name)" class="p-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition-colors">
+                                                        🗺️
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                @if (AvailableHospitals.Count > 5)
+                                {
+                                    <div class="text-center">
+                                        <button @onclick="() => ScrollToHospitals()" class="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                            +@(AvailableHospitals.Count - 5) more hospitals - View all on main page
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                }
+
+                <!-- Typing Indicator -->
+                @if (isTyping)
+                {
+                    <div class="flex justify-start chat-enter">
+                        <div class="message-ai max-w-[80%] rounded-2xl px-4 py-3 shadow-md">
+                            <div class="typing-indicator flex space-x-1">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-5 border-t border-gray-200/80 dark:border-gray-700/80 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
+            <!-- Voice Error Message -->
+            @if (!string.IsNullOrEmpty(voiceErrorMessage))
+            {
+                <div class="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-lg fade-in">
+                    <div class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm text-red-700 dark:text-red-300 font-medium">@voiceErrorMessage</p>
+                        <button @onclick="() => voiceErrorMessage = null" class="ml-auto text-red-500 hover:text-red-700 dark:hover:text-red-300">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Voice Warning Message -->
+            @if (!string.IsNullOrEmpty(voiceWarningMessage))
+            {
+                <div class="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 rounded-lg fade-in">
+                    <div class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm text-yellow-700 dark:text-yellow-300 font-medium">@voiceWarningMessage</p>
+                        <button @onclick="() => voiceWarningMessage = null" class="ml-auto text-yellow-500 hover:text-yellow-700 dark:hover:text-yellow-300">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Transcription Ready Hint -->
+            @if (transcriptionReady && !string.IsNullOrEmpty(inputMessage))
+            {
+                <div class="mb-3 p-2 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 rounded-lg fade-in flex items-center gap-2 text-xs">
+                    <svg class="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span class="text-green-700 dark:text-green-300 font-medium flex-1">Voice transcription complete! Edit if needed, then press Send.</span>
+                    <button @onclick="() => { transcriptionReady = false; }" class="text-green-500 hover:text-green-700 dark:hover:text-green-300">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            }
+
+            <!-- Queue Status Indicator -->
+            @if (queuedMessageCount > 0)
+            {
+                <div class="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-lg fade-in">
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <svg class="w-5 h-5 text-blue-500 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="absolute -top-1 -right-1 flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                            </span>
+                        </div>
+                        <p class="text-sm text-blue-700 dark:text-blue-300 font-medium flex-1">
+                            @queuedMessageCount @(queuedMessageCount == 1 ? "message" : "messages") queued...
+                        </p>
+                    </div>
+                </div>
+            }
+
+            <!-- Error Message Display -->
+            @if (currentError != null)
+            {
+                var bgClass = currentError.Severity switch
+                {
+                    ErrorSeverity.Info => "bg-blue-50 dark:bg-blue-900/20 border-blue-500",
+                    ErrorSeverity.Warning => "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500",
+                    ErrorSeverity.Error => "bg-red-50 dark:bg-red-900/20 border-red-500",
+                    ErrorSeverity.Critical => "bg-red-100 dark:bg-red-900/40 border-red-600",
+                    _ => "bg-gray-50 dark:bg-gray-900/20 border-gray-500"
+                };
+
+                var textClass = currentError.Severity switch
+                {
+                    ErrorSeverity.Info => "text-blue-700 dark:text-blue-300",
+                    ErrorSeverity.Warning => "text-yellow-700 dark:text-yellow-300",
+                    ErrorSeverity.Error => "text-red-700 dark:text-red-300",
+                    ErrorSeverity.Critical => "text-red-800 dark:text-red-200",
+                    _ => "text-gray-700 dark:text-gray-300"
+                };
+
+                var iconTextClass = currentError.Severity switch
+                {
+                    ErrorSeverity.Info => "text-blue-500",
+                    ErrorSeverity.Warning => "text-yellow-500",
+                    ErrorSeverity.Error => "text-red-500",
+                    ErrorSeverity.Critical => "text-red-600",
+                    _ => "text-gray-500"
+                };
+
+                var animationClass = currentError.Severity == ErrorSeverity.Critical ? "animate-shake" : "fade-in";
+
+                <div class="mb-3 p-3 @bgClass border-l-4 rounded-lg @animationClass">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">@currentError.Icon</span>
+                        <div class="flex-1">
+                            <p class="text-sm @textClass font-medium mb-2">@currentError.Message</p>
+                            @if (currentError.SuggestedActions.Any())
+                            {
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    @foreach (var action in currentError.SuggestedActions)
+                                    {
+                                        <button @onclick="async () => await HandleErrorAction(action)"
+                                                class="text-xs px-3 py-1.5 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 @(action.ActionType == ErrorActionType.Call911 ? "bg-red-600 hover:bg-red-700 text-white" : action.ActionType == ErrorActionType.Retry ? "bg-blue-500 hover:bg-blue-600 text-white" : "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 " + textClass)">
+                                            @action.Label
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <button @onclick="DismissError" class="@iconTextClass hover:opacity-70 transition-opacity">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (isRecording)
+            {
+                <div class="flex flex-col gap-3">
+                    <!-- Live Transcription Preview -->
+                    @if (!string.IsNullOrEmpty(inputMessage))
+                    {
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 fade-in">
+                            <div class="flex items-start gap-2">
+                                <svg class="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                                </svg>
+                                <div class="flex-1">
+                                    <p class="text-xs text-blue-600 dark:text-blue-400 font-semibold mb-1">Listening...</p>
+                                    <p class="text-sm text-gray-700 dark:text-gray-300 italic">@inputMessage</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="waveform-container rounded-2xl px-5 py-4">
+                        <div class="flex items-center justify-between gap-4">
+                            <!-- Recording Indicator -->
+                            <div class="flex items-center gap-3 flex-shrink-0">
+                                <div class="relative">
+                                    <div class="w-3 h-3 rounded-full animate-pulse" style="background: var(--color-primary);"></div>
+                                    <div class="absolute inset-0 w-3 h-3 rounded-full animate-ping" style="background: var(--color-primary);"></div>
+                                </div>
+                                <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">REC</span>
+                            </div>
+
+                            <!-- Voice Waveform Visualization -->
+                            <div class="voice-waveform flex-1">
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                            </div>
+
+                            <!-- Stop Button -->
+                            <button @onclick="StopVoiceRecording"
+                                    style="background: var(--color-primary);"
+                                    class="btn-3d btn-recording-3d px-5 py-2 text-white rounded-xl hover:brightness-110 transition-all text-sm font-semibold flex-shrink-0">
+                                <span class="flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <rect x="6" y="6" width="12" height="12" rx="1"/>
+                                    </svg>
+                                    Stop
+                                </span>
+                            </button>
+                        </div>
+
+                        <!-- Recording status text -->
+                        <div class="text-center mt-2">
+                            <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Listening... Speak clearly into your microphone</span>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="flex items-end space-x-3">
+                    <div class="flex-1 relative">
+                        <textarea id="chatInput"
+                                  @bind="inputMessage"
+                                  @bind:event="oninput"
+                                  @onkeydown="HandleKeyDown"
+                                  placeholder="@GetLocalizedText("input_placeholder")"
+                                  rows="1"
+                                  class="chat-input-modern w-full resize-none rounded-2xl px-5 py-4 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none max-h-32 overflow-y-auto @(transcriptionReady ? "chat-input-ready" : "")"
+                                  disabled="@isSending"></textarea>
+                        @if (transcriptionReady)
+                        {
+                            <div class="absolute -top-2 -right-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg animate-bounce">
+                                READY
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Voice Button -->
+                    @if (voiceSupported)
+                    {
+                        <button @onclick="StartVoiceRecording"
+                                style="background: var(--color-primary);"
+                                class="btn-3d btn-voice-3d group p-4 text-white rounded-xl hover:brightness-110 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled="@isSending">
+                            <svg class="w-5 h-5 group-hover:scale-110 transition-transform duration-300 relative z-10" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/>
+                            </svg>
+                        </button>
+                    }
+
+                    <!-- Send Button -->
+                    <button @onclick="SendMessage"
+                            style="background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 80%, black 20%));"
+                            class="btn-3d btn-send-3d group p-4 text-white rounded-xl hover:brightness-110 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
+                            disabled="@(isSending || string.IsNullOrWhiteSpace(inputMessage))">
+                        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 pointer-events-none"></div>
+                        @if (isSending)
+                        {
+                            <svg class="w-5 h-5 animate-spin relative z-10" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg class="w-5 h-5 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                            </svg>
+                        }
+                    </button>
+                </div>
+            }
+
+            <!-- Powered by indicator -->
+            <div class="text-center mt-3">
+                <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Powered by Gemini AI ✨</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<HospitalDto>? AvailableHospitals { get; set; }
+    [Parameter] public double? UserLatitude { get; set; }
+    [Parameter] public double? UserLongitude { get; set; }
+    [Parameter] public string? UserRole { get; set; }
+    [Parameter] public EventCallback OnRequestHospitalSearch { get; set; }
+    [Parameter] public bool IsSearchingHospitals { get; set; }
+
+    private bool isOpen = false;
+    private bool isTyping = false;
+    private bool isSending = false;
+    private bool isRecording = false;
+    private bool voiceSupported = false;
+    private bool hasUnreadMessages = false;
+    private int unreadCount = 0;
+    private bool transcriptionReady = false;
+
+    private string inputMessage = "";
+    private string sessionId = Guid.NewGuid().ToString();
+    private List<ChatMessageDto> messages = new();
+    private ChatResponseDto? currentResponse;
+
+    private DotNetObjectReference<EmergencyAiChatbot>? dotNetRef;
+    private int previousHospitalCount = 0;
+    private bool isWaitingForHospitals = false;
+    private string? voiceErrorMessage = null;
+    private string? voiceWarningMessage = null;
+    private System.Threading.Timer? errorMessageTimer = null;
+    private string currentLanguage = "en";
+
+    private bool voiceOutputEnabled = true;
+    private Dictionary<string, Dictionary<string, string>> localizations = new();
+
+    // Disclaimer
+    private EmergencyDisclaimer? disclaimerRef;
+    private bool disclaimerAccepted = false;
+    private const string DISCLAIMER_STORAGE_KEY = "emergency_disclaimer_accepted";
+
+    // Message Queue
+    private Queue<PendingMessage> messageQueue = new();
+    private bool isProcessingQueue = false;
+    private int queuedMessageCount => messageQueue.Count;
+
+    // Error Handling
+    private ErrorMessage? currentError = null;
+    private System.Threading.Timer? errorDismissTimer = null;
+
+
+    private void LanguageChanged()
+    {
+        // Language has been changed via @bind, no need to manually set it
+        // We could add logic here to refresh the chat or send a system message
+        // For now, it will just be used in the next message sent.
+        StateHasChanged();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+        InitializeLocalizations();
+
+        // Check if disclaimer has been accepted
+        var hasAccepted = await LocalStorage.GetItemAsync<bool?>(DISCLAIMER_STORAGE_KEY);
+        disclaimerAccepted = hasAccepted ?? false;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Check if hospitals were just loaded
+        var currentCount = AvailableHospitals?.Count ?? 0;
+        if (isWaitingForHospitals && currentCount > 0 && currentCount != previousHospitalCount)
+        {
+            // Hospitals just became available
+            var successMessage = new ChatMessageDto
+            {
+                Content = GetLocalizedText("hospitals_found").Replace("{count}", currentCount.ToString()),
+                IsUserMessage = false,
+                SessionId = sessionId
+            };
+            messages.Add(successMessage);
+            isWaitingForHospitals = false;
+            
+            // Speak the response if voice output is enabled
+            if (voiceOutputEnabled)
+            {
+                await SpeakText(successMessage.Content, currentLanguage);
+            }
+            
+            StateHasChanged();
+        }
+        previousHospitalCount = currentCount;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            dotNetRef = DotNetObjectReference.Create(this);
+            voiceSupported = await JSRuntime.InvokeAsync<bool>("emergencyChatHelper.isSpeechRecognitionSupported");
+            StateHasChanged();
+        }
+
+        if (isOpen)
+        {
+            await JSRuntime.InvokeVoidAsync("emergencyChatHelper.scrollToBottom", "chatMessages");
+        }
+    }
+
+    private async Task ToggleChat()
+    {
+        // Check if disclaimer has been accepted before opening chat
+        if (!isOpen && !disclaimerAccepted)
+        {
+            // Show disclaimer first
+            await disclaimerRef?.ShowDisclaimer()!;
+            return;
+        }
+
+        isOpen = !isOpen;
+        if (isOpen)
+        {
+            hasUnreadMessages = false;
+            unreadCount = 0;
+        }
+    }
+
+    private async Task HandleDisclaimerResponse(bool accepted)
+    {
+        if (accepted)
+        {
+            disclaimerAccepted = true;
+            await LocalStorage.SetItemAsync(DISCLAIMER_STORAGE_KEY, true);
+
+            // Now open the chat
+            isOpen = true;
+            StateHasChanged();
+        }
+        else
+        {
+            // User declined - chat remains closed
+            isOpen = false;
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(inputMessage)) return;
+
+        var wasTranscribed = transcriptionReady;
+        transcriptionReady = false;
+
+        await QueueMessage(inputMessage, wasTranscribed);
+        inputMessage = "";  // Clear input immediately
+    }
+
+    private async Task SendQuickMessage(string message)
+    {
+        await QueueMessage(message, false);
+    }
+
+    // New: Queue a message instead of rejecting if busy
+    private async Task QueueMessage(string message, bool isVoice)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        var pendingMessage = new PendingMessage
+        {
+            Content = message,
+            IsVoiceInput = isVoice
+        };
+
+        messageQueue.Enqueue(pendingMessage);
+        StateHasChanged();
+
+        // Start processing if not already running
+        if (!isProcessingQueue)
+        {
+            await ProcessMessageQueue();
+        }
+    }
+
+    // New: Process messages from queue sequentially
+    private async Task ProcessMessageQueue()
+    {
+        if (isProcessingQueue) return;
+
+        isProcessingQueue = true;
+
+        while (messageQueue.Count > 0)
+        {
+            var pendingMessage = messageQueue.Dequeue();
+
+            if (!pendingMessage.IsCancelled)
+            {
+                await SendMessageInternal(pendingMessage);
+            }
+
+            StateHasChanged();
+        }
+
+        isProcessingQueue = false;
+        StateHasChanged();
+    }
+
+    private async Task SendMessageInternal(PendingMessage pendingMessage)
+    {
+        isSending = true;
+
+        // Add user message to UI
+        var userMessage = new ChatMessageDto
+        {
+            Content = pendingMessage.Content,
+            IsUserMessage = true,
+            SessionId = sessionId
+        };
+        messages.Add(userMessage);
+        StateHasChanged();
+
+        isTyping = true;
+        StateHasChanged();
+
+        try
+        {
+            // Check if we should send hospital context (first message or cache expired)
+            bool shouldSendContext = HospitalCache.ShouldSendContext(sessionId, UserLatitude, UserLongitude);
+
+            // Build hospital context list if needed
+            List<HospitalContextDto>? hospitalContext = null;
+            if (shouldSendContext && AvailableHospitals?.Any() == true)
+            {
+                hospitalContext = AvailableHospitals.Select(h => new HospitalContextDto
+                {
+                    Name = h.Name,
+                    Rating = h.Rating,
+                    DistanceInKm = h.DistanceInKm,
+                    IsOpen = h.IsOpen,
+                    PhoneNumber = h.PhoneNumber,
+                    Type = h.Type,
+                    Latitude = h.Latitude,
+                    Longitude = h.Longitude
+                }).ToList();
+
+                // Cache for future messages (10 min expiration)
+                if (UserLatitude.HasValue && UserLongitude.HasValue)
+                {
+                    HospitalCache.CacheHospitalContext(UserLatitude.Value, UserLongitude.Value, hospitalContext);
+                }
+            }
+
+            // Build context
+            var context = new ChatContextDto
+            {
+                UserLatitude = UserLatitude,
+                UserLongitude = UserLongitude,
+                UserRole = UserRole,
+                AvailableHospitals = hospitalContext  // null if cached, full list if first message
+            };
+
+            var input = new SendChatMessageInput
+            {
+                Message = pendingMessage.Content,
+                SessionId = sessionId,
+                Context = context,
+                IsVoiceInput = pendingMessage.IsVoiceInput
+            };
+
+            var response = await ChatService.SendMessageAsync(input);
+
+            if (response != null && response.Success)
+            {
+                var aiMessage = new ChatMessageDto
+                {
+                    Id = response.MessageId,
+                    Content = response.Content,
+                    IsUserMessage = false,
+                    SessionId = sessionId,
+                    Timestamp = response.Timestamp
+                };
+                messages.Add(aiMessage);
+                currentResponse = response;
+
+                // Clear any existing errors on success
+                currentError = null;
+
+                // Handle automatic language detection
+                if (!string.IsNullOrEmpty(response.DetectedLanguage) && response.DetectedLanguage != currentLanguage)
+                {
+                    currentLanguage = response.DetectedLanguage;
+                    StateHasChanged();
+                }
+
+                // Speak the AI response if voice output is enabled
+                if (voiceOutputEnabled)
+                {
+                    await SpeakText(response.Content, currentLanguage);
+                }
+
+                // Handle suggested actions from backend
+                if (response.SuggestedActions?.Any(a => a.Action == "search_hospitals") == true &&
+                    (AvailableHospitals == null || !AvailableHospitals.Any()))
+                {
+                    await TriggerHospitalSearch();
+                }
+
+                if (!isOpen)
+                {
+                    hasUnreadMessages = true;
+                    unreadCount++;
+                }
+            }
+            else
+            {
+                // Use ErrorMessageBuilder for API errors
+                ShowError(ErrorMessageBuilder.BuildFromApiError(response?.ErrorMessage));
+            }
+        }
+        catch (Exception ex)
+        {
+            // Use ErrorMessageBuilder for exceptions
+            ShowError(ErrorMessageBuilder.BuildFromException(ex));
+
+            // Retry logic for transient errors
+            if (pendingMessage.RetryCount < pendingMessage.MaxRetries &&
+                (ex is HttpRequestException || ex is TaskCanceledException))
+            {
+                pendingMessage.RetryCount++;
+                await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, pendingMessage.RetryCount))); // Exponential backoff
+
+                // Re-queue the message
+                messageQueue.Enqueue(pendingMessage);
+
+                // Show retry info
+                ShowError(ErrorMessageBuilder.BuildInfoMessage(
+                    $"Retrying... (attempt {pendingMessage.RetryCount + 1} of {pendingMessage.MaxRetries + 1})",
+                    autoDismiss: true
+                ));
+            }
+        }
+        finally
+        {
+            isTyping = false;
+            isSending = false;
+            StateHasChanged();
+        }
+    }
+
+    // New: Show error message
+    private void ShowError(ErrorMessage error)
+    {
+        currentError = error;
+        StateHasChanged();
+
+        // Auto-dismiss if configured
+        if (error.AutoDismiss)
+        {
+            errorDismissTimer?.Dispose();
+            errorDismissTimer = new System.Threading.Timer(_ =>
+            {
+                currentError = null;
+                InvokeAsync(StateHasChanged);
+            }, null, TimeSpan.FromSeconds(error.AutoDismissSeconds), Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    // New: Dismiss error manually
+    private void DismissError()
+    {
+        currentError = null;
+        errorDismissTimer?.Dispose();
+        StateHasChanged();
+    }
+
+    // New: Handle error action button clicks
+    private async Task HandleErrorAction(ErrorAction action)
+    {
+        switch (action.ActionType)
+        {
+            case ErrorActionType.Retry:
+                // Retry last message
+                if (messages.Count > 0)
+                {
+                    var lastUserMessage = messages.LastOrDefault(m => m.IsUserMessage);
+                    if (lastUserMessage != null)
+                    {
+                        await QueueMessage(lastUserMessage.Content, false);
+                    }
+                }
+                DismissError();
+                break;
+
+            case ErrorActionType.Dismiss:
+                DismissError();
+                break;
+
+            case ErrorActionType.Call911:
+                await JSRuntime.InvokeVoidAsync("window.open", "tel:911", "_self");
+                break;
+
+            case ErrorActionType.ClearChat:
+                messages.Clear();
+                messageQueue.Clear();
+                currentResponse = null;
+                DismissError();
+                StateHasChanged();
+                break;
+
+            case ErrorActionType.Reload:
+                await JSRuntime.InvokeVoidAsync("location.reload");
+                break;
+
+            case ErrorActionType.SimplifyQuestion:
+                // Show hint to simplify
+                ShowError(ErrorMessageBuilder.BuildInfoMessage(
+                    "Try asking a shorter, more specific question. For example: 'Find nearest hospital' or 'Heart attack symptoms'",
+                    autoDismiss: true
+                ));
+                break;
+
+            case ErrorActionType.ContactSupport:
+                // Could open support chat or email
+                ShowError(ErrorMessageBuilder.BuildInfoMessage(
+                    "For support, please reload the page or contact your administrator.",
+                    autoDismiss: true
+                ));
+                break;
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task StartVoiceRecording()
+    {
+        if (!voiceSupported || isRecording) return;
+
+        isRecording = true;
+        StateHasChanged();
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("emergencyChatHelper.startVoiceRecognition", dotNetRef, currentLanguage);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error starting voice recognition: {ex.Message}");
+            isRecording = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopVoiceRecording()
+    {
+        isRecording = false;
+        await JSRuntime.InvokeVoidAsync("emergencyChatHelper.stopVoiceRecognition");
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnVoiceRecognitionResult(string transcript, bool isFinal)
+    {
+        inputMessage = transcript;
+
+        if (isFinal)
+        {
+            isRecording = false;
+            transcriptionReady = true;
+
+            // Focus and select the text in the input field
+            await Task.Delay(100); // Small delay to ensure state is updated
+            await JSRuntime.InvokeVoidAsync("emergencyChatHelper.focusMessageInput", "chatInput");
+
+            // Auto-select the text for easy editing
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("eval", @"
+                    const input = document.getElementById('chatInput');
+                    if (input) {
+                        input.select();
+                    }
+                ");
+            }
+            catch
+            {
+                // Ignore if selection fails
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnVoiceRecognitionError(string error)
+    {
+        isRecording = false;
+        voiceErrorMessage = error;
+        voiceWarningMessage = null;
+
+        // Auto-clear error message after 5 seconds
+        errorMessageTimer?.Dispose();
+        errorMessageTimer = new System.Threading.Timer(_ =>
+        {
+            voiceErrorMessage = null;
+            InvokeAsync(StateHasChanged);
+        }, null, 5000, Timeout.Infinite);
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnVoiceRecognitionWarning(string warning)
+    {
+        voiceWarningMessage = warning;
+        voiceErrorMessage = null;
+
+        // Auto-clear warning message after 3 seconds
+        errorMessageTimer?.Dispose();
+        errorMessageTimer = new System.Threading.Timer(_ =>
+        {
+            voiceWarningMessage = null;
+            InvokeAsync(StateHasChanged);
+        }, null, 3000, Timeout.Infinite);
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnVoiceRecognitionEnd()
+    {
+        isRecording = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleQuickAction(QuickActionDto action)
+    {
+        switch (action.Action)
+        {
+            case "call_911":
+                await JSRuntime.InvokeVoidAsync("alert", "Calling 911\n\nIn a real emergency, this would dial 911.");
+                break;
+            case "search_hospitals":
+            case "view_hospitals":
+                // Check if hospitals are available, if not trigger search
+                if (AvailableHospitals == null || !AvailableHospitals.Any())
+                {
+                    await TriggerHospitalSearch();
+                }
+                else
+                {
+                    // Hospitals already available, scroll to hospitals section
+                    await ScrollToHospitals();
+                }
+                break;
+            case "get_directions":
+                // Open directions to nearest hospital
+                if (AvailableHospitals?.Any() == true)
+                {
+                    var nearest = AvailableHospitals.OrderBy(h => h.DistanceInKm ?? double.MaxValue).FirstOrDefault();
+                    if (nearest?.Latitude.HasValue == true && nearest.Longitude.HasValue)
+                    {
+                        await GetDirections(nearest.Latitude.Value, nearest.Longitude.Value, nearest.Name);
+                    }
+                }
+                else
+                {
+                    await TriggerHospitalSearch();
+                }
+                break;
+            default:
+                if (!string.IsNullOrEmpty(action.PhoneNumber))
+                {
+                    await JSRuntime.InvokeVoidAsync("geolocationHelper.makeCall", action.PhoneNumber);
+                }
+                else if (!string.IsNullOrEmpty(action.Url))
+                {
+                    await JSRuntime.InvokeVoidAsync("geolocationHelper.openWebsite", action.Url);
+                }
+                break;
+        }
+    }
+
+    private async Task TriggerHospitalSearch()
+    {
+        if (OnRequestHospitalSearch.HasDelegate)
+        {
+            // Add a helpful AI response
+            var aiResponse = new ChatMessageDto
+            {
+                Content = GetLocalizedText("ai_hospital_response"),
+                IsUserMessage = false,
+                SessionId = sessionId
+            };
+            messages.Add(aiResponse);
+            isWaitingForHospitals = true;
+
+            StateHasChanged();
+
+            // Trigger the search
+            await OnRequestHospitalSearch.InvokeAsync();
+        }
+        else
+        {
+            var errorMsg = new ChatMessageDto
+            {
+                Content = GetLocalizedText("search_button_instruction"),
+                IsUserMessage = false,
+                SessionId = sessionId
+            };
+            messages.Add(errorMsg);
+            StateHasChanged();
+        }
+    }
+
+    private async Task CallHospital(string phoneNumber)
+    {
+        await JSRuntime.InvokeVoidAsync("geolocationHelper.makeCall", phoneNumber);
+    }
+
+    private async Task GetDirections(double latitude, double longitude, string name)
+    {
+        await JSRuntime.InvokeVoidAsync("geolocationHelper.openDirections", latitude, longitude, name);
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+        dotNetRef?.Dispose();
+        errorMessageTimer?.Dispose();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    private void InitializeLocalizations()
+    {
+        localizations = new Dictionary<string, Dictionary<string, string>>
+        {
+            ["en"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "Welcome to Emergency AI",
+                ["welcome_description"] = "I'm here to help you find hospitals, understand emergency procedures, and guide you through medical emergencies.",
+                ["find_hospital"] = "Find nearest hospital",
+                ["heart_attack"] = "Heart attack procedures",
+                ["trauma_centers"] = "Find trauma centers",
+                ["find_hospital_query"] = "Find nearest hospital",
+                ["heart_attack_query"] = "What to do in a heart attack?",
+                ["trauma_centers_query"] = "Show trauma centers",
+                ["ai_hospital_response"] = "I'm searching for nearby hospitals for you. Please wait while I locate the closest emergency facilities.",
+                ["input_placeholder"] = "Type your emergency question...",
+                ["searching_hospitals"] = "🔍 Searching for nearby hospitals... This will take a moment.",
+                ["no_hospitals_found"] = "⚠️ No hospitals found in your area. Please try expanding the search radius or check your location settings.",
+                ["no_hospitals_for_directions"] = "⚠️ No hospitals available for directions. Please search for hospitals first.",
+                ["search_button_instruction"] = "⚠️ Unable to search for hospitals. Please use the 'Search Nearby Hospitals' button on the page.",
+                ["hospitals_found"] = "✅ Found {count} nearby hospitals! All hospitals are now displayed on the main page. You can scroll down to see the complete list with details like ratings, contact information, and directions.",
+                ["hospital_found_voice"] = "Found {name}. It is {distance} kilometers away and is currently {status}.",
+                ["open"] = "open",
+                ["closed"] = "closed",
+                ["hospital_info_template"] = "🏥 **{name}**\n📍 Distance: {distance} km\n⭐ Rating: {rating}\n🕰️ Status: {status}\n📞 Phone: {phone}\n📍 Address: {address}",
+                ["rate_limit_message"] = "Please wait a moment before sending another message. This helps ensure quality responses for everyone."
+            },
+            ["hi"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "आपातकालीन AI में आपका स्वागत है",
+                ["welcome_description"] = "मैं यहाँ अस्पताल खोजने, आपातकालीन प्रक्रियाओं को समझने और चिकित्सा आपातकाल में आपका मार्गदर्शन करने के लिए हूँ।",
+                ["find_hospital"] = "निकटतम अस्पताल खोजें",
+                ["heart_attack"] = "दिल का दौरा प्रक्रियाएं",
+                ["trauma_centers"] = "ट्रामा सेंटर खोजें",
+                ["find_hospital_query"] = "निकटतम अस्पताल खोजें",
+                ["heart_attack_query"] = "दिल का दौरा पड़ने पर क्या करें?",
+                ["trauma_centers_query"] = "ट्रामा सेंटर दिखाएं",
+                ["ai_hospital_response"] = "मैं आपके लिए निकटवर्ती अस्पतालों की खोज कर रहा हूँ। कृपया प्रतीक्षा करें जबकि मैं निकटतम आपातकालीन सुविधाओं का पता लगाता हूँ।",
+                ["input_placeholder"] = "अपना आपातकालीन प्रश्न टाइप करें...",
+                ["searching_hospitals"] = "🔍 आस-पास के अस्पतालों की खोज की जा रही है... इसमें कुछ समय लगेगा।",
+                ["no_hospitals_found"] = "⚠️ आपके क्षेत्र में कोई अस्पताल नहीं मिला। कृपया खोज त्रिज्या बढ़ाने या अपनी स्थान सेटिंग्स जांचने का प्रयास करें।",
+                ["no_hospitals_for_directions"] = "⚠️ दिशा-निर्देशों के लिए कोई अस्पताल उपलब्ध नहीं है। कृपया पहले अस्पतालों की खोज करें।",
+                ["search_button_instruction"] = "⚠️ अस्पतालों की खोज करने में असमर्थ। कृपया पृष्ठ पर 'निकटवर्ती अस्पताल खोजें' बटन का उपयोग करें।",
+                ["hospitals_found"] = "✅ {count} निकटवर्ती अस्पताल मिले! सभी अस्पताल अब मुख्य पृष्ठ पर प्रदर्शित हैं। आप रेटिंग, संपर्क जानकारी और दिशा-निर्देशों के साथ पूरी सूची देखने के लिए नीचे स्क्रॉल कर सकते हैं।",
+                ["hospital_found_voice"] = "{name} मिल गया। यह {distance} किलोमीटर दूर है और वर्तमान में {status} है।",
+                ["open"] = "खुला",
+                ["closed"] = "बंद",
+                ["hospital_info_template"] = "🏥 **{name}**\n📍 दूरी: {distance} किमी\n⭐ रेटिंग: {rating}\n🕰️ स्थिति: {status}\n📞 फोन: {phone}\n📍 पता: {address}",
+                ["rate_limit_message"] = "कृपया दूसरा संदेश भेजने से पहले थोड़ा प्रतीक्षा करें। यह सभी के लिए गुणवत्तापूर्ण प्रतिक्रिया सुनिश्चित करने में मदद करता है।"
+            },
+            ["bn"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "জরুরি AI-তে স্বাগতম",
+                ["welcome_description"] = "আমি এখানে হাসপাতাল খুঁজে পেতে, জরুরি পদ্ধতি বুঝতে এবং চিকিৎসা জরুরি অবস্থায় আপনাকে গাইড করতে আছি।",
+                ["find_hospital"] = "নিকটতম হাসপাতাল খুঁজুন",
+                ["heart_attack"] = "হার্ট অ্যাটাক পদ্ধতি",
+                ["trauma_centers"] = "ট্রমা সেন্টার খুঁজুন",
+                ["find_hospital_query"] = "নিকটতম হাসপাতাল খুঁজুন",
+                ["heart_attack_query"] = "হার্ট অ্যাটাকে কী করবেন?",
+                ["trauma_centers_query"] = "ট্রমা সেন্টার দেখান",
+                ["input_placeholder"] = "আপনার জরুরি প্রশ্ন টাইপ করুন...",
+                ["searching_hospitals"] = "🔍 কাছাকাছি হাসপাতাল খোঁজা হচ্ছে... এটি কিছু সময় নেবে।",
+                ["no_hospitals_found"] = "⚠️ আপনার এলাকায় কোনো হাসপাতাল পাওয়া যায়নি। অনুগ্রহ করে অনুসন্ধান ব্যাসার্ধ বাড়ানোর বা আপনার অবস্থান সেটিংস পরীক্ষা করার চেষ্টা করুন।",
+                ["no_hospitals_for_directions"] = "⚠️ দিকনির্দেশনার জন্য কোনো হাসপাতাল উপলব্ধ নেই। অনুগ্রহ করে প্রথমে হাসপাতাল খুঁজুন।",
+                ["search_button_instruction"] = "⚠️ হাসপাতাল খুঁজতে অক্ষম। অনুগ্রহ করে পৃষ্ঠায় 'কাছাকাছি হাসপাতাল খুঁজুন' বোতাম ব্যবহার করুন।",
+                ["hospitals_found"] = "✅ {count}টি কাছাকাছি হাসপাতাল পাওয়া গেছে! সব হাসপাতাল এখন মূল পৃষ্ঠায় প্রদর্শিত হয়েছে। রেটিং, যোগাযোগের তথ্য এবং দিকনির্দেশনা সহ সম্পূর্ণ তালিকা দেখতে নিচে স্ক্রল করুন।"
+            },
+            ["te"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "ఎమర్జెన్సీ AI కి స్వాగతం",
+                ["welcome_description"] = "నేను ఆసుపత్రులను కనుగొనడంలో, అత్యవసర విధానాలను అర్థం చేసుకోవడంలో మరియు వైద్య అత్యవసర పరిస్థితుల్లో మీకు మార్గదర్శనం చేయడానికి ఇక్కడ ఉన్నాను.",
+                ["find_hospital"] = "సమీప ఆసుపత్రిని కనుగొనండి",
+                ["heart_attack"] = "గుండెపోటు విధానాలు",
+                ["trauma_centers"] = "ట్రామా సెంటర్లను కనుగొనండి",
+                ["find_hospital_query"] = "సమీప ఆసుపత్రిని కనుగొనండి",
+                ["heart_attack_query"] = "గుండెపోటులో ఏమి చేయాలి?",
+                ["trauma_centers_query"] = "ట్రామా సెంటర్లను చూపించండి",
+                ["input_placeholder"] = "మీ అత్యవసర ప్రశ్నను టైప్ చేయండి...",
+                ["searching_hospitals"] = "🔍 సమీప ఆసుపత్రుల కోసం వెతుకుతున్నాము... దీనికి కొంత సమయం పడుతుంది.",
+                ["no_hospitals_found"] = "⚠️ మీ ప్రాంతంలో ఆసుపత్రులు కనుగొనబడలేదు. దయచేసి శోధన వ్యాసార్థాన్ని విస్తరించడం లేదా మీ స్థాన సెట్టింగ్లను తనిఖీ చేయడం ప్రయత్నించండి.",
+                ["no_hospitals_for_directions"] = "⚠️ దిశలకు ఆసుపత్రులు అందుబాటులో లేవు. దయచేసి మొదట ఆసుపత్రుల కోసం వెతకండి.",
+                ["search_button_instruction"] = "⚠️ ఆసుపత్రుల కోసం వెతకలేకపోతున్నాము. దయచేసి పేజీలో 'సమీప ఆసుపత్రులను వెతకండి' బటన్‌ను ఉపయోగించండి."
+            },
+            ["mr"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "आपत्कालीन AI मध्ये आपले स्वागत आहे",
+                ["welcome_description"] = "मी येथे रुग्णालये शोधण्यासाठी, आपत्कालीन प्रक्रिया समजून घेण्यासाठी आणि वैद्यकीय आपत्कालीन परिस्थितीत तुम्हाला मार्गदर्शन करण्यासाठी आहे.",
+                ["find_hospital"] = "जवळचे रुग्णालय शोधा",
+                ["heart_attack"] = "हृदयविकाराचा झटका प्रक्रिया",
+                ["trauma_centers"] = "ट्रामा केंद्रे शोधा",
+                ["find_hospital_query"] = "जवळचे रुग्णालय शोधा",
+                ["heart_attack_query"] = "हृदयविकाराचा झटका आल्यावर काय करावे?",
+                ["trauma_centers_query"] = "ट्रामा केंद्रे दाखवा",
+                ["input_placeholder"] = "तुमचा आपत्कालीन प्रश्न टाइप करा...",
+                ["searching_hospitals"] = "🔍 जवळपासची रुग्णालये शोधत आहे... यास काही वेळ लागेल.",
+                ["no_hospitals_found"] = "⚠️ तुमच्या परिसरात रुग्णालये सापडली नाहीत. कृपया शोध त्रिज्या वाढवण्याचा किंवा तुमच्या स्थान सेटिंग्ज तपासण्याचा प्रयत्न करा.",
+                ["no_hospitals_for_directions"] = "⚠️ दिशानिर्देशांसाठी रुग्णालये उपलब्ध नाहीत. कृपया प्रथम रुग्णालये शोधा.",
+                ["search_button_instruction"] = "⚠️ रुग्णालये शोधण्यात अक्षम. कृपया पृष्ठावरील 'जवळपासची रुग्णालये शोधा' बटण वापरा."
+            },
+            ["ta"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "அவசர AI க்கு வரவேற்கிறோம்",
+                ["welcome_description"] = "மருத்துவமனைகளைக் கண்டறிய, அவசர நடைமுறைகளைப் புரிந்துகொள்ள மற்றும் மருத்துவ அவசரநிலைகளில் உங்களுக்கு வழிகாட்ட நான் இங்கே இருக்கிறேன்.",
+                ["find_hospital"] = "அருகிலுள்ள மருத்துவமனையைக் கண்டறியவும்",
+                ["heart_attack"] = "மாரடைப்பு நடைமுறைகள்",
+                ["trauma_centers"] = "அதிர்ச்சி மையங்களைக் கண்டறியவும்",
+                ["find_hospital_query"] = "அருகிலுள்ள மருத்துவமனையைக் கண்டறியவும்",
+                ["heart_attack_query"] = "மாரடைப்பில் என்ன செய்வது?",
+                ["trauma_centers_query"] = "அதிர்ச்சி மையங்களைக் காட்டவும்",
+                ["input_placeholder"] = "உங்கள் அவசர கேள்வியை தட்டச்சு செய்யவும்...",
+                ["searching_hospitals"] = "🔍 அருகிலுள்ள மருத்துவமனைகளைத் தேடுகிறது... இதற்கு சிறிது நேரம் ஆகும்.",
+                ["no_hospitals_found"] = "⚠️ உங்கள் பகுதியில் மருத்துவமனைகள் கிடைக்கவில்லை. தேடல் ஆரத்தை விரிவுபடுத்த அல்லது உங்கள் இடம் அமைப்புகளைச் சரிபார்க்க முயற்சிக்கவும்.",
+                ["no_hospitals_for_directions"] = "⚠️ திசைகளுக்கு மருத்துவமனைகள் கிடைக்கவில்லை. முதலில் மருத்துவமனைகளைத் தேடவும்.",
+                ["search_button_instruction"] = "⚠️ மருத்துவமனைகளைத் தேட முடியவில்லை. பக்கத்தில் 'அருகிலுள்ள மருத்துவமனைகளைத் தேடு' பொத்தானைப் பயன்படுத்தவும்."
+            },
+            ["gu"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "ઇમર્જન્સી AI માં આપનું સ્વાગત છે",
+                ["welcome_description"] = "હું અહીં હોસ્પિટલો શોધવા, કટોકટીની પ્રક્રિયાઓ સમજવા અને તબીબી કટોકટીમાં તમને માર્ગદર્શન આપવા માટે છું.",
+                ["find_hospital"] = "નજીકની હોસ્પિટલ શોધો",
+                ["heart_attack"] = "હાર્ટ એટેક પ્રક્રિયાઓ",
+                ["trauma_centers"] = "ટ્રોમા સેન્ટર શોધો",
+                ["find_hospital_query"] = "નજીકની હોસ્પિટલ શોધો",
+                ["heart_attack_query"] = "હાર્ટ એટેકમાં શું કરવું?",
+                ["trauma_centers_query"] = "ટ્રોમા સેન્ટર બતાવો",
+                ["input_placeholder"] = "તમારો કટોકટીનો પ્રશ્ન ટાઇપ કરો...",
+                ["searching_hospitals"] = "🔍 નજીકની હોસ્પિટલો શોધી રહ્યા છીએ... આમાં થોડો સમય લાગશે.",
+                ["no_hospitals_found"] = "⚠️ તમારા વિસ્તારમાં હોસ્પિટલો મળી નથી. કૃપા કરીને શોધ ત્રિજ્યા વધારવાનો અથવા તમારી સ્થાન સેટિંગ્સ તપાસવાનો પ્રયાસ કરો.",
+                ["no_hospitals_for_directions"] = "⚠️ દિશાઓ માટે હોસ્પિટલો ઉપલબ્ધ નથી. કૃપા કરીને પહેલા હોસ્પિટલો શોધો.",
+                ["search_button_instruction"] = "⚠️ હોસ્પિટલો શોધવામાં અસમર્થ. કૃપા કરીને પૃષ્ઠ પર 'નજીકની હોસ્પિટલો શોધો' બટનનો ઉપયોગ કરો."
+            },
+            ["kn"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "ತುರ್ತು AI ಗೆ ಸ್ವಾಗತ",
+                ["welcome_description"] = "ಆಸ್ಪತ್ರೆಗಳನ್ನು ಹುಡುಕಲು, ತುರ್ತು ಕಾರ್ಯವಿಧಾನಗಳನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಲು ಮತ್ತು ವೈದ್ಯಕೀಯ ತುರ್ತುಸ್ಥಿತಿಗಳಲ್ಲಿ ನಿಮಗೆ ಮಾರ್ಗದರ್ಶನ ನೀಡಲು ನಾನು ಇಲ್ಲಿದ್ದೇನೆ.",
+                ["find_hospital"] = "ಹತ್ತಿರದ ಆಸ್ಪತ್ರೆ ಹುಡುಕಿ",
+                ["heart_attack"] = "ಹೃದಯಾಘಾತ ಕಾರ್ಯವಿಧಾನಗಳು",
+                ["trauma_centers"] = "ಆಘಾತ ಕೇಂದ್ರಗಳನ್ನು ಹುಡುಕಿ",
+                ["find_hospital_query"] = "ಹತ್ತಿರದ ಆಸ್ಪತ್ರೆ ಹುಡುಕಿ",
+                ["heart_attack_query"] = "ಹೃದಯಾಘಾತದಲ್ಲಿ ಏನು ಮಾಡಬೇಕು?",
+                ["trauma_centers_query"] = "ಆಘಾತ ಕೇಂದ್ರಗಳನ್ನು ತೋರಿಸಿ",
+                ["input_placeholder"] = "ನಿಮ್ಮ ತುರ್ತು ಪ್ರಶ್ನೆಯನ್ನು ಟೈಪ್ ಮಾಡಿ...",
+                ["searching_hospitals"] = "🔍 ಹತ್ತಿರದ ಆಸ್ಪತ್ರೆಗಳನ್ನು ಹುಡುಕುತ್ತಿದೆ... ಇದಕ್ಕೆ ಸ್ವಲ್ಪ ಸಮಯ ತೆಗೆದುಕೊಳ್ಳುತ್ತದೆ.",
+                ["no_hospitals_found"] = "⚠️ ನಿಮ್ಮ ಪ್ರದೇಶದಲ್ಲಿ ಆಸ್ಪತ್ರೆಗಳು ಕಂಡುಬಂದಿಲ್ಲ. ದಯವಿಟ್ಟು ಹುಡುಕಾಟ ತ್ರಿಜ್ಯವನ್ನು ವಿಸ್ತರಿಸಲು ಅಥವಾ ನಿಮ್ಮ ಸ್ಥಳ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಲು ಪ್ರಯತ್ನಿಸಿ.",
+                ["no_hospitals_for_directions"] = "⚠️ ದಿಕ್ಕುಗಳಿಗಾಗಿ ಆಸ್ಪತ್ರೆಗಳು ಲಭ್ಯವಿಲ್ಲ. ದಯವಿಟ್ಟು ಮೊದಲು ಆಸ್ಪತ್ರೆಗಳನ್ನು ಹುಡುಕಿ.",
+                ["search_button_instruction"] = "⚠️ ಆಸ್ಪತ್ರೆಗಳನ್ನು ಹುಡುಕಲು ಸಾಧ್ಯವಾಗುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು ಪುಟದಲ್ಲಿ 'ಹತ್ತಿರದ ಆಸ್ಪತ್ರೆಗಳನ್ನು ಹುಡುಕಿ' ಬಟನ್ ಬಳಸಿ."
+            },
+            ["ml"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "എമർജൻസി AI-ലേക്ക് സ്വാഗതം",
+                ["welcome_description"] = "ആശുപത്രികൾ കണ്ടെത്താനും അടിയന്തര നടപടിക്രമങ്ങൾ മനസ്സിലാക്കാനും മെഡിക്കൽ അടിയന്തരാവസ്ഥകളിൽ നിങ്ങളെ നയിക്കാനും ഞാൻ ഇവിടെയുണ്ട്.",
+                ["find_hospital"] = "അടുത്തുള്ള ആശുപത്രി കണ്ടെത്തുക",
+                ["heart_attack"] = "ഹൃദയാഘാത നടപടിക്രമങ്ങൾ",
+                ["trauma_centers"] = "ട്രോമ സെന്ററുകൾ കണ്ടെത്തുക",
+                ["find_hospital_query"] = "അടുത്തുള്ള ആശുപത്രി കണ്ടെത്തുക",
+                ["heart_attack_query"] = "ഹൃദയാഘാതത്തിൽ എന്ത് ചെയ്യണം?",
+                ["trauma_centers_query"] = "ട്രോമ സെന്ററുകൾ കാണിക്കുക",
+                ["input_placeholder"] = "നിങ്ങളുടെ അടിയന്തര ചോദ്യം ടൈപ്പ് ചെയ്യുക...",
+                ["searching_hospitals"] = "🔍 അടുത്തുള്ള ആശുപത്രികൾ തിരയുന്നു... ഇതിന് കുറച്ച് സമയമെടുക്കും.",
+                ["no_hospitals_found"] = "⚠️ നിങ്ങളുടെ പ്രദേശത്ത് ആശുപത്രികൾ കണ്ടെത്തിയില്ല. ദയവായി തിരയൽ ദൂരം വിപുലീകരിക്കാനോ നിങ്ങളുടെ ലൊക്കേഷൻ ക്രമീകരണങ്ങൾ പരിശോധിക്കാനോ ശ്രമിക്കുക.",
+                ["no_hospitals_for_directions"] = "⚠️ ദിശകൾക്കായി ആശുപത്രികൾ ലഭ്യമല്ല. ദയവായി ആദ്യം ആശുപത്രികൾ തിരയുക.",
+                ["search_button_instruction"] = "⚠️ ആശുപത്രികൾ തിരയാൻ കഴിയുന്നില്ല. ദയവായി പേജിലെ 'അടുത്തുള്ള ആശുപത്രികൾ തിരയുക' ബട്ടൺ ഉപയോഗിക്കുക."
+            },
+            ["pa"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "ਐਮਰਜੈਂਸੀ AI ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ",
+                ["welcome_description"] = "ਮੈਂ ਇੱਥੇ ਹਸਪਤਾਲ ਲੱਭਣ, ਐਮਰਜੈਂਸੀ ਪ੍ਰਕਿਰਿਆਵਾਂ ਨੂੰ ਸਮਝਣ ਅਤੇ ਮੈਡੀਕਲ ਐਮਰਜੈਂਸੀ ਵਿੱਚ ਤੁਹਾਡੀ ਮਦਦ ਕਰਨ ਲਈ ਹਾਂ।",
+                ["find_hospital"] = "ਨੇੜਲਾ ਹਸਪਤਾਲ ਲੱਭੋ",
+                ["heart_attack"] = "ਦਿਲ ਦਾ ਦੌਰਾ ਪ੍ਰਕਿਰਿਆਵਾਂ",
+                ["trauma_centers"] = "ਟਰਾਮਾ ਸੈਂਟਰ ਲੱਭੋ",
+                ["find_hospital_query"] = "ਨੇੜਲਾ ਹਸਪਤਾਲ ਲੱਭੋ",
+                ["heart_attack_query"] = "ਦਿਲ ਦੇ ਦੌਰੇ ਵਿੱਚ ਕੀ ਕਰਨਾ ਹੈ?",
+                ["trauma_centers_query"] = "ਟਰਾਮਾ ਸੈਂਟਰ ਦਿਖਾਓ",
+                ["input_placeholder"] = "ਆਪਣਾ ਐਮਰਜੈਂਸੀ ਸਵਾਲ ਟਾਈਪ ਕਰੋ...",
+                ["searching_hospitals"] = "🔍 ਨੇੜਲੇ ਹਸਪਤਾਲ ਲੱਭ ਰਹੇ ਹਾਂ... ਇਸ ਵਿੱਚ ਕੁਝ ਸਮਾਂ ਲੱਗੇਗਾ।",
+                ["no_hospitals_found"] = "⚠️ ਤੁਹਾਡੇ ਖੇਤਰ ਵਿੱਚ ਹਸਪਤਾਲ ਨਹੀਂ ਮਿਲੇ। ਕਿਰਪਾ ਕਰਕੇ ਖੋਜ ਦਾ ਦਾਇਰਾ ਵਧਾਉਣ ਜਾਂ ਆਪਣੀ ਸਥਿਤੀ ਸੈਟਿੰਗਾਂ ਦੀ ਜਾਂਚ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+                ["no_hospitals_for_directions"] = "⚠️ ਦਿਸ਼ਾਵਾਂ ਲਈ ਹਸਪਤਾਲ ਉਪਲਬਧ ਨਹੀਂ ਹਨ। ਕਿਰਪਾ ਕਰਕੇ ਪਹਿਲਾਂ ਹਸਪਤਾਲ ਲੱਭੋ।",
+                ["search_button_instruction"] = "⚠️ ਹਸਪਤਾਲ ਲੱਭਣ ਵਿੱਚ ਅਸਮਰੱਥ। ਕਿਰਪਾ ਕਰਕੇ ਪੰਨੇ 'ਤੇ 'ਨੇੜਲੇ ਹਸਪਤਾਲ ਲੱਭੋ' ਬਟਨ ਦੀ ਵਰਤੋਂ ਕਰੋ।"
+            },
+            ["or"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "ଜରୁରୀକାଳୀନ AI କୁ ସ୍ୱାଗତ",
+                ["welcome_description"] = "ମୁଁ ଏଠାରେ ଡାକ୍ତରଖାନା ଖୋଜିବା, ଜରୁରୀକାଳୀନ ପ୍ରକ୍ରିୟା ବୁଝିବା ଏବଂ ଚିକିତ୍ସା ଜରୁରୀକାଳୀନ ପରିସ୍ଥିତିରେ ଆପଣଙ୍କୁ ମାର୍ଗଦର୍ଶନ କରିବା ପାଇଁ ଅଛି।",
+                ["find_hospital"] = "ନିକଟସ୍ଥ ଡାକ୍ତରଖାନା ଖୋଜନ୍ତୁ",
+                ["heart_attack"] = "ହୃଦଘାତ ପ୍ରକ୍ରିୟା",
+                ["trauma_centers"] = "ଟ୍ରମା କେନ୍ଦ୍ର ଖୋଜନ୍ତୁ",
+                ["find_hospital_query"] = "ନିକଟସ୍ଥ ଡାକ୍ତରଖାନା ଖୋଜନ୍ତୁ",
+                ["heart_attack_query"] = "ହୃଦଘାତରେ କଣ କରିବେ?",
+                ["trauma_centers_query"] = "ଟ୍ରମା କେନ୍ଦ୍ର ଦେଖାନ୍ତୁ",
+                ["input_placeholder"] = "ଆପଣଙ୍କର ଜରୁରୀକାଳୀନ ପ୍ରଶ୍ନ ଟାଇପ୍ କରନ୍ତୁ...",
+                ["searching_hospitals"] = "🔍 ନିକଟସ୍ଥ ଡାକ୍ତରଖାନା ଖୋଜୁଛି... ଏହା କିଛି ସମୟ ନେବ।",
+                ["no_hospitals_found"] = "⚠️ ଆପଣଙ୍କ ଅଞ୍ଚଳରେ ଡାକ୍ତରଖାନା ମିଳିଲା ନାହିଁ। ଦୟାକରି ଖୋଜ ପରିସର ବଢ଼ାଇବାକୁ କିମ୍ବା ଆପଣଙ୍କର ଅବସ୍ଥାନ ସେଟିଂସ ଯାଞ୍ଚ କରିବାକୁ ଚେଷ୍ଟା କରନ୍ତୁ।",
+                ["no_hospitals_for_directions"] = "⚠️ ଦିଗ ନିର୍ଦ୍ଦେଶ ପାଇଁ ଡାକ୍ତରଖାନା ଉପଲବ୍ଧ ନାହିଁ। ଦୟାକରି ପ୍ରଥମେ ଡାକ୍ତରଖାନା ଖୋଜନ୍ତୁ।",
+                ["search_button_instruction"] = "⚠️ ଡାକ୍ତରଖାନା ଖୋଜିବାରେ ଅସମର୍ଥ। ଦୟାକରି ପୃଷ୍ଠାରେ 'ନିକଟସ୍ଥ ଡାକ୍ତରଖାନା ଖୋଜନ୍ତୁ' ବଟନ୍ ବ୍ୟବହାର କରନ୍ତୁ।"
+            },
+            ["as"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "জৰুৰীকালীন AI লৈ স্বাগতম",
+                ["welcome_description"] = "মই ইয়াত চিকিৎসালয় বিচাৰিবলৈ, জৰুৰীকালীন প্ৰক্ৰিয়া বুজিবলৈ আৰু চিকিৎসা জৰুৰীকালীন অৱস্থাত আপোনাক পথ প্ৰদৰ্শন কৰিবলৈ আছো।",
+                ["find_hospital"] = "ওচৰৰ চিকিৎসালয় বিচাৰক",
+                ["heart_attack"] = "হৃদযন্ত্ৰৰ আক্ৰমণ প্ৰক্ৰিয়া",
+                ["trauma_centers"] = "ট্ৰমা কেন্দ্ৰ বিচাৰক",
+                ["find_hospital_query"] = "ওচৰৰ চিকিৎসালয় বিচাৰক",
+                ["heart_attack_query"] = "হৃদযন্ত্ৰৰ আক্ৰমণত কি কৰিব?",
+                ["trauma_centers_query"] = "ট্ৰমা কেন্দ্ৰ দেখুৱাওক",
+                ["input_placeholder"] = "আপোনাৰ জৰুৰীকালীন প্ৰশ্ন টাইপ কৰক...",
+                ["searching_hospitals"] = "🔍 ওচৰৰ চিকিৎসালয় বিচাৰি আছো... ইয়াত কিছু সময় লাগিব।",
+                ["no_hospitals_found"] = "⚠️ আপোনাৰ অঞ্চলত চিকিৎসালয় পোৱা নগ'ল। অনুগ্ৰহ কৰি অনুসন্ধান পৰিসৰ বৃদ্ধি কৰা বা আপোনাৰ অৱস্থান ছেটিংছ পৰীক্ষা কৰাৰ চেষ্টা কৰক।",
+                ["no_hospitals_for_directions"] = "⚠️ দিশৰ বাবে চিকিৎসালয় উপলব্ধ নাই। অনুগ্ৰহ কৰি প্ৰথমে চিকিৎসালয় বিচাৰক।",
+                ["search_button_instruction"] = "⚠️ চিকিৎসালয় বিচাৰিবলৈ অক্ষম। অনুগ্ৰহ কৰি পৃষ্ঠাত 'ওচৰৰ চিকিৎসালয় বিচাৰক' বুটাম ব্যৱহাৰ কৰক।"
+            },
+            ["ur"] = new Dictionary<string, string>
+            {
+                ["welcome_title"] = "ایمرجنسی AI میں خوش آمدید",
+                ["welcome_description"] = "میں یہاں ہسپتال تلاش کرنے، ہنگامی طریقہ کار کو سمجھنے اور طبی ہنگامی حالات میں آپ کی رہنمائی کرنے کے لیے ہوں۔",
+                ["find_hospital"] = "قریبی ہسپتال تلاش کریں",
+                ["heart_attack"] = "دل کا دورہ طریقہ کار",
+                ["trauma_centers"] = "ٹراما سینٹر تلاش کریں",
+                ["find_hospital_query"] = "قریبی ہسپتال تلاش کریں",
+                ["heart_attack_query"] = "دل کے دورے میں کیا کریں؟",
+                ["trauma_centers_query"] = "ٹراما سینٹر دکھائیں",
+                ["input_placeholder"] = "اپنا ہنگامی سوال ٹائپ کریں...",
+                ["searching_hospitals"] = "🔍 قریبی ہسپتال تلاش کر رہے ہیں... اس میں کچھ وقت لگے گا۔",
+                ["no_hospitals_found"] = "⚠️ آپ کے علاقے میں ہسپتال نہیں ملے۔ براہ کرم تلاش کا دائرہ بڑھانے یا اپنی لوکیشن سیٹنگز چیک کرنے کی کوشش کریں۔",
+                ["no_hospitals_for_directions"] = "⚠️ سمت کے لیے ہسپتال دستیاب نہیں۔ براہ کرم پہلے ہسپتال تلاش کریں۔",
+                ["search_button_instruction"] = "⚠️ ہسپتال تلاش کرنے میں ناکام۔ براہ کرم صفحے پر 'قریبی ہسپتال تلاش کریں' بٹن استعمال کریں۔"
+            }
+        };
+    }
+
+    private string GetLocalizedText(string key)
+    {
+        if (localizations.ContainsKey(currentLanguage) && localizations[currentLanguage].ContainsKey(key))
+        {
+            return localizations[currentLanguage][key];
+        }
+        // Fallback to English
+        return localizations["en"].ContainsKey(key) ? localizations["en"][key] : key;
+    }
+
+
+    
+    private async Task ScrollToHospitals()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToElement", "hospital-results");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error scrolling to hospitals: {ex.Message}");
+        }
+    }
+    
+    private string GetLocalizedHospitalInfo(HospitalDto hospital)
+    {
+        var template = GetLocalizedText("hospital_info_template");
+        return template
+            .Replace("{name}", hospital.Name)
+            .Replace("{distance}", hospital.DistanceInKm?.ToString("F1") ?? "N/A")
+            .Replace("{rating}", hospital.Rating?.ToString("F1") ?? "N/A")
+            .Replace("{status}", hospital.IsOpen ? GetLocalizedText("open") : GetLocalizedText("closed"))
+            .Replace("{phone}", hospital.PhoneNumber ?? "N/A")
+            .Replace("{address}", hospital.FullAddress ?? "N/A");
+    }
+    
+
+    
+    private void ToggleVoiceOutput()
+    {
+        voiceOutputEnabled = !voiceOutputEnabled;
+        StateHasChanged();
+    }
+    
+    private async Task SpeakText(string text, string? language = null)
+    {
+        try
+        {
+            // Remove markdown and HTML formatting for better speech
+            var cleanText = text.Replace("*", "").Replace("_", "").Replace("#", "").Replace("`", "");
+            cleanText = cleanText.Replace("[", "").Replace("]", "").Replace("(", "").Replace(")", "").Replace("{", "").Replace("}", "");
+            cleanText = cleanText.Trim();
+            
+            if (!string.IsNullOrEmpty(cleanText))
+            {
+                var speechLang = language ?? currentLanguage;
+                await JSRuntime.InvokeVoidAsync("emergencyChatHelper.speak", cleanText, 1.0, 1.0, 0.8, speechLang);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error speaking text: {ex.Message}");
+        }
+    }
+    
+
+}
