@@ -1,0 +1,207 @@
+@inject ISettingsService SettingsService
+@inject IToastService ToastService
+@inject AppSettingsState AppSettings
+
+<div class="bg-card dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors duration-200">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Security Settings</h3>
+
+    <EditForm Model="@securitySettings" OnValidSubmit="@HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <!-- Session & Login Settings -->
+        <div class="mb-6">
+            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-3">Session & Login</h4>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Session Timeout (minutes) <span class="text-red-500">*</span>
+                    </label>
+                    <InputNumber @bind-Value="securitySettings.SessionTimeoutMinutes"
+                                 class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" />
+                    <ValidationMessage For="@(() => securitySettings.SessionTimeoutMinutes)" class="text-red-500 text-sm mt-1" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Max Login Attempts <span class="text-red-500">*</span>
+                    </label>
+                    <InputNumber @bind-Value="securitySettings.MaxLoginAttempts"
+                                 class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" />
+                    <ValidationMessage For="@(() => securitySettings.MaxLoginAttempts)" class="text-red-500 text-sm mt-1" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Account Lockout (minutes) <span class="text-red-500">*</span>
+                    </label>
+                    <InputNumber @bind-Value="securitySettings.AccountLockoutMinutes"
+                                 class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" />
+                    <ValidationMessage For="@(() => securitySettings.AccountLockoutMinutes)" class="text-red-500 text-sm mt-1" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Password Policy -->
+        <div class="mb-6">
+            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-3">Password Policy</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Minimum Password Length <span class="text-red-500">*</span>
+                    </label>
+                    <InputNumber @bind-Value="securitySettings.PasswordMinLength"
+                                 class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" />
+                    <ValidationMessage For="@(() => securitySettings.PasswordMinLength)" class="text-red-500 text-sm mt-1" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Password Expiry (days) <span class="text-red-500">*</span>
+                    </label>
+                    <InputNumber @bind-Value="securitySettings.PasswordExpiryDays"
+                                 class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" />
+                    <ValidationMessage For="@(() => securitySettings.PasswordExpiryDays)" class="text-red-500 text-sm mt-1" />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <InputCheckbox @bind-Value="securitySettings.RequireUppercase"
+                                   class="w-5 h-5 text-primary dark:text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Require uppercase letters</span>
+                </label>
+
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <InputCheckbox @bind-Value="securitySettings.RequireLowercase"
+                                   class="w-5 h-5 text-primary dark:text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Require lowercase letters</span>
+                </label>
+
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <InputCheckbox @bind-Value="securitySettings.RequireNumbers"
+                                   class="w-5 h-5 text-primary dark:text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Require numbers</span>
+                </label>
+
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <InputCheckbox @bind-Value="securitySettings.RequireSpecialChars"
+                                   class="w-5 h-5 text-primary dark:text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Require special characters</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Additional Security -->
+        <div class="mb-6">
+            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-3">Additional Security</h4>
+            <div class="space-y-3">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <InputCheckbox @bind-Value="securitySettings.EnableTwoFactor"
+                                   class="w-5 h-5 text-primary dark:text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Enable Two-Factor Authentication</span>
+                </label>
+
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <InputCheckbox @bind-Value="securitySettings.RequireEmailVerification"
+                                   class="w-5 h-5 text-primary dark:text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Require Email Verification</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="flex justify-end">
+            <button type="submit"
+                    disabled="@isLoading"
+                    class="px-6 py-2 bg-primary text-white rounded-lg hover:opacity-90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                @if (isLoading)
+                {
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <span>Save Changes</span>
+                }
+            </button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private UpdateSecuritySettingsInput securitySettings = new(30, 5, 8, true, true, true, true, false, true, 90, 15);
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+    }
+
+    private async Task LoadSettings()
+    {
+        try
+        {
+            var systemSettings = await SettingsService.GetSystemSettingsAsync();
+            if (systemSettings != null)
+            {
+                securitySettings = new UpdateSecuritySettingsInput(
+                    systemSettings.SessionTimeoutMinutes,
+                    systemSettings.MaxLoginAttempts,
+                    systemSettings.PasswordMinLength,
+                    systemSettings.RequireUppercase,
+                    systemSettings.RequireLowercase,
+                    systemSettings.RequireNumbers,
+                    systemSettings.RequireSpecialChars,
+                    systemSettings.EnableTwoFactor,
+                    systemSettings.RequireEmailVerification,
+                    systemSettings.PasswordExpiryDays,
+                    systemSettings.AccountLockoutMinutes
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load settings: {ex.Message}");
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await SettingsService.UpdateSecuritySettingsAsync(securitySettings);
+
+            if (result != null && result.Success)
+            {
+                var dto = new SecuritySettingsDto(
+                    securitySettings.SessionTimeoutMinutes,
+                    securitySettings.MaxLoginAttempts,
+                    securitySettings.PasswordMinLength,
+                    securitySettings.RequireUppercase,
+                    securitySettings.RequireLowercase,
+                    securitySettings.RequireNumbers,
+                    securitySettings.RequireSpecialChars,
+                    securitySettings.EnableTwoFactor,
+                    securitySettings.RequireEmailVerification,
+                    securitySettings.PasswordExpiryDays,
+                    securitySettings.AccountLockoutMinutes
+                );
+                AppSettings.UpdateSecuritySettings(dto);
+
+                ToastService.ShowSuccess(result.Message ?? "Security settings saved successfully!");
+            }
+            else
+            {
+                ToastService.ShowError(result?.Message ?? "Failed to save security settings.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

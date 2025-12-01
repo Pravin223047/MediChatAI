@@ -1,0 +1,322 @@
+@* Export Modal Component for Analytics Data *@
+
+<ModalBase IsOpen="@IsOpen"
+           Title="Export Analytics Data"
+           Subtitle="Choose a format to download your data"
+           Size="lg"
+           ShowCloseButton="true"
+           CloseOnBackdropClick="true"
+           CloseOnEscape="true"
+           OnClose="@OnClose">
+    <ChildContent>
+        <!-- Export Format Selection Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 py-4">
+
+            <!-- CSV Export Card -->
+            <div class="group relative bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/10 rounded-xl p-6 border-2 border-blue-200 dark:border-blue-700/50 hover:border-blue-400 dark:hover:border-blue-500 hover:scale-105 transition-all duration-300 cursor-pointer shadow-md hover:shadow-xl"
+                 @onclick="() => HandleExport(ExportFormat.Csv)">
+                <div class="flex items-start space-x-4">
+                    <!-- Icon -->
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-blue-500 dark:bg-blue-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center">
+                            CSV
+                            @if (exportingFormat == ExportFormat.Csv)
+                            {
+                                <div class="ml-2 animate-spin">
+                                    <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            }
+                        </h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Compatible with Excel, Google Sheets, and most spreadsheet applications
+                        </p>
+                        <div class="flex items-center text-xs text-gray-500 dark:text-gray-500">
+                            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            User data export
+                        </div>
+                    </div>
+                </div>
+                <!-- Download Button -->
+                <button type="button"
+                        disabled="@(exportingFormat == ExportFormat.Csv)"
+                        class="mt-4 w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg flex items-center justify-center">
+                    @if (exportingFormat == ExportFormat.Csv)
+                    {
+                        <span>Exporting...</span>
+                    }
+                    else
+                    {
+                        <>
+                            <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download CSV
+                        </>
+                    }
+                </button>
+            </div>
+
+            <!-- XLSX Export Card -->
+            <div class="group relative bg-gradient-to-br from-green-50 to-emerald-100/50 dark:from-green-900/20 dark:to-emerald-800/10 rounded-xl p-6 border-2 border-green-200 dark:border-green-700/50 hover:border-green-400 dark:hover:border-green-500 transition-all duration-300 shadow-md opacity-60">
+                <div class="flex items-start space-x-4">
+                    <!-- Icon -->
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-green-500 dark:bg-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                            <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center">
+                            XLSX
+                            <span class="ml-2 px-2 py-0.5 text-xs font-medium bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 rounded-full">Coming Soon</span>
+                        </h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Native Microsoft Excel format with advanced formatting
+                        </p>
+                        <div class="flex items-center text-xs text-gray-500 dark:text-gray-500">
+                            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Enhanced data tables
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- JSON Export Card -->
+            <div class="group relative bg-gradient-to-br from-purple-50 to-violet-100/50 dark:from-purple-900/20 dark:to-violet-800/10 rounded-xl p-6 border-2 border-purple-200 dark:border-purple-700/50 hover:border-purple-400 dark:hover:border-purple-500 hover:scale-105 transition-all duration-300 cursor-pointer shadow-md hover:shadow-xl"
+                 @onclick="() => HandleExport(ExportFormat.Json)">
+                <div class="flex items-start space-x-4">
+                    <!-- Icon -->
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-purple-500 dark:bg-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center">
+                            JSON
+                            @if (exportingFormat == ExportFormat.Json)
+                            {
+                                <div class="ml-2 animate-spin">
+                                    <svg class="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            }
+                        </h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            For developers and data integration workflows
+                        </p>
+                        <div class="flex items-center text-xs text-gray-500 dark:text-gray-500">
+                            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Analytics data export
+                        </div>
+                    </div>
+                </div>
+                <!-- Download Button -->
+                <button type="button"
+                        disabled="@(exportingFormat == ExportFormat.Json)"
+                        class="mt-4 w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg flex items-center justify-center">
+                    @if (exportingFormat == ExportFormat.Json)
+                    {
+                        <span>Exporting...</span>
+                    }
+                    else
+                    {
+                        <>
+                            <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download JSON
+                        </>
+                    }
+                </button>
+            </div>
+
+            <!-- PDF Export Card -->
+            <div class="group relative bg-gradient-to-br from-red-50 to-rose-100/50 dark:from-red-900/20 dark:to-rose-800/10 rounded-xl p-6 border-2 border-red-200 dark:border-red-700/50 hover:border-red-400 dark:hover:border-red-500 transition-all duration-300 shadow-md opacity-60">
+                <div class="flex items-start space-x-4">
+                    <!-- Icon -->
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-red-500 dark:bg-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                            <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center">
+                            PDF
+                            <span class="ml-2 px-2 py-0.5 text-xs font-medium bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200 rounded-full">Coming Soon</span>
+                        </h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Professional analytics report for printing and sharing
+                        </p>
+                        <div class="flex items-center text-xs text-gray-500 dark:text-gray-500">
+                            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Formatted report
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PNG Export Card -->
+            <div class="group relative bg-gradient-to-br from-orange-50 to-amber-100/50 dark:from-orange-900/20 dark:to-amber-800/10 rounded-xl p-6 border-2 border-orange-200 dark:border-orange-700/50 hover:border-orange-400 dark:hover:border-orange-500 hover:scale-105 transition-all duration-300 cursor-pointer shadow-md hover:shadow-xl col-span-full"
+                 @onclick="() => HandleExport(ExportFormat.Png)">
+                <div class="flex items-start space-x-4">
+                    <!-- Icon -->
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-orange-500 dark:bg-orange-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center">
+                            PNG Images
+                            @if (exportingFormat == ExportFormat.Png)
+                            {
+                                <div class="ml-2 animate-spin">
+                                    <svg class="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            }
+                        </h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Export individual charts as high-quality images for presentations
+                        </p>
+                        <div class="flex items-center text-xs text-gray-500 dark:text-gray-500">
+                            <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Chart screenshots
+                        </div>
+                    </div>
+                </div>
+                <!-- Download Button -->
+                <button type="button"
+                        disabled="@(exportingFormat == ExportFormat.Png)"
+                        class="mt-4 w-full sm:w-auto py-2.5 px-6 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg flex items-center justify-center">
+                    @if (exportingFormat == ExportFormat.Png)
+                    {
+                        <span>Exporting...</span>
+                    }
+                    else
+                    {
+                        <>
+                            <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download Charts
+                        </>
+                    }
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Helper Text -->
+        <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div class="flex items-start">
+                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div class="text-sm text-blue-800 dark:text-blue-300">
+                    <p class="font-medium">Export Tips:</p>
+                    <ul class="mt-1 list-disc list-inside space-y-1 text-blue-700 dark:text-blue-400">
+                        <li>CSV exports include all user data within the selected date range</li>
+                        <li>JSON exports contain complete analytics data for integration</li>
+                        <li>PNG exports download each chart individually</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+
+    <FooterContent>
+        <button type="button"
+                @onclick="OnClose"
+                class="w-full sm:w-auto px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+            Close
+        </button>
+    </FooterContent>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnExportCsv { get; set; }
+    [Parameter] public EventCallback OnExportJson { get; set; }
+    [Parameter] public EventCallback OnExportPng { get; set; }
+
+    private ExportFormat? exportingFormat = null;
+
+    private enum ExportFormat
+    {
+        Csv,
+        Json,
+        Png
+    }
+
+    private async Task HandleExport(ExportFormat format)
+    {
+        if (exportingFormat != null) return; // Prevent double-click
+
+        exportingFormat = format;
+        StateHasChanged();
+
+        try
+        {
+            switch (format)
+            {
+                case ExportFormat.Csv:
+                    await OnExportCsv.InvokeAsync();
+                    break;
+                case ExportFormat.Json:
+                    await OnExportJson.InvokeAsync();
+                    break;
+                case ExportFormat.Png:
+                    await OnExportPng.InvokeAsync();
+                    break;
+            }
+
+            // Small delay to show success feedback
+            await Task.Delay(500);
+        }
+        finally
+        {
+            exportingFormat = null;
+            StateHasChanged();
+        }
+    }
+}

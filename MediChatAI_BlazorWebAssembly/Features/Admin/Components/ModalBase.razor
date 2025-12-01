@@ -1,0 +1,138 @@
+@inject IJSRuntime JS
+
+@* Reusable Modal Base Component with Enhanced Accessibility *@
+@* Z-Index Hierarchy: z-[150] ensures modals appear above all content (charts: z-50, tooltips: z-9999) *@
+<div id="@ModalId"
+     class="fixed inset-0 z-[150] overflow-y-auto @(IsOpen ? "" : "hidden")"
+     aria-labelledby="modal-title"
+     role="dialog"
+     aria-modal="true"
+     tabindex="-1"
+     @onkeydown="HandleKeyDown">
+    <!-- Background overlay with enhanced blur effect -->
+    <div class="flex items-center justify-center h-full pt-4 px-4 pb-4 text-center sm:p-0">
+        <!-- Translucent backdrop overlay with dark mode support -->
+        <div class="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm transition-opacity @(IsOpen ? "ease-out duration-300 opacity-100" : "ease-in duration-200 opacity-0")"
+             aria-hidden="true" @onclick="HandleBackdropClick"></div>
+
+        <!-- Modal panel with dark mode support -->
+        <div class="inline-block align-middle bg-white dark:bg-gray-800 rounded-lg text-left shadow-xl transform transition-all @SizeClass @(IsOpen ? "ease-out duration-300 opacity-100 translate-y-0 sm:scale-100" : "ease-in duration-200 opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95") relative max-h-[90vh] flex flex-col">
+            <!-- Modal Header (Fixed) with Dark Mode -->
+            <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:px-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-center">
+                        @if (!string.IsNullOrEmpty(Icon))
+                        {
+                            <div class="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full @IconBgClass sm:h-10 sm:w-10">
+                                <span class="@Icon @IconColorClass"></span>
+                            </div>
+                        }
+                        <div class="ml-4">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+                                @Title
+                            </h3>
+                            @if (!string.IsNullOrEmpty(Subtitle))
+                            {
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">@Subtitle</p>
+                            }
+                        </div>
+                    </div>
+                    @if (ShowCloseButton)
+                    {
+                        <button type="button" @onclick="Close" class="bg-white dark:bg-gray-800 rounded-md text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:focus:ring-offset-gray-800 transition-colors" aria-label="Close modal (ESC)">
+                            <span class="sr-only">Close</span>
+                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Modal Body (Scrollable) with Dark Mode -->
+            <div class="overflow-y-auto flex-1 px-4 py-4 sm:px-6 text-gray-900 dark:text-gray-100">
+                @ChildContent
+            </div>
+
+            <!-- Modal Footer (Fixed) with Dark Mode -->
+            @if (FooterContent != null)
+            {
+                <div class="bg-gray-50 dark:bg-gray-800/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    @FooterContent
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string IconBgClass { get; set; } = "bg-indigo-100 dark:bg-indigo-900/30";
+    [Parameter] public string IconColorClass { get; set; } = "text-primary dark:text-primary";
+    [Parameter] public string Size { get; set; } = "md"; // sm, md, lg, xl, 2xl, full
+    [Parameter] public bool ShowCloseButton { get; set; } = true;
+    [Parameter] public bool CloseOnBackdropClick { get; set; } = true;
+    [Parameter] public bool CloseOnEscape { get; set; } = true;
+    [Parameter] public bool AutoFocusFirstElement { get; set; } = true;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string ModalId { get; set; } = $"modal-{Guid.NewGuid():N}";
+    private bool previousIsOpen = false;
+
+    private string SizeClass => Size switch
+    {
+        "sm" => "sm:max-w-sm sm:w-full",
+        "md" => "sm:max-w-lg sm:w-full",
+        "lg" => "sm:max-w-2xl sm:w-full",
+        "xl" => "sm:max-w-4xl sm:w-full",
+        "2xl" => "sm:max-w-6xl sm:w-full",
+        "full" => "sm:max-w-7xl sm:w-full",
+        _ => "sm:max-w-lg sm:w-full"
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Handle modal opening - set focus and create focus trap
+        if (IsOpen && !previousIsOpen && AutoFocusFirstElement)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("focusFirstElement", ModalId);
+                await JS.InvokeVoidAsync("createFocusTrap", ModalId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Focus management error: {ex.Message}");
+            }
+        }
+
+        previousIsOpen = IsOpen;
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleBackdropClick()
+    {
+        if (CloseOnBackdropClick)
+        {
+            await Close();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Close modal on ESC key press
+        if (CloseOnEscape && e.Key == "Escape")
+        {
+            await Close();
+        }
+    }
+}

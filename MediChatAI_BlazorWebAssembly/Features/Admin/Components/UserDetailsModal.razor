@@ -1,0 +1,348 @@
+@inject IAdminService AdminService
+
+<ModalBase IsOpen="@IsOpen"
+           Title="User Details"
+           Subtitle="@(userDetails?.Email ?? "")"
+           Size="xl"
+           OnClose="@Close">
+
+    <ChildContent>
+        @if (isLoading)
+        {
+            <div class="flex justify-center items-center py-12">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <span class="ml-3 text-gray-600">Loading user details...</span>
+            </div>
+        }
+        else if (userDetails != null)
+        {
+            <!-- User Profile Header -->
+            <div class="bg-gradient-to-r @GetRoleGradient(userDetails.Role) rounded-lg p-6 mb-6">
+                <div class="flex items-center space-x-4">
+                    <div class="h-20 w-20 rounded-full bg-white flex items-center justify-center text-2xl font-bold @GetRoleTextColor(userDetails.Role)">
+                        @GetUserInitials(userDetails.FirstName, userDetails.LastName)
+                    </div>
+                    <div class="flex-1 text-white">
+                        <h2 class="text-2xl font-bold">@userDetails.FirstName @userDetails.LastName</h2>
+                        <p class="text-sm opacity-90">@userDetails.Email</p>
+                        <div class="flex items-center space-x-3 mt-2">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white bg-opacity-30 text-green-500">
+                                @userDetails.Role
+                            </span>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium @(userDetails.IsActive ? "bg-green-400" : "bg-red-400") text-white">
+                                @(userDetails.IsActive ? "Active" : "Inactive")
+                            </span>
+                            @if (userDetails.EmailConfirmed)
+                            {
+                                <span class="inline-flex items-center text-xs text-white opacity-90">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Email Verified
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button @onclick="() => activeTab = 0"
+                            class="@(activeTab == 0 ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300") whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+                        Overview
+                    </button>
+                    @if (userDetails.Role == "Doctor")
+                    {
+                        <button @onclick="() => activeTab = 1"
+                                class="@(activeTab == 1 ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300") whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+                            Professional Info
+                        </button>
+                    }
+                    <button @onclick="() => activeTab = 2"
+                            class="@(activeTab == 2 ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300") whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+                        Activity
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="mt-6">
+                @if (activeTab == 0)
+                {
+                    <!-- Overview Tab -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Personal Information -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                                Personal Information
+                            </h3>
+                            <dl class="space-y-3">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Full Name</dt>
+                                    <dd class="text-sm text-gray-900 mt-1">@userDetails.FirstName @userDetails.LastName</dd>
+                                </div>
+                                @if (!string.IsNullOrEmpty(userDetails.EmergencyContactPhone))
+                                {
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Emergency Contact</dt>
+                                        <dd class="text-sm text-gray-900 mt-1">@userDetails.EmergencyContactName (@userDetails.EmergencyContactPhone)</dd>
+                                    </div>
+                                }
+                                @if (userDetails.DateOfBirth.HasValue)
+                                {
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Date of Birth</dt>
+                                        <dd class="text-sm text-gray-900 mt-1">@userDetails.DateOfBirth.Value.ToString("MMMM dd, yyyy")</dd>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(userDetails.Gender))
+                                {
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Gender</dt>
+                                        <dd class="text-sm text-gray-900 mt-1">@userDetails.Gender</dd>
+                                    </div>
+                                }
+                            </dl>
+                        </div>
+
+                        <!-- Address Information -->
+                        @if (!string.IsNullOrEmpty(userDetails.Address))
+                        {
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                    <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                    Address
+                                </h3>
+                                <dl class="space-y-3">
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Street Address</dt>
+                                        <dd class="text-sm text-gray-900 mt-1">@userDetails.Address</dd>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        @if (!string.IsNullOrEmpty(userDetails.City))
+                                        {
+                                            <div>
+                                                <dt class="text-sm font-medium text-gray-500">City</dt>
+                                                <dd class="text-sm text-gray-900 mt-1">@userDetails.City</dd>
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(userDetails.State))
+                                        {
+                                            <div>
+                                                <dt class="text-sm font-medium text-gray-500">State</dt>
+                                                <dd class="text-sm text-gray-900 mt-1">@userDetails.State</dd>
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(userDetails.ZipCode))
+                                    {
+                                        <div>
+                                            <dt class="text-sm font-medium text-gray-500">ZIP Code</dt>
+                                            <dd class="text-sm text-gray-900 mt-1">@userDetails.ZipCode</dd>
+                                        </div>
+                                    }
+                                </dl>
+                            </div>
+                        }
+
+                        <!-- Account Information -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                Account Information
+                            </h3>
+                            <dl class="space-y-3">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">User ID</dt>
+                                    <dd class="text-sm text-gray-900 mt-1 font-mono text-xs">@userDetails.Id</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Joined</dt>
+                                    <dd class="text-sm text-gray-900 mt-1">@userDetails.CreatedAt.ToString("MMMM dd, yyyy")</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Last Login</dt>
+                                    <dd class="text-sm text-gray-900 mt-1">@userDetails.LastLoginAt.ToString("MMMM dd, yyyy hh:mm tt")</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Account Status</dt>
+                                    <dd class="mt-1">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium @(userDetails.IsActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800")">
+                                            @(userDetails.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+                }
+                else if (activeTab == 1 && userDetails.Role == "Doctor")
+                {
+                    <!-- Professional Information Tab -->
+                    <div class="space-y-6">
+                        @if (!string.IsNullOrEmpty(userDetails.Specialization))
+                        {
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">Medical Credentials</h3>
+                                <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Specialization</dt>
+                                        <dd class="text-sm text-gray-900 mt-1">@userDetails.Specialization</dd>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(userDetails.LicenseNumber))
+                                    {
+                                        <div>
+                                            <dt class="text-sm font-medium text-gray-500">License Number</dt>
+                                            <dd class="text-sm text-gray-900 mt-1 font-mono">@userDetails.LicenseNumber</dd>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(userDetails.Department))
+                                    {
+                                        <div>
+                                            <dt class="text-sm font-medium text-gray-500">Department</dt>
+                                            <dd class="text-sm text-gray-900 mt-1">@userDetails.Department</dd>
+                                        </div>
+                                    }
+                                </dl>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(userDetails.BloodType) || !string.IsNullOrEmpty(userDetails.Allergies))
+                        {
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">Medical Information</h3>
+                                <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    @if (!string.IsNullOrEmpty(userDetails.BloodType))
+                                    {
+                                        <div>
+                                            <dt class="text-sm font-medium text-gray-500">Blood Type</dt>
+                                            <dd class="text-sm text-gray-900 mt-1">@userDetails.BloodType</dd>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(userDetails.Allergies))
+                                    {
+                                        <div>
+                                            <dt class="text-sm font-medium text-gray-500">Allergies</dt>
+                                            <dd class="text-sm text-gray-900 mt-1">@userDetails.Allergies</dd>
+                                        </div>
+                                    }
+                                </dl>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(userDetails.MedicalHistory))
+                        {
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-2">Medical History</h3>
+                                <p class="text-sm text-gray-700 whitespace-pre-line">@userDetails.MedicalHistory</p>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (activeTab == 2)
+                {
+                    <!-- Activity Tab -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-500 text-center py-4">Activity tracking will be displayed here in future updates.</p>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-8">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.99-.833-2.76 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+                <p class="mt-2 text-sm text-gray-500">Failed to load user details</p>
+            </div>
+        }
+    </ChildContent>
+
+    <FooterContent>
+        <button type="button" @onclick="Close"
+                class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary sm:w-auto sm:text-sm transition-colors">
+            Close
+        </button>
+    </FooterContent>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string? UserId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private UserDetailsDto? userDetails;
+    private bool isLoading = false;
+    private int activeTab = 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && !string.IsNullOrEmpty(UserId))
+        {
+            await LoadUserDetails();
+        }
+    }
+
+    private async Task LoadUserDetails()
+    {
+        isLoading = true;
+        try
+        {
+            var result = await AdminService.GetUserDetailsAsync(UserId!);
+            if (result?.Success == true)
+            {
+                userDetails = result.User;
+            }
+        }
+        catch
+        {
+            userDetails = null;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Close()
+    {
+        activeTab = 0;
+        userDetails = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private string GetUserInitials(string? firstName, string? lastName)
+    {
+        var first = !string.IsNullOrEmpty(firstName) ? firstName[0].ToString() : "";
+        var last = !string.IsNullOrEmpty(lastName) ? lastName[0].ToString() : "";
+        return (first + last).ToUpper();
+    }
+
+    private string GetRoleGradient(string? role) => role switch
+    {
+        "Patient" => "from-blue-500 to-cyan-500",
+        "Doctor" => "from-emerald-500 to-teal-500",
+        "Admin" => "from-purple-500 to-indigo-500",
+        _ => "from-gray-500 to-slate-500"
+    };
+
+    private string GetRoleTextColor(string? role) => role switch
+    {
+        "Patient" => "text-primary",
+        "Doctor" => "text-emerald-600",
+        "Admin" => "text-accent dark:text-accent",
+        _ => "text-gray-600"
+    };
+}

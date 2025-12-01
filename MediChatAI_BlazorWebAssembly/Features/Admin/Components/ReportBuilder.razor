@@ -1,0 +1,253 @@
+@inject IToastService ToastService
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Left Panel - Report Configuration -->
+    <div class="lg:col-span-1 space-y-6">
+
+        <!-- Report Settings Card -->
+        <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-6">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Report Configuration</h3>
+
+            <div class="space-y-4">
+                <!-- Report Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Report Name</label>
+                    <input type="text" @bind="ReportName" placeholder="Enter report name..."
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary" />
+                </div>
+
+                <!-- Report Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</label>
+                    <textarea @bind="ReportDescription" rows="3" placeholder="Describe your report..."
+                              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"></textarea>
+                </div>
+
+                <!-- Visualization Type -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Visualization Type</label>
+                    <select @bind="VisualizationType" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="bar">Bar Chart</option>
+                        <option value="line">Line Chart</option>
+                        <option value="pie">Pie Chart</option>
+                        <option value="donut">Donut Chart</option>
+                        <option value="area">Area Chart</option>
+                        <option value="radar">Radar Chart</option>
+                        <option value="table">Data Table</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Selection -->
+        <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-6">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Select Metrics</h3>
+
+            <div class="space-y-2">
+                @foreach (var metric in AvailableMetrics)
+                {
+                    <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors">
+                        <input type="checkbox" @bind="metric.IsSelected"
+                               class="w-5 h-5 text-primary rounded focus:ring-2 focus:ring-primary" />
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-900 dark:text-white">@metric.Name</p>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">@metric.Description</p>
+                        </div>
+                    </label>
+                }
+            </div>
+        </div>
+
+        <!-- Dimensions Selection -->
+        <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-6">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Dimensions</h3>
+
+            <div class="space-y-2">
+                @foreach (var dimension in AvailableDimensions)
+                {
+                    <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors">
+                        <input type="radio" name="dimension" @onchange="() => SelectDimension(dimension)"
+                               class="w-5 h-5 text-primary focus:ring-2 focus:ring-primary" />
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-900 dark:text-white">@dimension.Name</p>
+                        </div>
+                    </label>
+                }
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right Panel - Preview and Actions -->
+    <div class="lg:col-span-2 space-y-6">
+
+        <!-- Preview Card -->
+        <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Live Preview</h3>
+                    <button @onclick="RefreshPreview" class="px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors flex items-center space-x-2">
+                        <svg class="w-5 h-5 @(IsRefreshing ? "animate-spin" : "")" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-6">
+                @if (!HasSelectedMetrics)
+                {
+                    <div class="text-center py-20">
+                        <svg class="w-20 h-20 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        <h4 class="text-lg font-semibold text-gray-600 dark:text-gray-400 mb-2">No Metrics Selected</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-500">Select metrics from the left panel to see a preview</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- Visualization Preview -->
+                    <div class="min-h-[400px] bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4">
+                        <canvas id="previewChart" style="height: 400px;"></canvas>
+                    </div>
+
+                    <!-- Selected Metrics Summary -->
+                    <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <h4 class="font-semibold text-blue-900 dark:text-blue-300 mb-2">Selected Configuration:</h4>
+                        <ul class="space-y-1 text-sm text-blue-800 dark:text-blue-400">
+                            <li>• <strong>Metrics:</strong> @string.Join(", ", AvailableMetrics.Where(m => m.IsSelected).Select(m => m.Name))</li>
+                            <li>• <strong>Dimension:</strong> @SelectedDimension?.Name</li>
+                            <li>• <strong>Visualization:</strong> @VisualizationType</li>
+                        </ul>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-6">
+            <div class="flex items-center justify-between">
+                <div class="flex space-x-3">
+                    <button @onclick="SaveAsTemplate" class="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                        </svg>
+                        <span>Save as Template</span>
+                    </button>
+                    <button @onclick="ScheduleReport" class="px-5 py-2.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex items-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span>Schedule</span>
+                    </button>
+                </div>
+                <button @onclick="GenerateReport" disabled="@(!HasSelectedMetrics)" class="px-6 py-2.5 bg-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span>Generate Report</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+    private string ReportName = "Custom Report";
+    private string ReportDescription = "";
+    private string VisualizationType = "bar";
+    private bool IsRefreshing = false;
+
+    private List<MetricOption> AvailableMetrics = new();
+    private List<DimensionOption> AvailableDimensions = new();
+    private DimensionOption? SelectedDimension;
+
+    private bool HasSelectedMetrics => AvailableMetrics.Any(m => m.IsSelected);
+
+    protected override void OnInitialized()
+    {
+        // Initialize available metrics
+        AvailableMetrics = new List<MetricOption>
+        {
+            new MetricOption { Id = "1", Name = "Total Users", Description = "Count of all registered users", IsSelected = false },
+            new MetricOption { Id = "2", Name = "Active Users", Description = "Users active in selected period", IsSelected = false },
+            new MetricOption { Id = "3", Name = "New Registrations", Description = "New user signups", IsSelected = false },
+            new MetricOption { Id = "4", Name = "Activity Count", Description = "Total number of activities", IsSelected = false },
+            new MetricOption { Id = "5", Name = "Login Count", Description = "Number of user logins", IsSelected = false },
+            new MetricOption { Id = "6", Name = "Session Duration", Description = "Average session time", IsSelected = false }
+        };
+
+        // Initialize available dimensions
+        AvailableDimensions = new List<DimensionOption>
+        {
+            new DimensionOption { Id = "1", Name = "Time (Daily)" },
+            new DimensionOption { Id = "2", Name = "Time (Weekly)" },
+            new DimensionOption { Id = "3", Name = "Time (Monthly)" },
+            new DimensionOption { Id = "4", Name = "User Role" },
+            new DimensionOption { Id = "5", Name = "Activity Type" },
+            new DimensionOption { Id = "6", Name = "User Status" }
+        };
+
+        SelectedDimension = AvailableDimensions.First();
+    }
+
+    private void SelectDimension(DimensionOption dimension)
+    {
+        SelectedDimension = dimension;
+        StateHasChanged();
+    }
+
+    private async Task RefreshPreview()
+    {
+        IsRefreshing = true;
+        StateHasChanged();
+        await Task.Delay(500);
+        // Render preview chart
+        IsRefreshing = false;
+        StateHasChanged();
+    }
+
+    private void SaveAsTemplate()
+    {
+        if (string.IsNullOrWhiteSpace(ReportName))
+        {
+            ToastService.ShowError("Please enter a report name");
+            return;
+        }
+        ToastService.ShowSuccess($"Report template '{ReportName}' saved!");
+    }
+
+    private void ScheduleReport()
+    {
+        ToastService.ShowInfo("Schedule report feature coming soon!");
+    }
+
+    private void GenerateReport()
+    {
+        if (!HasSelectedMetrics)
+        {
+            ToastService.ShowError("Please select at least one metric");
+            return;
+        }
+        ToastService.ShowSuccess("Generating custom report...");
+    }
+
+    public class MetricOption
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public bool IsSelected { get; set; }
+    }
+
+    public class DimensionOption
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+}

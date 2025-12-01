@@ -1,0 +1,159 @@
+@* Reusable Confirmation Modal for Admin Actions *@
+<ModalBase IsOpen="@IsOpen"
+           Title="@Title"
+           Subtitle="@Subtitle"
+           Icon="@Icon"
+           IconBgClass="@IconBgClass"
+           IconColorClass="@IconColorClass"
+           Size="md"
+           CloseOnBackdropClick="false"
+           OnClose="@Cancel">
+
+    <ChildContent>
+        <div class="mt-2">
+            <p class="text-sm text-gray-500">
+                @Message
+            </p>
+
+            @if (!string.IsNullOrEmpty(WarningMessage))
+            {
+                <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.99-.833-2.76 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700">@WarningMessage</p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (ShowInput)
+            {
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">@InputLabel</label>
+                    <textarea @bind="inputValue"
+                              class="shadow-sm focus:ring-primary focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
+                              rows="3"
+                              placeholder="@InputPlaceholder"></textarea>
+                </div>
+            }
+        </div>
+    </ChildContent>
+
+    <FooterContent>
+        <button type="button" @onclick="Cancel"
+                class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary sm:ml-3 sm:w-auto sm:text-sm transition-colors"
+                disabled="@isProcessing">
+            @CancelButtonText
+        </button>
+        <button type="button" @onclick="Confirm"
+                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 @ConfirmButtonClass text-base font-medium text-white hover:@ConfirmButtonHoverClass focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-@ConfirmButtonRing sm:w-auto sm:text-sm transition-colors"
+                disabled="@isProcessing">
+            @if (isProcessing)
+            {
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Processing...</span>
+            }
+            else
+            {
+                @ConfirmButtonText
+            }
+        </button>
+    </FooterContent>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm Action";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string Message { get; set; } = "Are you sure you want to proceed?";
+    [Parameter] public string? WarningMessage { get; set; }
+    [Parameter] public string ConfirmButtonText { get; set; } = "Confirm";
+    [Parameter] public string CancelButtonText { get; set; } = "Cancel";
+    [Parameter] public string ConfirmationType { get; set; } = "danger"; // danger, warning, success, info
+    [Parameter] public bool ShowInput { get; set; } = false;
+    [Parameter] public string InputLabel { get; set; } = "Additional Notes";
+    [Parameter] public string InputPlaceholder { get; set; } = "Enter notes...";
+    [Parameter] public EventCallback<string> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private bool isProcessing = false;
+    private string inputValue = "";
+
+    private string Icon => ConfirmationType switch
+    {
+        "danger" => "text-red-600",
+        "warning" => "text-yellow-600",
+        "success" => "text-green-600",
+        _ => "text-primary dark:text-primary"
+    };
+
+    private string IconBgClass => ConfirmationType switch
+    {
+        "danger" => "bg-red-100",
+        "warning" => "bg-yellow-100",
+        "success" => "bg-green-100",
+        _ => "bg-blue-100"
+    };
+
+    private string IconColorClass => ConfirmationType switch
+    {
+        "danger" => "text-red-600",
+        "warning" => "text-yellow-600",
+        "success" => "text-green-600",
+        _ => "text-primary dark:text-primary"
+    };
+
+    private string ConfirmButtonClass => ConfirmationType switch
+    {
+        "danger" => "bg-red-600",
+        "warning" => "bg-yellow-600",
+        "success" => "bg-green-600",
+        _ => "bg-primary"
+    };
+
+    private string ConfirmButtonHoverClass => ConfirmationType switch
+    {
+        "danger" => "bg-red-700",
+        "warning" => "bg-yellow-700",
+        "success" => "bg-green-700",
+        _ => "bg-primary"
+    };
+
+    private string ConfirmButtonRing => ConfirmationType switch
+    {
+        "danger" => "red-500",
+        "warning" => "yellow-500",
+        "success" => "green-500",
+        _ => "indigo-500"
+    };
+
+    private async Task Confirm()
+    {
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            await OnConfirm.InvokeAsync(inputValue);
+        }
+        finally
+        {
+            isProcessing = false;
+            inputValue = "";
+        }
+    }
+
+    private async Task Cancel()
+    {
+        inputValue = "";
+        await OnCancel.InvokeAsync();
+    }
+}

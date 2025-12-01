@@ -1,0 +1,933 @@
+@inject ISettingsService SettingsService
+@inject IToastService ToastService
+@inject INotificationService NotificationService
+@inject IGraphQLService GraphQLService
+@inject IJSRuntime JSRuntime
+
+<div class="space-y-8 pb-8">
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                <div class="p-3 bg-primary rounded-xl shadow-lg">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                    </svg>
+                </div>
+                Notification Settings
+            </h1>
+            <p class="mt-2 text-gray-600 dark:text-gray-200">Manage system-wide notification preferences and monitor real-time analytics</p>
+        </div>
+        <button @onclick="LoadNotificationStats"
+                disabled="@isLoadingStats"
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-950 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md font-medium"
+                title="Refresh statistics">
+            <svg class="w-5 h-5 dark:text-gray-200 text-gray-900 @(isLoadingStats ? "animate-spin" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span class="dark:text-gray-200 text-gray-900">@(isLoadingStats ? "Refreshing..." : "Refresh Stats")</span>
+        </button>
+    </div>
+
+    <!-- Statistics Dashboard -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Total Notifications Card -->
+        <div class="group relative bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden">
+            <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+            <div class="relative flex items-center justify-between">
+                <div class="flex-1">
+                    <p class="text-blue-100 text-sm font-medium mb-1">Total Notifications</p>
+                    <p class="text-4xl font-bold text-white">@totalNotifications</p>
+                </div>
+                <div class="p-2 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm">
+                    <svg class="w-8 h-8 text-primary dark:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center text-blue-100 text-xs">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                </svg>
+                All time notifications sent
+            </div>
+        </div>
+
+        <!-- Unread Notifications Card -->
+        <div class="group relative bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden">
+            <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+            <div class="relative flex items-center justify-between">
+                <div class="flex-1">
+                    <p class="text-orange-100 text-sm font-medium mb-1">Unread Messages</p>
+                    <p class="text-4xl font-bold text-white">@unreadNotifications</p>
+                </div>
+                <div class="p-2 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm">
+                    <svg class="w-8 h-8 text-orange-600 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center text-orange-100 text-xs">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Pending user attention
+            </div>
+        </div>
+
+        <!-- Connection Status Card -->
+        @if (NotificationService.IsConnected)
+        {
+            <div class="group relative bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden">
+                <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                <div class="relative flex items-center justify-between">
+                    <div class="flex-1">
+                        <p class="text-green-100 text-sm font-medium mb-1">SignalR Status</p>
+                        <p class="text-xl font-bold text-white flex items-center gap-2">
+                            <span class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                            </span>
+                            Connected
+                        </p>
+                    </div>
+                    <div class="p-4 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm">
+                        <svg class="w-8 h-8 text-green-600 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-center text-green-100 text-xs">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Real-time notifications active
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="group relative bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden">
+                <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                <div class="relative">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex-1">
+                            <p class="text-red-100 text-sm font-medium mb-1">SignalR Status</p>
+                            <p class="text-xl font-bold text-white flex items-center gap-2">
+                                <span class="relative flex h-3 w-3">
+                                    <span class="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                                </span>
+                                Disconnected
+                            </p>
+                        </div>
+                        <div class="p-2 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm">
+                         @if (isReconnecting)
+                        {
+                            <svg class="w-8 h-8 text-green-600 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                         }
+                        else
+                        {
+                            <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                         }
+                        </div>
+                    </div>
+                    <button @onclick="ReconnectSignalR"
+                            disabled="@isReconnecting"
+                            class="w-full py-2 bg-white text-red-600 rounded-lg font-semibold hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2">
+                        @if (isReconnecting)
+                        {
+                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span class="text-sm">Reconnecting...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            <span class="text-sm">Reconnect Now</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        }
+
+        <!-- Read Rate Card -->
+        <div class="group relative bg-gradient-to-br from-primary to-accent rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden">
+            <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+            <div class="relative flex items-center justify-between">
+                <div class="flex-1">
+                    <p class="text-indigo-100 text-sm font-medium mb-1">Read Rate</p>
+                    <p class="text-4xl font-bold text-white">@readRate<span class="text-2xl">%</span></p>
+                </div>
+                <div class="p-2 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm">
+                    <svg class="w-8 h-8 text-accent dark:text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center text-indigo-100 text-xs">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                </svg>
+                User engagement metric
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Test Notification -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-900 p-6 hover:shadow-lg hover:border-primary-300 transition-all duration-300">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-indigo-50 rounded-xl">
+                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-1">Test Notification</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-200 mb-4">Send a test notification to verify the system</p>
+                    <button @onclick="SendTestNotification"
+                            disabled="@isSendingTest"
+                            class="w-full py-2.5 px-4 bg-primary text-white rounded-xl hover:opacity-90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium flex items-center justify-center gap-2 shadow-sm">
+                        @if (isSendingTest)
+                        {
+                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Sending...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                            </svg>
+                            <span>Send Test</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Sender -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-900 p-6 hover:shadow-lg hover:border-purple-300 transition-all duration-300">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-purple-50 rounded-xl">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-1">Bulk Sender</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-200 mb-4">Send notifications to user groups</p>
+                    <button @onclick="() => showBulkSenderModal = true"
+                            class="w-full py-2.5 px-4 bg-accent text-white rounded-xl hover:bg-purple-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        <span>Open Sender</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Logs -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-900 p-6 hover:shadow-lg hover:border-green-300 transition-all duration-300">
+            <div class="flex items-start gap-4">
+                <div class="p-3 bg-green-50 rounded-xl">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-1">Export Logs</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-200 mb-4">Download notification history as CSV</p>
+                    <button @onclick="ExportNotificationLogs"
+                            disabled="@isExporting"
+                            class="w-full py-2.5 px-4 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
+                        @if (isExporting)
+                        {
+                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Exporting...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            <span>Export CSV</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Notification Settings -->
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-900 overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 to:dark-gray-800 px-6 py-5 border-b border-gray-200 dark:border-gray-900">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="p-2.5 bg-primary rounded-xl shadow-lg">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">Email Notification Settings</h2>
+                        <p class="text-sm text-gray-600 dark:text-gray-200 mt-0.5">Configure email notification triggers and preferences</p>
+                    </div>
+                </div>
+                <button @onclick="() => showAdvancedSettings = !showAdvancedSettings"
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-950 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium shadow-sm">
+                    <span>@(showAdvancedSettings ? "Hide" : "Show") Advanced</span>
+                    <svg class="w-4 h-4 transition-transform duration-200 @(showAdvancedSettings ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Form Content -->
+        <div class="p-6">
+            <EditForm Model="@notificationSettings" OnValidSubmit="@HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <!-- Master Toggle -->
+                <div class="mb-8 p-6 bg-gradient-to-r from-primary to-accent rounded-2xl border border-blue-200 dark:border-blue-900">
+                    <label class="flex items-center justify-between cursor-pointer group">
+                        <div class="flex items-center gap-4">
+                            <div class="relative">
+                                <InputCheckbox @bind-Value="notificationSettings.EnableEmailNotifications"
+                                               class="sr-only peer" />
+                                <div class="w-14 h-8 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:start-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                    Enable Email Notifications
+                                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </h3>
+                                <p class="text-sm text-gray-600 dark:text-gray-100 mt-1">Master toggle for all email notifications across the platform</p>
+                            </div>
+                        </div>
+                        <span class="@(notificationSettings.EnableEmailNotifications ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800") px-4 py-1.5 rounded-full text-sm font-semibold">
+                            @(notificationSettings.EnableEmailNotifications ? "Enabled" : "Disabled")
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Notification Categories Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <!-- Admin Notifications -->
+                    <div class="bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-700 dark:to-pink-700 rounded-2xl p-6 border border-red-200">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="p-2 bg-red-100 rounded-lg">
+                                <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                                </svg>
+                            </div>
+                            <h4 class="text-base font-semibold text-gray-900">Admin Notifications</h4>
+                        </div>
+                        <div class="space-y-3">
+                            <label class="flex items-start gap-3 p-3 bg-white rounded-xl hover:shadow-sm transition-all cursor-pointer group">
+                                <div class="relative mt-0.5">
+                                    <InputCheckbox @bind-Value="notificationSettings.NotifyAdminOnNewDoctor"
+                                                   disabled="@(!notificationSettings.EnableEmailNotifications)"
+                                                   class="sr-only peer" />
+                                    <div class="w-10 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+                                </div>
+                                <div class="flex-1">
+                                    <span class="text-sm font-medium text-gray-900">New Doctor Registration</span>
+                                    <p class="text-xs text-gray-600 mt-0.5">Alert when doctors complete registration</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Doctor Notifications -->
+                    <div class="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-700 dark:to-cyan-700 rounded-2xl p-6 border border-blue-200">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="p-2 bg-blue-100 rounded-lg">
+                                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                            <h4 class="text-base font-semibold text-gray-900">Doctor Notifications</h4>
+                        </div>
+                        <div class="space-y-3">
+                            <label class="flex items-start gap-3 p-3 bg-white rounded-xl hover:shadow-sm transition-all cursor-pointer group">
+                                <div class="relative mt-0.5">
+                                    <InputCheckbox @bind-Value="notificationSettings.NotifyDoctorOnApproval"
+                                                   disabled="@(!notificationSettings.EnableEmailNotifications)"
+                                                   class="sr-only peer" />
+                                    <div class="w-10 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+                                </div>
+                                <div class="flex-1">
+                                    <span class="text-sm font-medium text-gray-900">Account Approval/Rejection</span>
+                                    <p class="text-xs text-gray-600 mt-0.5">Notify on account status changes</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Security Notifications -->
+                    <div class="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-700 dark:to-indigo-700 rounded-2xl p-6 border border-purple-200">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="p-2 bg-purple-100 rounded-lg">
+                                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                </svg>
+                            </div>
+                            <h4 class="text-base font-semibold text-gray-900">Security Alerts</h4>
+                        </div>
+                        <div class="space-y-3">
+                            <label class="flex items-start gap-3 p-3 bg-white rounded-xl hover:shadow-sm transition-all cursor-pointer group">
+                                <div class="relative mt-0.5">
+                                    <InputCheckbox @bind-Value="notificationSettings.NotifyUserOnLogin"
+                                                   disabled="@(!notificationSettings.EnableEmailNotifications)"
+                                                   class="sr-only peer" />
+                                    <div class="w-10 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+                                </div>
+                                <div class="flex-1">
+                                    <span class="text-sm font-medium text-gray-900">Login Alerts</span>
+                                    <p class="text-xs text-gray-600 mt-0.5">Send alerts on user login</p>
+                                </div>
+                            </label>
+                            <label class="flex items-start gap-3 p-3 bg-white rounded-xl hover:shadow-sm transition-all cursor-pointer group">
+                                <div class="relative mt-0.5">
+                                    <InputCheckbox @bind-Value="notificationSettings.NotifyUserOnPasswordChange"
+                                                   disabled="@(!notificationSettings.EnableEmailNotifications)"
+                                                   class="sr-only peer" />
+                                    <div class="w-10 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+                                </div>
+                                <div class="flex-1">
+                                    <span class="text-sm font-medium text-gray-900">Password Changes</span>
+                                    <p class="text-xs text-gray-600 mt-0.5">Alert on password modifications</p>
+                                </div>
+                            </label>
+                            <label class="flex items-start gap-3 p-3 bg-white rounded-xl hover:shadow-sm transition-all cursor-pointer group">
+                                <div class="relative mt-0.5">
+                                    <InputCheckbox @bind-Value="notificationSettings.NotifyUserOn2FAChange"
+                                                   disabled="@(!notificationSettings.EnableEmailNotifications)"
+                                                   class="sr-only peer" />
+                                    <div class="w-10 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>
+                                </div>
+                                <div class="flex-1">
+                                    <span class="text-sm font-medium text-gray-900">2FA Changes</span>
+                                    <p class="text-xs text-gray-600 mt-0.5">Notify on 2FA enable/disable</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Settings -->
+                @if (showAdvancedSettings)
+                {
+                    <div class="mb-8 p-6 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-700 dark:to-orange-700 rounded-2xl border border-amber-200 animate-slideDown">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="p-2 bg-amber-100 rounded-lg">
+                                <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                            </div>
+                            <h4 class="text-lg font-semibold text-gray-900">Advanced Configuration</h4>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-white p-5 rounded-xl border border-gray-200">
+                                <label class="block text-sm font-semibold text-gray-900 mb-3">Notification Sound</label>
+                                <select class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                                    <option>Default</option>
+                                    <option>Chime</option>
+                                    <option>Bell</option>
+                                    <option>Ping</option>
+                                    <option>Silent</option>
+                                </select>
+                                <p class="mt-2 text-xs text-gray-600">Choose notification sound preference</p>
+                            </div>
+                            <div class="bg-white p-5 rounded-xl border border-gray-200">
+                                <label class="block text-sm font-semibold text-gray-900 mb-3">Auto-Cleanup Period</label>
+                                <div class="relative">
+                                    <input type="number" value="30" min="7" max="365"
+                                           class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+                                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">days</span>
+                                </div>
+                                <p class="mt-2 text-xs text-gray-600">Auto-delete read notifications after specified days</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Action Buttons -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-200 dark:border-gray-900">
+                    <button type="button" @onclick="ResetToDefaults"
+                            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 font-medium">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        <span>Reset to Defaults</span>
+                    </button>
+                    <button type="submit"
+                            disabled="@isLoading"
+                            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:from-primary-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold shadow-lg hover:shadow-xl">
+                        @if (isLoading)
+                        {
+                            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Saving Changes...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <span>Save Changes</span>
+                        }
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Sender Modal -->
+@if (showBulkSenderModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn" @onclick="() => showBulkSenderModal = false">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slideUp" @onclick:stopPropagation="true">
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-5 rounded-t-3xl">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-2xl font-bold text-white flex items-center gap-3">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path>
+                        </svg>
+                        Send Bulk Notification
+                    </h3>
+                    <button @onclick="() => showBulkSenderModal = false"
+                            class="p-2 text-white hover:bg-white hover:bg-opacity-20 rounded-lg transition-all">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-5">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-900 mb-2">Target Audience</label>
+                    <select @bind="bulkTargetRole"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all">
+                        <option value="">All Users</option>
+                        <option value="Admin">Admins Only</option>
+                        <option value="Doctor">Doctors Only</option>
+                        <option value="Patient">Patients Only</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-900 mb-2">Notification Title</label>
+                    <input @bind="bulkTitle" type="text" placeholder="Enter notification title..."
+                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-900 mb-2">Message</label>
+                    <textarea @bind="bulkMessage" rows="5" placeholder="Enter notification message..."
+                              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none transition-all"></textarea>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button @onclick="SendBulkNotification"
+                            disabled="@isSendingBulk"
+                            class="flex-1 py-3 px-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold flex items-center justify-center gap-2 shadow-lg">
+                        @if (isSendingBulk)
+                        {
+                            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Sending...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                            </svg>
+                            <span>Send Notification</span>
+                        }
+                    </button>
+                    <button @onclick="() => showBulkSenderModal = false"
+                            class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all font-semibold">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private UpdateNotificationSettingsInput notificationSettings = new(true, true, true, false, true, true);
+    private bool isLoading = false;
+    private bool isLoadingStats = true;
+    private bool isSendingTest = false;
+    private bool isSendingBulk = false;
+    private bool isExporting = false;
+    private bool isReconnecting = false;
+    private bool showBulkSenderModal = false;
+    private bool showAdvancedSettings = false;
+
+    private int totalNotifications = 0;
+    private int unreadNotifications = 0;
+    private int readRate = 0;
+
+    // Bulk notification fields
+    private string bulkTargetRole = "";
+    private string bulkTitle = "";
+    private string bulkMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+
+        if (!NotificationService.IsConnected)
+        {
+            await Task.Delay(1000);
+        }
+
+        await LoadNotificationStats();
+    }
+
+    private async Task LoadSettings()
+    {
+        try
+        {
+            var systemSettings = await SettingsService.GetSystemSettingsAsync();
+            if (systemSettings != null)
+            {
+                notificationSettings = new UpdateNotificationSettingsInput(
+                    systemSettings.EnableEmailNotifications,
+                    systemSettings.NotifyAdminOnNewDoctor,
+                    systemSettings.NotifyDoctorOnApproval,
+                    systemSettings.NotifyUserOnLogin,
+                    systemSettings.NotifyUserOnPasswordChange,
+                    systemSettings.NotifyUserOn2FAChange
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load settings: {ex.Message}");
+        }
+    }
+
+    private async Task LoadNotificationStats()
+    {
+        isLoadingStats = true;
+        StateHasChanged();
+
+        try
+        {
+            var notifications = await NotificationService.GetNotificationsAsync(new GetNotificationsInput
+            {
+                Skip = 0,
+                Take = 1000
+            });
+
+            if (notifications != null)
+            {
+                totalNotifications = notifications.TotalCount;
+                var readCount = notifications.Notifications.Count(n => n.IsRead);
+                readRate = totalNotifications > 0 ? (readCount * 100 / totalNotifications) : 0;
+            }
+            else
+            {
+                totalNotifications = 0;
+                readRate = 0;
+            }
+
+            unreadNotifications = await NotificationService.GetUnreadCountAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading stats: {ex.Message}");
+            totalNotifications = 0;
+            unreadNotifications = 0;
+            readRate = 0;
+        }
+        finally
+        {
+            isLoadingStats = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SendTestNotification()
+    {
+        isSendingTest = true;
+        try
+        {
+            var query = @"
+            mutation {
+                sendSystemNotification(
+                    title: ""Test Notification 🔔"",
+                    message: ""This is a test notification from the admin panel. If you're seeing this, the notification system is working perfectly! All triggers and real-time updates are functioning correctly."",
+                    targetRole: ""Admin""
+                ) {
+                    success
+                    message
+                }
+            }";
+
+            var response = await GraphQLService.SendQueryAsync<SendSystemNotificationResponse>(query);
+
+            if (response?.SendSystemNotification?.Success == true)
+            {
+                ToastService.ShowSuccess("Test notification sent successfully! Check your notifications bell icon.");
+                await Task.Delay(1000);
+                await LoadNotificationStats();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to send test notification.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isSendingTest = false;
+        }
+    }
+
+    private async Task SendBulkNotification()
+    {
+        if (string.IsNullOrWhiteSpace(bulkTitle) || string.IsNullOrWhiteSpace(bulkMessage))
+        {
+            ToastService.ShowError("Please provide both title and message");
+            return;
+        }
+
+        isSendingBulk = true;
+        try
+        {
+            var targetRole = string.IsNullOrEmpty(bulkTargetRole) ? "null" : $"\"{bulkTargetRole}\"";
+            var escapedTitle = bulkTitle.Replace("\"", "\\\"");
+            var escapedMessage = bulkMessage.Replace("\"", "\\\"");
+            var query = @"
+            mutation {
+                sendSystemNotification(
+                    title: """ + escapedTitle + @""",
+                    message: """ + escapedMessage + @""",
+                    targetRole: " + targetRole + @"
+                ) {
+                    success
+                    message
+                }
+            }";
+
+            var response = await GraphQLService.SendQueryAsync<SendSystemNotificationResponse>(query);
+
+            if (response?.SendSystemNotification?.Success == true)
+            {
+                ToastService.ShowSuccess(response.SendSystemNotification.Message ?? "Bulk notification sent successfully!");
+                showBulkSenderModal = false;
+                bulkTitle = "";
+                bulkMessage = "";
+                bulkTargetRole = "";
+                await Task.Delay(1000);
+                await LoadNotificationStats();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to send bulk notification.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isSendingBulk = false;
+        }
+    }
+
+    private async Task ExportNotificationLogs()
+    {
+        isExporting = true;
+        try
+        {
+            var notifications = await NotificationService.GetNotificationsAsync(new GetNotificationsInput
+            {
+                Skip = 0,
+                Take = 10000
+            });
+
+            if (notifications != null && notifications.Notifications.Any())
+            {
+                var csv = new System.Text.StringBuilder();
+                csv.AppendLine("ID,Title,Message,Type,Category,Priority,IsRead,Created At,Read At");
+
+                foreach (var notif in notifications.Notifications)
+                {
+                    csv.AppendLine($"\"{notif.Id}\",\"{notif.Title}\",\"{notif.Message}\",\"{notif.Type}\",\"{notif.Category}\",\"{notif.Priority}\",\"{notif.IsRead}\",\"{notif.CreatedAt:yyyy-MM-dd HH:mm:ss}\",\"{(notif.ReadAt.HasValue ? notif.ReadAt.Value.ToString("yyyy-MM-dd HH:mm:ss") : "")}\"");
+                }
+
+                var csvContent = csv.ToString();
+                var fileName = $"notifications_export_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+
+                await JSRuntime.InvokeVoidAsync("downloadFile", fileName, csvContent);
+                ToastService.ShowSuccess($"Exported {notifications.Notifications.Count} notifications to {fileName}");
+            }
+            else
+            {
+                ToastService.ShowWarning("No notifications to export");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Export failed: {ex.Message}");
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private void ResetToDefaults()
+    {
+        notificationSettings = new UpdateNotificationSettingsInput(true, true, true, false, true, true);
+        ToastService.ShowInfo("Settings reset to defaults. Click 'Save Changes' to apply.");
+    }
+
+    private async Task HandleSubmit()
+    {
+        isLoading = true;
+
+        try
+        {
+            var result = await SettingsService.UpdateNotificationSettingsAsync(notificationSettings);
+
+            if (result != null && result.Success)
+            {
+                ToastService.ShowSuccess(result.Message ?? "Notification settings saved successfully!");
+            }
+            else
+            {
+                ToastService.ShowError(result?.Message ?? "Failed to save notification settings.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ReconnectSignalR()
+    {
+        isReconnecting = true;
+        StateHasChanged();
+
+        try
+        {
+            var success = await NotificationService.ReconnectAsync();
+
+            if (success)
+            {
+                ToastService.ShowSuccess("SignalR reconnected successfully! Real-time notifications are now active.");
+                await Task.Delay(500);
+                await LoadNotificationStats();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to reconnect SignalR. Please check your authentication and try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Reconnection error: {ex.Message}");
+        }
+        finally
+        {
+            isReconnecting = false;
+            StateHasChanged();
+        }
+    }
+
+    private class SendSystemNotificationResponse
+    {
+        public AdminOperationResultDto? SendSystemNotification { get; set; }
+    }
+
+    private class AdminOperationResultDto
+    {
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+        public string[]? Errors { get; set; }
+    }
+}
+
+<style>
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes slideDown {
+        from {
+            opacity: 0;
+            max-height: 0;
+        }
+        to {
+            opacity: 1;
+            max-height: 1000px;
+        }
+    }
+
+    .animate-fadeIn {
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    .animate-slideUp {
+        animation: slideUp 0.4s ease-out;
+    }
+
+    .animate-slideDown {
+        animation: slideDown 0.4s ease-out;
+    }
+</style>
