@@ -1,0 +1,97 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IDoctorOnboardingService DoctorOnboardingService
+@inject NavigationManager Navigation
+
+@if (isCheckingAccess)
+{
+    <div class="flex items-center justify-center min-h-screen">
+        <div class="text-center">
+            <div class="spinner-border text-primary dark:text-primary" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <p class="mt-2 text-gray-600">Checking access...</p>
+        </div>
+    </div>
+}
+else if (canAccess)
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string CurrentPath { get; set; } = string.Empty;
+
+    private bool isCheckingAccess = true;
+    private bool canAccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAccess();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CheckAccess();
+    }
+
+    private async Task CheckAccess()
+    {
+        isCheckingAccess = true;
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            // If not authenticated, allow navigation (auth pages will handle)
+            if (!user.Identity?.IsAuthenticated ?? true)
+            {
+                canAccess = true;
+                return;
+            }
+
+            // Get user role
+            var role = user.Claims.FirstOrDefault(c => c.Type == "role")?.Value;
+
+            // Only apply guard to doctors
+            if (role != "Doctor")
+            {
+                canAccess = true;
+                return;
+            }
+
+            // Allow access to dashboard always (where onboarding modal shows)
+            if (CurrentPath == "/doctor/dashboard" || CurrentPath == "/")
+            {
+                canAccess = true;
+                return;
+            }
+
+            // Check onboarding status for all other routes
+            var status = await DoctorOnboardingService.GetOnboardingStatusAsync();
+
+            // Only allow navigation if profile is completed AND approved by admin
+            if (status.IsProfileCompleted && status.IsApprovedByAdmin)
+            {
+                canAccess = true;
+            }
+            else
+            {
+                // Redirect to dashboard where onboarding modal will show
+                Navigation.NavigateTo("/doctor/dashboard", forceLoad: false);
+                canAccess = false;
+            }
+        }
+        catch
+        {
+            // On error, allow access to avoid blocking the user
+            canAccess = true;
+        }
+        finally
+        {
+            isCheckingAccess = false;
+        }
+    }
+}

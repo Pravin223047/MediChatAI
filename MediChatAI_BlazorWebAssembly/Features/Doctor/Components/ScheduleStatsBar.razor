@@ -1,0 +1,90 @@
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    @if (IsLoading)
+    {
+        @for (int i = 0; i < 4; i++)
+        {
+            <div class="bg-white/10 backdrop-blur-sm rounded-xl p-4 animate-pulse">
+                <div class="h-4 bg-white/20 rounded w-1/2 mb-2"></div>
+                <div class="h-8 bg-white/20 rounded w-3/4"></div>
+            </div>
+        }
+    }
+    else if (Statistics != null)
+    {
+        <!-- Today's Appointments -->
+        <div class="bg-white/10 backdrop-blur-sm rounded-xl p-4 hover:bg-white/15 transition-all">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-white/80 text-sm font-medium">Today's Appointments</p>
+                    <p class="text-3xl font-bold text-white mt-1">@Statistics.TodayAppointments</p>
+                </div>
+                <div class="p-3 bg-white/20 rounded-lg">
+                    <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completed -->
+        <div class="bg-white/10 backdrop-blur-sm rounded-xl p-4 hover:bg-white/15 transition-all">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-white/80 text-sm font-medium">Completed</p>
+                    <p class="text-3xl font-bold text-white mt-1">@Statistics.CompletedAppointments</p>
+                    <p class="text-white/70 text-xs mt-1">@Statistics.CompletionRate.ToString("F1")% completion rate</p>
+                </div>
+                <div class="p-3 bg-green-500/30 rounded-lg">
+                    <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending -->
+        <div class="bg-white/10 backdrop-blur-sm rounded-xl p-4 hover:bg-white/15 transition-all">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-white/80 text-sm font-medium">Pending</p>
+                    <p class="text-3xl font-bold text-white mt-1">@GetPendingCount()</p>
+                    <p class="text-white/70 text-xs mt-1">Week: @Statistics.WeekAppointments total</p>
+                </div>
+                <div class="p-3 bg-yellow-500/30 rounded-lg">
+                    <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Revenue/Total -->
+        <div class="bg-white/10 backdrop-blur-sm rounded-xl p-4 hover:bg-white/15 transition-all">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-white/80 text-sm font-medium">This Month</p>
+                    <p class="text-3xl font-bold text-white mt-1">@Statistics.MonthAppointments</p>
+                    <p class="text-white/70 text-xs mt-1">@Statistics.AverageAppointmentsPerDay.ToString("F1") avg/day</p>
+                </div>
+                <div class="p-3 bg-blue-500/30 rounded-lg">
+                    <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public AppointmentStatisticsModel? Statistics { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+
+    private int GetPendingCount()
+    {
+        if (Statistics == null) return 0;
+        return Statistics.TotalAppointments - Statistics.CompletedAppointments - Statistics.CancelledAppointments - Statistics.NoShowAppointments;
+    }
+}

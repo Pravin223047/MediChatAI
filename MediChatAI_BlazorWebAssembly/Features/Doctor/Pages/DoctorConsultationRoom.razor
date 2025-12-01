@@ -1,0 +1,430 @@
+@page "/doctor/consultation/{AppointmentId:int}"
+@using MediChatAI_BlazorWebAssembly.Core.Services.Consultation
+@using MediChatAI_BlazorWebAssembly.Core.Services.State
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Services
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using MediChatAI_BlazorWebAssembly.Features.Consultation.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IConsultationRoomService ConsultationRoomService
+@inject IConsultationRecordingService RecordingService
+@inject ConsultationState ConsultationState
+@inject IAppointmentService AppointmentService
+@inject IPatientManagementService PatientService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+<PageTitle>Consultation Room - MediChatAI</PageTitle>
+
+@if (isLoading)
+{
+    <div class="flex items-center justify-center h-screen bg-gray-900">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary-500 mx-auto mb-4"></div>
+            <p class="text-gray-300 text-lg">Loading consultation room...</p>
+        </div>
+    </div>
+}
+else if (hasError)
+{
+    <div class="flex items-center justify-center h-screen bg-gray-900">
+        <div class="bg-red-900/20 border border-red-500 rounded-lg p-8 max-w-md">
+            <div class="flex items-center mb-4">
+                <svg class="w-6 h-6 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <h3 class="text-red-400 font-semibold text-lg">Error Loading Consultation</h3>
+            </div>
+            <p class="text-gray-300 mb-4">@errorMessage</p>
+            <button @onclick="NavigateBack" class="btn btn-secondary w-full">
+                Go Back to Appointments
+            </button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="h-screen flex flex-col bg-gray-900 overflow-hidden">
+        <!-- Header Bar -->
+        <div class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <button @onclick="HandleEndConsultation" class="text-gray-400 hover:text-white transition-colors" title="Back to Appointments">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                </button>
+                <div>
+                    <h1 class="text-white font-semibold text-lg">Consultation with @patientName</h1>
+                    <p class="text-gray-400 text-sm">
+                        @if (ConsultationState.CurrentSession != null)
+                        {
+                            <span class="inline-flex items-center">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                                @ConsultationState.CurrentSession.Status
+                                @if (ConsultationState.CurrentSession.ActualStartTime != null)
+                                {
+                                    <span class="ml-2">• @GetElapsedTime()</span>
+                                }
+                            </span>
+                        }
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                @if (ConsultationState.IsRecording)
+                {
+                    <div class="flex items-center bg-red-900/30 px-3 py-1 rounded-lg">
+                        <span class="w-3 h-3 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+                        <span class="text-red-400 text-sm font-medium">Recording</span>
+                        <span class="text-gray-400 text-sm ml-2">@ConsultationState.RecordingDuration.ToString(@"hh\:mm\:ss")</span>
+                    </div>
+                }
+                <button @onclick="ShowParticipantManager" class="text-gray-400 hover:text-white text-sm flex items-center transition-colors">
+                    <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                    @ConsultationState.GetOnlineParticipantCount() online
+                </button>
+                @if (ConsultationState.CurrentSession?.Status == "WaitingForDoctor" || ConsultationState.CurrentSession?.Status == "Scheduled")
+                {
+                    <button @onclick="StartConsultation" class="btn btn-primary" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <span class="loading loading-spinner loading-sm mr-2"></span>
+                        }
+                        Start Consultation
+                    </button>
+                }
+                else if (ConsultationState.CurrentSession?.Status == "Active")
+                {
+                    <button @onclick="ShowEndConsultationModal" class="btn btn-error" disabled="@isProcessing">
+                        End Consultation
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Main Content: Video + Sidebar -->
+        <div class="flex-1 flex overflow-hidden">
+            <!-- Video Interface (70%) -->
+            <div class="flex-1 lg:w-[70%] relative bg-gray-950">
+                <VideoCallInterface OnEndCall="ShowEndConsultationModal" />
+            </div>
+
+            <!-- Sidebar (30%) -->
+            <div class="w-full lg:w-[30%] bg-gray-800 border-l border-gray-700 flex flex-col">
+                <!-- Tabs -->
+                <div class="flex border-b border-gray-700 bg-gray-800">
+                    <button @onclick="@(() => SetActiveTab("patient"))" class="@GetTabClass("patient")">
+                        Patient
+                    </button>
+                    <button @onclick="@(() => SetActiveTab("chat"))" class="@GetTabClass("chat")">
+                        Chat
+                    </button>
+                    <button @onclick="@(() => SetActiveTab("notes"))" class="@GetTabClass("notes")">
+                        Notes
+                    </button>
+                    <button @onclick="@(() => SetActiveTab("rx"))" class="@GetTabClass("rx")">
+                        Rx
+                    </button>
+                </div>
+
+                <!-- Tab Content -->
+                <div class="flex-1 overflow-y-auto bg-gray-850">
+                    @if (activeTab == "patient")
+                    {
+                        <PatientInfoSidebar PatientId="@patientId" />
+                    }
+                    else if (activeTab == "chat")
+                    {
+                        <InCallChat PartnerId="@patientId" PartnerName="@patientName" />
+                    }
+                    else if (activeTab == "notes")
+                    {
+                        @if (ConsultationState.CurrentSession != null)
+                        {
+                            <ConsultationNotes SessionId="@ConsultationState.CurrentSession.Id" />
+                        }
+                    }
+                    else if (activeTab == "rx")
+                    {
+                        @if (ConsultationState.CurrentSession != null)
+                        {
+                            <InCallPrescriptionWriter PatientId="@patientId"
+                                                      ConsultationSessionId="@ConsultationState.CurrentSession.Id" />
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Participant Manager Modal -->
+@if (showParticipantManager && ConsultationState.CurrentSession != null)
+{
+    <div class="modal modal-open">
+        <ParticipantManager SessionId="@ConsultationState.CurrentSession.Id"
+                            OnClose="@(() => showParticipantManager = false)" />
+        <div class="modal-backdrop" @onclick="@(() => showParticipantManager = false)"></div>
+    </div>
+}
+
+<!-- End Consultation Modal -->
+@if (showEndConsultationModal)
+{
+    <div class="modal modal-open">
+        <div class="modal-box bg-gray-800 border border-gray-700">
+            <h3 class="font-bold text-lg text-white mb-4">End Consultation?</h3>
+            <p class="text-gray-300 mb-6">Are you sure you want to end this consultation?</p>
+            <div class="modal-action">
+                <button @onclick="@(() => showEndConsultationModal = false)" class="btn btn-ghost" disabled="@isProcessing">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmEndConsultation" class="btn btn-error" disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <span class="loading loading-spinner loading-sm mr-2"></span>
+                    }
+                    End Consultation
+                </button>
+            </div>
+        </div>
+        <div class="modal-backdrop" @onclick="@(() => showEndConsultationModal = false)"></div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int AppointmentId { get; set; }
+
+    private bool isLoading = true;
+    private bool hasError = false;
+    private string errorMessage = string.Empty;
+    private bool isProcessing = false;
+    private bool showEndConsultationModal = false;
+    private bool showParticipantManager = false;
+
+    private string activeTab = "patient";
+    private string patientId = string.Empty;
+    private string patientName = "Loading...";
+    private string doctorId = string.Empty;
+
+    private System.Threading.Timer? elapsedTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            ConsultationState.OnStateChanged += StateHasChanged;
+            ConsultationState.OnSessionUpdated += OnSessionUpdated;
+            ConsultationState.OnRecordingStateChanged += OnRecordingStateChanged;
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            doctorId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+
+            await LoadAppointmentAsync();
+            await LoadOrCreateConsultationSession();
+
+            elapsedTimer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(StateHasChanged);
+            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            hasError = true;
+            errorMessage = $"Failed to load consultation room: {ex.Message}";
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadAppointmentAsync()
+    {
+        var appointment = await AppointmentService.GetAppointmentByIdAsync(AppointmentId.ToString());
+        if (appointment == null)
+        {
+            throw new Exception("Appointment not found");
+        }
+
+        patientId = appointment.PatientId ?? string.Empty;
+
+        var patient = await PatientService.GetPatientByIdAsync(patientId);
+        if (patient != null)
+        {
+            patientName = patient.FullName;
+        }
+    }
+
+    private async Task LoadOrCreateConsultationSession()
+    {
+        var existingSession = await ConsultationRoomService.GetActiveConsultationByAppointmentAsync(AppointmentId);
+
+        if (existingSession != null)
+        {
+            ConsultationState.SetCurrentSession(existingSession);
+
+            var participants = await ConsultationRoomService.GetParticipantsAsync(existingSession.Id);
+            if (participants != null)
+            {
+                ConsultationState.SetParticipants(participants);
+            }
+
+            var notes = await ConsultationRoomService.GetSessionNotesAsync(existingSession.Id);
+            if (notes != null)
+            {
+                ConsultationState.SetNotes(notes);
+            }
+        }
+        else
+        {
+            var newSession = await ConsultationRoomService.CreateConsultationSessionAsync(
+                AppointmentId,
+                doctorId,
+                patientId
+            );
+
+            if (newSession != null)
+            {
+                ConsultationState.SetCurrentSession(newSession);
+                ToastService.ShowSuccess("Consultation room created");
+            }
+            else
+            {
+                throw new Exception("Failed to create consultation session");
+            }
+        }
+    }
+
+    private async Task StartConsultation()
+    {
+        if (ConsultationState.CurrentSession == null) return;
+
+        isProcessing = true;
+        try
+        {
+            var updatedSession = await ConsultationRoomService.StartConsultationAsync(ConsultationState.CurrentSession.Id);
+            if (updatedSession != null)
+            {
+                ConsultationState.UpdateSession(updatedSession);
+                ConsultationState.SetConnectionState(true);
+                ToastService.ShowSuccess("Consultation started");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to start consultation: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void ShowEndConsultationModal()
+    {
+        showEndConsultationModal = true;
+    }
+
+    private void ShowParticipantManager()
+    {
+        showParticipantManager = true;
+    }
+
+    private async Task ConfirmEndConsultation()
+    {
+        if (ConsultationState.CurrentSession == null) return;
+
+        isProcessing = true;
+        try
+        {
+            var updatedSession = await ConsultationRoomService.EndConsultationAsync(ConsultationState.CurrentSession.Id);
+            if (updatedSession != null)
+            {
+                ConsultationState.UpdateSession(updatedSession);
+                ConsultationState.SetConnectionState(false);
+                ToastService.ShowSuccess("Consultation ended");
+
+                showEndConsultationModal = false;
+
+                await Task.Delay(1500);
+                Navigation.NavigateTo("/doctor/appointments");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to end consultation: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void HandleEndConsultation()
+    {
+        if (ConsultationState.CurrentSession?.Status == "Active")
+        {
+            ShowEndConsultationModal();
+        }
+        else
+        {
+            NavigateBack();
+        }
+    }
+
+    private void NavigateBack()
+    {
+        Navigation.NavigateTo("/doctor/appointments");
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+    }
+
+    private string GetTabClass(string tabName)
+    {
+        var baseClass = "flex-1 px-4 py-3 text-sm font-medium transition-colors";
+        var activeClass = "text-primary-400 border-b-2 border-primary-400 bg-gray-750";
+        var inactiveClass = "text-gray-400 hover:text-white hover:bg-gray-750";
+
+        return $"{baseClass} {(activeTab == tabName ? activeClass : inactiveClass)}";
+    }
+
+    private string GetElapsedTime()
+    {
+        if (ConsultationState.CurrentSession?.ActualStartTime == null)
+            return "00:00:00";
+
+        var elapsed = DateTime.UtcNow - ConsultationState.CurrentSession.ActualStartTime.Value;
+        return elapsed.ToString(@"hh\:mm\:ss");
+    }
+
+    private void OnSessionUpdated(ConsultationSessionDto session)
+    {
+        StateHasChanged();
+    }
+
+    private void OnRecordingStateChanged(bool isRecording)
+    {
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        ConsultationState.OnStateChanged -= StateHasChanged;
+        ConsultationState.OnSessionUpdated -= OnSessionUpdated;
+        ConsultationState.OnRecordingStateChanged -= OnRecordingStateChanged;
+
+        elapsedTimer?.Dispose();
+
+        ConsultationState.ClearSession();
+    }
+}

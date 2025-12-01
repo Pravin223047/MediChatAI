@@ -1,0 +1,933 @@
+@page "/doctor/reports"
+@using MediChatAI_BlazorWebAssembly.Core.Components.Guards
+@using MediChatAI_BlazorWebAssembly.Core.Services.State
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Services
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Components
+@inject IDoctorReportService ReportService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject AppSettingsState AppSettings
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reports - @AppSettings.Settings.SiteName</PageTitle>
+
+<AuthorizeRouteGuard RequiredRole="Doctor">
+
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <!-- Header with Gradient -->
+    <header class="sticky top-0 z-40 backdrop-blur-md bg-gradient-to-r from-primary to-accent border-b border-white/20 shadow-xl">
+        <div class="px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Reports & Analytics
+                    </h1>
+                    <p class="text-white/90 mt-1">Comprehensive insights and data analysis</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <button @onclick="ToggleFilters"
+                            class="inline-flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg transition-all font-medium">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                        </svg>
+                        Filters
+                    </button>
+
+                    <button @onclick="OpenExportModal"
+                            class="inline-flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg transition-all font-medium">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Export
+                    </button>
+
+                    <button @onclick="PrintReport"
+                            class="inline-flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg transition-all font-medium">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                        </svg>
+                        Print
+                    </button>
+
+                    <button @onclick="RefreshReports"
+                            class="inline-flex items-center px-4 py-2 bg-white text-primary rounded-lg hover:shadow-lg transition-all font-semibold">
+                        <svg class="@(isRefreshing ? "animate-spin" : "") w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="py-8 px-4 sm:px-6 lg:px-8" id="report-content">
+        <!-- Quick Stats Bar -->
+        @if (overviewStats != null)
+        {
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <ReportMetricCard
+                    Title="Total Reports"
+                    Value="@overviewStats.TotalReportsGenerated.ToString()"
+                    IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z&quot;/>"
+                    GradientColors="from-blue-500 to-blue-600"
+                    ShowComparison="false"
+                    FooterText="All time" />
+
+                <ReportMetricCard
+                    Title="This Month"
+                    Value="@overviewStats.ReportsThisMonth.ToString()"
+                    IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z&quot;/>"
+                    GradientColors="from-green-500 to-green-600"
+                    ShowComparison="false"
+                    FooterText="Current month" />
+
+                <ReportMetricCard
+                    Title="Scheduled Reports"
+                    Value="@overviewStats.ScheduledReportsActive.ToString()"
+                    IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z&quot;/>"
+                    GradientColors="from-purple-500 to-purple-600"
+                    ShowComparison="false"
+                    FooterText="Active schedules" />
+
+                <ReportMetricCard
+                    Title="Saved Templates"
+                    Value="@overviewStats.SavedTemplates.ToString()"
+                    IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z&quot;/>"
+                    GradientColors="from-amber-500 to-amber-600"
+                    ShowComparison="false"
+                    FooterText="Custom templates" />
+            </div>
+        }
+
+        <!-- Advanced Filters Panel (Collapsible) -->
+        @if (showFilters)
+        {
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-8 border border-gray-200 dark:border-gray-700 animate-slideDown">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Advanced Filters</h3>
+                    <button @onclick="() => showFilters = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Date Range -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date From</label>
+                        <input type="date" @bind="filterDateFrom" @bind:event="oninput"
+                               class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date To</label>
+                        <input type="date" @bind="filterDateTo" @bind:event="oninput"
+                               class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white" />
+                    </div>
+                    <div class="flex items-end">
+                        <button @onclick="ApplyFilters"
+                                class="w-full px-6 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-lg hover:shadow-lg transition-all font-medium">
+                            Apply Filters
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex items-center gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" @bind="comparisonMode" @bind:event="onchange"
+                               class="w-4 h-4 text-primary bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                        <span class="text-sm text-gray-700 dark:text-gray-300">Enable comparison mode (vs previous period)</span>
+                    </label>
+                </div>
+            </div>
+        }
+
+        <!-- Tab Navigation -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl mb-8 border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="border-b border-gray-200 dark:border-gray-700">
+                <nav class="flex flex-wrap -mb-px overflow-x-auto">
+                    @foreach (var tab in tabs)
+                    {
+                        <button @onclick="() => activeTab = tab.Id"
+                                class="@(activeTab == tab.Id ? "border-primary text-primary" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600") whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="@tab.Icon"/>
+                            </svg>
+                            @tab.Label
+                        </button>
+                    }
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                @if (isLoading)
+                {
+                    <div class="flex items-center justify-center py-12">
+                        <div class="text-center">
+                            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                            <p class="mt-4 text-gray-600 dark:text-gray-400">Loading report data...</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <!-- Patient Reports Tab -->
+                    @if (activeTab == "patients" && patientReports != null)
+                    {
+                        <div class="space-y-6">
+                            <!-- Patient Metrics Grid -->
+                            @if (patientReports.Metrics != null)
+                            {
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <ReportMetricCard
+                                        Title="Active Patients"
+                                        Value="@patientReports.Metrics.TotalActivePatients.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z&quot;/>"
+                                        GradientColors="from-indigo-500 to-indigo-600"
+                                        ShowComparison="true"
+                                        PercentageChange="@patientReports.Metrics.PercentageChange"
+                                        ComparisonPeriod="last period" />
+
+                                    <ReportMetricCard
+                                        Title="New Patients"
+                                        Value="@patientReports.Metrics.NewPatientsThisMonth.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z&quot;/>"
+                                        GradientColors="from-green-500 to-green-600"
+                                        FooterText="This month" />
+
+                                    <ReportMetricCard
+                                        Title="Critical Patients"
+                                        Value="@patientReports.Metrics.CriticalPatients.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z&quot;/>"
+                                        GradientColors="from-red-500 to-red-600"
+                                        FooterText="Require attention" />
+
+                                    <ReportMetricCard
+                                        Title="Follow-ups Due"
+                                        Value="@patientReports.Metrics.FollowUpsDue.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z&quot;/>"
+                                        GradientColors="from-amber-500 to-amber-600"
+                                        FooterText="Pending" />
+                                </div>
+                            }
+
+                            <!-- Charts -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                                <ReportChartCard
+                                    Title="Patient Visit Trends"
+                                    Subtitle="New vs Returning Patients"
+                                    ChartId="patient-visit-trends"
+                                    ChartType="line"
+                                    ChartData="@GetPatientVisitTrendsData()"
+                                    Height="350px"
+                                    ShowDrillDown="true" />
+
+                                <ReportChartCard
+                                    Title="Patient Demographics"
+                                    Subtitle="Age Distribution"
+                                    ChartId="patient-demographics"
+                                    ChartType="doughnut"
+                                    ChartData="@GetPatientDemographicsData()"
+                                    Height="350px" />
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Appointment Analytics Tab -->
+                    @if (activeTab == "appointments" && appointmentReports != null)
+                    {
+                        <div class="space-y-6">
+                            <!-- Appointment Metrics -->
+                            @if (appointmentReports.Metrics != null)
+                            {
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <ReportMetricCard
+                                        Title="Total Appointments"
+                                        Value="@appointmentReports.Metrics.TotalAppointments.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z&quot;/>"
+                                        GradientColors="from-blue-500 to-blue-600"
+                                        ShowComparison="true"
+                                        PercentageChange="@appointmentReports.Metrics.PercentageChange"
+                                        ComparisonPeriod="last period" />
+
+                                    <ReportMetricCard
+                                        Title="Completion Rate"
+                                        Value="@appointmentReports.Metrics.CompletionRate.ToString("F1")"
+                                        Unit="%"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z&quot;/>"
+                                        GradientColors="from-green-500 to-green-600"
+                                        ShowProgress="true"
+                                        ProgressPercentage="@appointmentReports.Metrics.CompletionRate" />
+
+                                    <ReportMetricCard
+                                        Title="Cancellation Rate"
+                                        Value="@appointmentReports.Metrics.CancellationRate.ToString("F1")"
+                                        Unit="%"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z&quot;/>"
+                                        GradientColors="from-amber-500 to-amber-600" />
+
+                                    <ReportMetricCard
+                                        Title="No-Show Rate"
+                                        Value="@appointmentReports.Metrics.NoShowRate.ToString("F1")"
+                                        Unit="%"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z&quot;/>"
+                                        GradientColors="from-red-500 to-red-600" />
+                                </div>
+                            }
+
+                            <!-- Charts -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                                <ReportChartCard
+                                    Title="Appointment Trends"
+                                    Subtitle="Status Over Time"
+                                    ChartId="appointment-trends"
+                                    ChartType="line"
+                                    ChartData="@GetAppointmentTrendsData()"
+                                    Height="350px" />
+
+                                <ReportChartCard
+                                    Title="Appointment Status Breakdown"
+                                    Subtitle="Distribution by Status"
+                                    ChartId="appointment-status"
+                                    ChartType="pie"
+                                    ChartData="@GetAppointmentStatusData()"
+                                    Height="350px" />
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Prescription Reports Tab -->
+                    @if (activeTab == "prescriptions" && prescriptionReports != null)
+                    {
+                        <div class="space-y-6">
+                            <!-- Prescription Metrics -->
+                            @if (prescriptionReports.Metrics != null)
+                            {
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <ReportMetricCard
+                                        Title="Total Prescriptions"
+                                        Value="@prescriptionReports.Metrics.TotalPrescriptions.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z&quot;/>"
+                                        GradientColors="from-purple-500 to-purple-600"
+                                        ShowComparison="true"
+                                        PercentageChange="@prescriptionReports.Metrics.PercentageChange"
+                                        ComparisonPeriod="last period" />
+
+                                    <ReportMetricCard
+                                        Title="This Month"
+                                        Value="@prescriptionReports.Metrics.PrescriptionsThisMonth.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2&quot;/>"
+                                        GradientColors="from-blue-500 to-blue-600"
+                                        FooterText="Current month" />
+
+                                    <ReportMetricCard
+                                        Title="Unique Medications"
+                                        Value="@prescriptionReports.Metrics.UniqueMedications.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10&quot;/>"
+                                        GradientColors="from-teal-500 to-teal-600"
+                                        FooterText="Different medications" />
+
+                                    <ReportMetricCard
+                                        Title="Refill Requests"
+                                        Value="@prescriptionReports.Metrics.RefillRequests.ToString()"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15&quot;/>"
+                                        GradientColors="from-amber-500 to-amber-600"
+                                        FooterText="Pending" />
+                                </div>
+                            }
+
+                            <!-- Charts -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                                <ReportChartCard
+                                    Title="Prescription Trends"
+                                    Subtitle="New Prescriptions vs Refills"
+                                    ChartId="prescription-trends"
+                                    ChartType="bar"
+                                    ChartData="@GetPrescriptionTrendsData()"
+                                    Height="350px" />
+
+                                <ReportChartCard
+                                    Title="Medication Categories"
+                                    Subtitle="Distribution by Category"
+                                    ChartId="medication-categories"
+                                    ChartType="doughnut"
+                                    ChartData="@GetMedicationCategoriesData()"
+                                    Height="350px" />
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Revenue Reports Tab -->
+                    @if (activeTab == "revenue" && revenueReports != null)
+                    {
+                        <div class="space-y-6">
+                            <!-- Revenue Metrics -->
+                            @if (revenueReports.Metrics != null)
+                            {
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <ReportMetricCard
+                                        Title="Total Revenue"
+                                        Value="@revenueReports.Metrics.TotalRevenue.ToString("C0")"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z&quot;/>"
+                                        GradientColors="from-emerald-500 to-emerald-600"
+                                        ShowComparison="true"
+                                        PercentageChange="@revenueReports.Metrics.PercentageChange"
+                                        ComparisonPeriod="last period" />
+
+                                    <ReportMetricCard
+                                        Title="This Month"
+                                        Value="@revenueReports.Metrics.RevenueThisMonth.ToString("C0")"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z&quot;/>"
+                                        GradientColors="from-blue-500 to-blue-600"
+                                        FooterText="Current month" />
+
+                                    <ReportMetricCard
+                                        Title="Avg Per Day"
+                                        Value="@revenueReports.Metrics.AverageDailyRevenue.ToString("C0")"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z&quot;/>"
+                                        GradientColors="from-purple-500 to-purple-600"
+                                        FooterText="Daily average" />
+
+                                    <ReportMetricCard
+                                        Title="Pending Payments"
+                                        Value="@revenueReports.Metrics.PendingPayments.ToString("C0")"
+                                        IconPath="<path stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot; d=&quot;M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z&quot;/>"
+                                        GradientColors="from-amber-500 to-amber-600"
+                                        FooterText="Outstanding" />
+                                </div>
+                            }
+
+                            <!-- Charts -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                                <ReportChartCard
+                                    Title="Revenue Trends"
+                                    Subtitle="Daily Revenue Over Time"
+                                    ChartId="revenue-trends"
+                                    ChartType="line"
+                                    ChartData="@GetRevenueTrendsData()"
+                                    Height="350px" />
+
+                                <ReportChartCard
+                                    Title="Revenue by Service"
+                                    Subtitle="Distribution by Service Type"
+                                    ChartId="revenue-by-service"
+                                    ChartType="bar"
+                                    ChartData="@GetRevenueByServiceData()"
+                                    Height="350px" />
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Custom Report Builder Tab -->
+                    @if (activeTab == "custom")
+                    {
+                        <CustomReportBuilder
+                            OnReportGenerated="HandleCustomReportGenerated"
+                            OnTemplateSaved="HandleTemplateSaved" />
+                    }
+
+                    <!-- Scheduled Reports Tab -->
+                    @if (activeTab == "scheduled")
+                    {
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <div>
+                                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Scheduled Reports</h3>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Manage automated report generation</p>
+                                </div>
+                                <button @onclick="OpenScheduleModal"
+                                        class="px-6 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-lg hover:shadow-lg transition-all font-medium flex items-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    New Schedule
+                                </button>
+                            </div>
+
+                            @if (scheduledReports.Any())
+                            {
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    @foreach (var schedule in scheduledReports)
+                                    {
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
+                                            <div class="flex items-start justify-between mb-3">
+                                                <div class="flex-1">
+                                                    <h4 class="font-semibold text-gray-900 dark:text-white">@schedule.ReportName</h4>
+                                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">@schedule.ReportType</p>
+                                                </div>
+                                                <span class="@(schedule.IsActive ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300") px-2 py-1 rounded-full text-xs font-medium">
+                                                    @(schedule.IsActive ? "Active" : "Inactive")
+                                                </span>
+                                            </div>
+
+                                            <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                                                <div class="flex items-center gap-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                    </svg>
+                                                    @schedule.Frequency
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                                    </svg>
+                                                    Next: @schedule.NextRunDate.ToString("MMM dd, yyyy")
+                                                </div>
+                                            </div>
+
+                                            <div class="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                                <button @onclick="() => EditSchedule(schedule)"
+                                                        class="flex-1 px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium">
+                                                    Edit
+                                                </button>
+                                                <button @onclick="() => DeleteSchedule(schedule.Id)"
+                                                        class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-center py-12">
+                                    <svg class="w-16 h-16 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    <p class="mt-4 text-gray-600 dark:text-gray-400">No scheduled reports yet</p>
+                                    <button @onclick="OpenScheduleModal"
+                                            class="mt-4 px-6 py-2 bg-primary text-white rounded-lg hover:shadow-lg transition-all font-medium">
+                                        Create Your First Schedule
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Modals -->
+<ReportExportModal
+    IsOpen="@showExportModal"
+    ReportType="@activeTab"
+    OnClose="() => showExportModal = false"
+    OnExportComplete="HandleExportComplete" />
+
+<ScheduledReportModal
+    IsOpen="@showScheduleModal"
+    Report="@currentSchedule"
+    OnClose="() => showScheduleModal = false"
+    OnSave="HandleScheduleSave" />
+
+</AuthorizeRouteGuard>
+
+@code {
+    // Tabs configuration
+    private List<TabItem> tabs = new()
+    {
+        new TabItem { Id = "patients", Label = "Patient Reports", Icon = "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
+        new TabItem { Id = "appointments", Label = "Appointments", Icon = "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
+        new TabItem { Id = "prescriptions", Label = "Prescriptions", Icon = "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+        new TabItem { Id = "revenue", Label = "Revenue", Icon = "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+        new TabItem { Id = "custom", Label = "Custom Builder", Icon = "M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" },
+        new TabItem { Id = "scheduled", Label = "Scheduled", Icon = "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" }
+    };
+
+    private string activeTab = "patients";
+    private bool isLoading = false;
+    private bool isRefreshing = false;
+    private bool showFilters = false;
+    private bool comparisonMode = false;
+    private bool showExportModal = false;
+    private bool showScheduleModal = false;
+
+    // Filter states
+    private DateTime filterDateFrom = DateTime.Now.AddMonths(-1);
+    private DateTime filterDateTo = DateTime.Now;
+
+    // Data states
+    private ReportOverviewStats? overviewStats;
+    private PatientReportData? patientReports;
+    private AppointmentReportData? appointmentReports;
+    private PrescriptionReportData? prescriptionReports;
+    private RevenueReportData? revenueReports;
+    private List<ScheduledReport> scheduledReports = new();
+    private ScheduledReport currentSchedule = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllReports();
+    }
+
+    private async Task LoadAllReports()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            overviewStats = await ReportService.GetReportOverviewAsync();
+            await LoadActiveTabData();
+            scheduledReports = await ReportService.GetScheduledReportsAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load report data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadActiveTabData()
+    {
+        try
+        {
+            switch (activeTab)
+            {
+                case "patients":
+                    patientReports = await ReportService.GetPatientReportsAsync(filterDateFrom, filterDateTo);
+                    break;
+                case "appointments":
+                    appointmentReports = await ReportService.GetAppointmentAnalyticsAsync(filterDateFrom, filterDateTo);
+                    break;
+                case "prescriptions":
+                    prescriptionReports = await ReportService.GetPrescriptionReportsAsync(filterDateFrom, filterDateTo);
+                    break;
+                case "revenue":
+                    revenueReports = await ReportService.GetRevenueReportsAsync(filterDateFrom, filterDateTo);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading {activeTab} data: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshReports()
+    {
+        isRefreshing = true;
+        await LoadAllReports();
+        await Task.Delay(500);
+        isRefreshing = false;
+        ToastService.ShowSuccess("Reports refreshed successfully");
+    }
+
+    private void ToggleFilters()
+    {
+        showFilters = !showFilters;
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadActiveTabData();
+        ToastService.ShowSuccess("Filters applied successfully");
+    }
+
+    private void OpenExportModal()
+    {
+        showExportModal = true;
+    }
+
+    private void OpenScheduleModal()
+    {
+        currentSchedule = new ScheduledReport();
+        showScheduleModal = true;
+    }
+
+    private void EditSchedule(ScheduledReport schedule)
+    {
+        currentSchedule = schedule;
+        showScheduleModal = true;
+    }
+
+    private async Task DeleteSchedule(string id)
+    {
+        var success = await ReportService.DeleteScheduledReportAsync(id);
+        if (success)
+        {
+            scheduledReports.RemoveAll(s => s.Id == id);
+            ToastService.ShowSuccess("Scheduled report deleted");
+        }
+    }
+
+    private async Task HandleScheduleSave(ScheduledReport schedule)
+    {
+        bool success;
+        if (string.IsNullOrEmpty(schedule.Id) || !scheduledReports.Any(s => s.Id == schedule.Id))
+        {
+            success = await ReportService.CreateScheduledReportAsync(schedule);
+            if (success) scheduledReports.Add(schedule);
+        }
+        else
+        {
+            success = await ReportService.UpdateScheduledReportAsync(schedule);
+            if (success)
+            {
+                var index = scheduledReports.FindIndex(s => s.Id == schedule.Id);
+                if (index >= 0) scheduledReports[index] = schedule;
+            }
+        }
+
+        if (success)
+        {
+            ToastService.ShowSuccess("Scheduled report saved successfully");
+        }
+    }
+
+    private async Task HandleCustomReportGenerated(CustomReportConfiguration config)
+    {
+        ToastService.ShowSuccess($"Custom report '{config.ReportName}' generated successfully");
+        // Optionally load the generated report data
+    }
+
+    private async Task HandleTemplateSaved(CustomReportConfiguration config)
+    {
+        var template = new ReportTemplate
+        {
+            TemplateName = config.ReportName,
+            Description = $"{config.ReportType} template",
+            ReportType = config.ReportType,
+            SelectedMetrics = config.SelectedMetrics
+        };
+
+        var success = await ReportService.SaveReportTemplateAsync(template);
+        if (success)
+        {
+            ToastService.ShowSuccess("Report template saved successfully");
+        }
+    }
+
+    private async Task HandleExportComplete(string format)
+    {
+        ToastService.ShowSuccess($"Report exported as {format} successfully");
+    }
+
+    private async Task PrintReport()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    // Chart data generation methods
+    private object? GetPatientVisitTrendsData()
+    {
+        if (patientReports?.VisitTrends == null || !patientReports.VisitTrends.Any())
+            return null;
+
+        return new
+        {
+            labels = patientReports.VisitTrends.Select(t => t.Date).ToArray(),
+            datasets = new[]
+            {
+                new {
+                    label = "New Patients",
+                    data = patientReports.VisitTrends.Select(t => t.NewPatients).ToArray(),
+                    borderColor = "rgb(99, 102, 241)",
+                    backgroundColor = "rgba(99, 102, 241, 0.1)",
+                    tension = 0.4
+                },
+                new {
+                    label = "Returning Patients",
+                    data = patientReports.VisitTrends.Select(t => t.ReturningPatients).ToArray(),
+                    borderColor = "rgb(34, 197, 94)",
+                    backgroundColor = "rgba(34, 197, 94, 0.1)",
+                    tension = 0.4
+                }
+            }
+        };
+    }
+
+    private object? GetPatientDemographicsData()
+    {
+        if (patientReports?.Demographics?.AgeDistribution == null)
+            return null;
+
+        return new
+        {
+            labels = patientReports.Demographics.AgeDistribution.Keys.ToArray(),
+            datasets = new[]
+            {
+                new {
+                    data = patientReports.Demographics.AgeDistribution.Values.ToArray(),
+                    backgroundColor = new[] {
+                        "rgba(99, 102, 241, 0.8)",
+                        "rgba(34, 197, 94, 0.8)",
+                        "rgba(251, 191, 36, 0.8)",
+                        "rgba(239, 68, 68, 0.8)",
+                        "rgba(139, 92, 246, 0.8)"
+                    }
+                }
+            }
+        };
+    }
+
+    private object? GetAppointmentTrendsData()
+    {
+        if (appointmentReports?.Trends == null || !appointmentReports.Trends.Any())
+            return null;
+
+        return new
+        {
+            labels = appointmentReports.Trends.Select(t => t.Date).ToArray(),
+            datasets = new[]
+            {
+                new {
+                    label = "Completed",
+                    data = appointmentReports.Trends.Select(t => t.Completed).ToArray(),
+                    borderColor = "rgb(34, 197, 94)",
+                    backgroundColor = "rgba(34, 197, 94, 0.1)",
+                    tension = 0.4
+                },
+                new {
+                    label = "Cancelled",
+                    data = appointmentReports.Trends.Select(t => t.Cancelled).ToArray(),
+                    borderColor = "rgb(251, 191, 36)",
+                    backgroundColor = "rgba(251, 191, 36, 0.1)",
+                    tension = 0.4
+                },
+                new {
+                    label = "No Show",
+                    data = appointmentReports.Trends.Select(t => t.NoShow).ToArray(),
+                    borderColor = "rgb(239, 68, 68)",
+                    backgroundColor = "rgba(239, 68, 68, 0.1)",
+                    tension = 0.4
+                }
+            }
+        };
+    }
+
+    private object? GetAppointmentStatusData()
+    {
+        if (appointmentReports?.StatusBreakdown == null)
+            return null;
+
+        return new
+        {
+            labels = appointmentReports.StatusBreakdown.Keys.ToArray(),
+            datasets = new[]
+            {
+                new {
+                    data = appointmentReports.StatusBreakdown.Values.ToArray(),
+                    backgroundColor = new[] {
+                        "rgba(34, 197, 94, 0.8)",
+                        "rgba(251, 191, 36, 0.8)",
+                        "rgba(239, 68, 68, 0.8)",
+                        "rgba(99, 102, 241, 0.8)"
+                    }
+                }
+            }
+        };
+    }
+
+    private object? GetPrescriptionTrendsData()
+    {
+        if (prescriptionReports?.Trends == null || !prescriptionReports.Trends.Any())
+            return null;
+
+        return new
+        {
+            labels = prescriptionReports.Trends.Select(t => t.Date).ToArray(),
+            datasets = new[]
+            {
+                new {
+                    label = "New Prescriptions",
+                    data = prescriptionReports.Trends.Select(t => t.NewPrescriptions).ToArray(),
+                    backgroundColor = "rgba(139, 92, 246, 0.8)"
+                },
+                new {
+                    label = "Refills",
+                    data = prescriptionReports.Trends.Select(t => t.Refills).ToArray(),
+                    backgroundColor = "rgba(99, 102, 241, 0.8)"
+                }
+            }
+        };
+    }
+
+    private object? GetMedicationCategoriesData()
+    {
+        if (prescriptionReports?.MedicationBreakdown == null || !prescriptionReports.MedicationBreakdown.Any())
+            return null;
+
+        return new
+        {
+            labels = prescriptionReports.MedicationBreakdown.Select(m => m.Category).ToArray(),
+            datasets = new[]
+            {
+                new {
+                    data = prescriptionReports.MedicationBreakdown.Select(m => m.Count).ToArray(),
+                    backgroundColor = new[] {
+                        "rgba(139, 92, 246, 0.8)",
+                        "rgba(99, 102, 241, 0.8)",
+                        "rgba(59, 130, 246, 0.8)",
+                        "rgba(34, 197, 94, 0.8)",
+                        "rgba(251, 191, 36, 0.8)"
+                    }
+                }
+            }
+        };
+    }
+
+    private object? GetRevenueTrendsData()
+    {
+        if (revenueReports?.Trends == null || !revenueReports.Trends.Any())
+            return null;
+
+        return new
+        {
+            labels = revenueReports.Trends.Select(t => t.Date).ToArray(),
+            datasets = new[]
+            {
+                new {
+                    label = "Revenue",
+                    data = revenueReports.Trends.Select(t => (double)t.Amount).ToArray(),
+                    borderColor = "rgb(16, 185, 129)",
+                    backgroundColor = "rgba(16, 185, 129, 0.1)",
+                    tension = 0.4,
+                    fill = true
+                }
+            }
+        };
+    }
+
+    private object? GetRevenueByServiceData()
+    {
+        if (revenueReports?.RevenueByService == null || !revenueReports.RevenueByService.Any())
+            return null;
+
+        return new
+        {
+            labels = revenueReports.RevenueByService.Keys.ToArray(),
+            datasets = new[]
+            {
+                new {
+                    label = "Revenue",
+                    data = revenueReports.RevenueByService.Values.Select(v => (double)v).ToArray(),
+                    backgroundColor = "rgba(16, 185, 129, 0.8)"
+                }
+            }
+        };
+    }
+
+    private class TabItem
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public string Icon { get; set; } = string.Empty;
+    }
+}

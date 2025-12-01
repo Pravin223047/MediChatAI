@@ -1,0 +1,147 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.GraphQL
+@inject IGraphQLService GraphQLService
+@inject IToastService ToastService
+
+<button @onclick="FixMidnightAppointments"
+        class="flex items-center space-x-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled="@isFixing">
+    @if (isFixing)
+    {
+        <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Fixing...</span>
+    }
+    else
+    {
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span>Fix Midnight Appointments</span>
+    }
+</button>
+
+@if (!string.IsNullOrEmpty(resultMessage))
+{
+    <div class="mt-4 p-4 rounded-lg @(isSuccess ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800")">
+        <div class="flex items-start">
+            @if (isSuccess)
+            {
+                <svg class="w-6 h-6 text-green-600 dark:text-green-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            }
+            else
+            {
+                <svg class="w-6 h-6 text-red-600 dark:text-red-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            }
+            <div>
+                <p class="font-semibold @(isSuccess ? "text-green-800 dark:text-green-200" : "text-red-800 dark:text-red-200")">
+                    @(isSuccess ? "Success!" : "Error")
+                </p>
+                <p class="text-sm @(isSuccess ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300") mt-1">
+                    @resultMessage
+                </p>
+                @if (fixedAppointmentIds.Any())
+                {
+                    <p class="text-xs @(isSuccess ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400") mt-2">
+                        Fixed Appointment IDs: @string.Join(", ", fixedAppointmentIds)
+                    </p>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnAppointmentsFixed { get; set; }
+
+    private bool isFixing = false;
+    private string resultMessage = string.Empty;
+    private bool isSuccess = false;
+    private List<int> fixedAppointmentIds = new();
+
+    private async Task FixMidnightAppointments()
+    {
+        isFixing = true;
+        resultMessage = string.Empty;
+        isSuccess = false;
+        fixedAppointmentIds.Clear();
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine("🔧 Calling FixMidnightAppointmentsAsync mutation...");
+
+            var mutation = @"
+                mutation {
+                    fixMidnightAppointments {
+                        success
+                        message
+                        appointmentsFixed
+                        fixedAppointmentIds
+                    }
+                }";
+
+            var response = await GraphQLService.SendQueryAsync<FixMidnightAppointmentsResponse>(mutation);
+
+            if (response?.FixMidnightAppointments != null)
+            {
+                var result = response.FixMidnightAppointments;
+                isSuccess = result.Success;
+                resultMessage = result.Message;
+                fixedAppointmentIds = result.FixedAppointmentIds ?? new List<int>();
+
+                Console.WriteLine($"✅ Fix completed: {result.Message}");
+                Console.WriteLine($"   Appointments fixed: {result.AppointmentsFixed}");
+                Console.WriteLine($"   IDs: {string.Join(", ", fixedAppointmentIds)}");
+
+                if (isSuccess)
+                {
+                    ToastService.ShowSuccess($"Fixed {result.AppointmentsFixed} appointment(s)!");
+                    await OnAppointmentsFixed.InvokeAsync();
+                }
+                else
+                {
+                    ToastService.ShowError(result.Message);
+                }
+            }
+            else
+            {
+                isSuccess = false;
+                resultMessage = "No response from server";
+                ToastService.ShowError("Failed to fix appointments");
+                Console.WriteLine("❌ No response from FixMidnightAppointments mutation");
+            }
+        }
+        catch (Exception ex)
+        {
+            isSuccess = false;
+            resultMessage = $"Error: {ex.Message}";
+            ToastService.ShowError($"Error: {ex.Message}");
+            Console.WriteLine($"❌ Exception: {ex.Message}");
+            Console.WriteLine($"   Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            isFixing = false;
+            StateHasChanged();
+        }
+    }
+
+    private class FixMidnightAppointmentsResponse
+    {
+        public FixMidnightAppointmentsResult? FixMidnightAppointments { get; set; }
+    }
+
+    private class FixMidnightAppointmentsResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public int AppointmentsFixed { get; set; }
+        public List<int>? FixedAppointmentIds { get; set; }
+    }
+}

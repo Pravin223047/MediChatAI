@@ -1,0 +1,171 @@
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+
+<div class="@GetCardClass() mb-1 p-2 rounded-lg cursor-move hover:shadow-md transition-all group"
+     draggable="true"
+     @ondragstart="HandleDragStart"
+     @ondragstart:preventDefault="false"
+     @ondragend="HandleDragEnd"
+     @onclick="HandleClick"
+     @onclick:stopPropagation="isDragging">
+
+    <div class="flex items-start justify-between">
+        <div class="flex-1 min-w-0">
+            <!-- Patient Name -->
+            <p class="text-xs font-semibold truncate @GetTextClass()">
+                @Appointment.PatientName
+            </p>
+
+            <!-- Time Range -->
+            <p class="text-xs truncate @GetSecondaryTextClass()">
+                @FormatTime(Appointment.StartTime) - @FormatTime(Appointment.EndTime)
+            </p>
+
+            <!-- Reason -->
+            @if (!string.IsNullOrEmpty(Appointment.Reason))
+            {
+                <p class="text-xs truncate @GetSecondaryTextClass()">
+                    @Appointment.Reason
+                </p>
+            }
+        </div>
+
+        <!-- Status Badge & Type Icon -->
+        <div class="ml-2 flex flex-col items-end space-y-1">
+            <span class="@GetStatusBadgeClass() inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium whitespace-nowrap">
+                @GetStatusDisplay()
+            </span>
+
+            @if (Appointment.IsVirtual)
+            {
+                <svg class="w-3 h-3 @GetIconClass()" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Virtual Appointment">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+            }
+            else if (!string.IsNullOrEmpty(Appointment.RoomNumber))
+            {
+                <span class="text-xs font-medium @GetIconClass()" title="Room Number">
+                    #{Appointment.RoomNumber}
+                </span>
+            }
+        </div>
+    </div>
+
+    <!-- Drag indicator (visible on hover) -->
+    <div class="mt-1 pt-1 border-t border-white/20 dark:border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
+        <p class="text-xs @GetSecondaryTextClass() text-center">
+            <svg class="w-3 h-3 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
+            </svg>
+            Drag to reschedule
+        </p>
+    </div>
+</div>
+
+@code {
+    [Parameter] public AppointmentModel Appointment { get; set; } = new();
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public EventCallback OnDragStart { get; set; }
+
+    private bool isDragging = false;
+
+    private async Task HandleDragStart()
+    {
+        isDragging = true;
+        await OnDragStart.InvokeAsync();
+    }
+
+    private void HandleDragEnd()
+    {
+        isDragging = false;
+    }
+
+    private async Task HandleClick()
+    {
+        if (!isDragging)
+        {
+            await OnClick.InvokeAsync();
+        }
+    }
+
+    private string GetCardClass()
+    {
+        return Appointment.Status.ToLower() switch
+        {
+            "scheduled" or "confirmed" => "bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/40 dark:to-blue-800/30 border border-blue-300 dark:border-blue-700",
+            "completed" => "bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/40 dark:to-green-800/30 border border-green-300 dark:border-green-700",
+            "cancelled" => "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/40 dark:to-gray-700/30 border border-gray-300 dark:border-gray-600",
+            "in-progress" or "inprogress" => "bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/40 dark:to-purple-800/30 border border-purple-300 dark:border-purple-700",
+            _ => "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/40 dark:to-gray-700/30 border border-gray-300 dark:border-gray-600"
+        };
+    }
+
+    private string GetTextClass()
+    {
+        return Appointment.Status.ToLower() switch
+        {
+            "scheduled" or "confirmed" => "text-blue-900 dark:text-blue-200",
+            "completed" => "text-green-900 dark:text-green-200",
+            "cancelled" => "text-gray-600 dark:text-gray-400 line-through",
+            "in-progress" or "inprogress" => "text-purple-900 dark:text-purple-200",
+            _ => "text-gray-900 dark:text-gray-200"
+        };
+    }
+
+    private string GetSecondaryTextClass()
+    {
+        return Appointment.Status.ToLower() switch
+        {
+            "scheduled" or "confirmed" => "text-blue-700 dark:text-blue-400",
+            "completed" => "text-green-700 dark:text-green-400",
+            "cancelled" => "text-gray-500 dark:text-gray-500",
+            "in-progress" or "inprogress" => "text-purple-700 dark:text-purple-400",
+            _ => "text-gray-700 dark:text-gray-400"
+        };
+    }
+
+    private string GetIconClass()
+    {
+        return Appointment.Status.ToLower() switch
+        {
+            "scheduled" or "confirmed" => "text-blue-600 dark:text-blue-400",
+            "completed" => "text-green-600 dark:text-green-400",
+            "cancelled" => "text-gray-500 dark:text-gray-500",
+            "in-progress" or "inprogress" => "text-purple-600 dark:text-purple-400",
+            _ => "text-gray-600 dark:text-gray-400"
+        };
+    }
+
+    private string GetStatusBadgeClass()
+    {
+        return Appointment.Status.ToLower() switch
+        {
+            "scheduled" => "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300",
+            "confirmed" => "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300",
+            "completed" => "bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300",
+            "cancelled" => "bg-gray-100 dark:bg-gray-800/40 text-gray-600 dark:text-gray-400",
+            "in-progress" or "inprogress" => "bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300",
+            "no-show" or "noshow" => "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300",
+            _ => "bg-gray-100 dark:bg-gray-800/40 text-gray-600 dark:text-gray-400"
+        };
+    }
+
+    private string GetStatusDisplay()
+    {
+        return Appointment.Status.ToLower() switch
+        {
+            "scheduled" => "Scheduled",
+            "confirmed" => "Confirmed",
+            "completed" => "Completed",
+            "cancelled" => "Cancelled",
+            "in-progress" or "inprogress" => "In Progress",
+            "no-show" or "noshow" => "No Show",
+            _ => Appointment.Status
+        };
+    }
+
+    private string FormatTime(TimeSpan time)
+    {
+        var dateTime = DateTime.Today.Add(time);
+        return dateTime.ToString("h:mm tt");
+    }
+}

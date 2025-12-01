@@ -1,0 +1,1093 @@
+@page "/doctor/dashboard"
+@using Microsoft.AspNetCore.Components.Authorization
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Components
+@inject IDoctorOnboardingService DoctorOnboardingService
+@inject IDoctorDashboardService DashboardService
+@inject AppSettingsState AppSettings
+
+<PageTitle>Doctor Dashboard - @AppSettings.Settings.SiteName</PageTitle>
+
+<AuthorizeRouteGuard RequiredRole="Doctor">
+
+@if (isLoading)
+{
+    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div class="text-center">
+            <div class="relative mb-6">
+                <div class="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto"></div>
+                <div class="absolute inset-0 animate-ping rounded-full h-16 w-16 border border-blue-400 opacity-20 mx-auto"></div>
+            </div>
+            <p class="mt-3 text-gray-600 dark:text-gray-400 font-medium">Loading dashboard...</p>
+        </div>
+    </div>
+}
+else if (onboardingStatus != null && !onboardingStatus.IsProfileCompleted)
+{
+    <div class="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="bg-white p-8 rounded-lg shadow-lg max-w-md mx-auto">
+                <i class="fas fa-user-md text-blue-500 text-6xl mb-4"></i>
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Complete Your Profile</h2>
+                <p class="text-gray-600 mb-6">
+                    Welcome to @AppSettings.Settings.SiteName! To access your dashboard, please complete your doctor profile.
+                </p>
+                <button class="inline-flex items-center px-8 py-4 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:shadow-lg transition-all font-semibold text-lg" @onclick="ShowOnboardingModal">
+                    <i class="fas fa-user-edit mr-2"></i> Complete Profile
+                </button>
+            </div>
+        </div>
+    </div>
+}
+else if (onboardingStatus != null && !onboardingStatus.IsApprovedByAdmin)
+{
+    <div class="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="bg-white p-8 rounded-lg shadow-lg max-w-full w-full mx-auto">
+                @if (onboardingStatus.Status == "Rejected")
+                {
+                    <i class="fas fa-times-circle text-red-500 text-6xl mb-4"></i>
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Application Rejected</h2>
+                    <p class="text-gray-600 mb-4">
+                        Your doctor profile application has been rejected by the admin.
+                    </p>
+                    @if (!string.IsNullOrEmpty(onboardingStatus.AdminRejectionReason))
+                    {
+                        <div class="bg-red-50 dark:bg-red-900 dark:bg-opacity-20 border-2 border-red-200 dark:border-red-700 rounded-xl p-4 text-left mb-4">
+                            <p class="text-sm text-red-800 dark:text-red-300"><strong class="font-bold">Reason:</strong> @onboardingStatus.AdminRejectionReason</p>
+                        </div>
+                    }
+                    <p class="text-gray-600 mb-6">
+                        Please contact support or resubmit your application with the required corrections.
+                    </p>
+                    <button class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:shadow-lg transition-all font-semibold" @onclick="ShowOnboardingModal">
+                        <i class="fas fa-redo mr-2"></i> Resubmit Profile
+                    </button>
+                }
+                else
+                {
+                    <!-- Modern Pending Approval Screen -->
+                    <div class="min-h-screen w-full bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
+                        <div class="w-full">
+
+                            <!-- Header Section with Animation -->
+                            <div class="text-center mb-12">
+                                <div class="relative inline-block mb-8">
+                                    <div class="absolute inset-0 bg-gradient-to-r from-amber-400 to-orange-500 opacity-20 rounded-full animate-ping"></div>
+                                    <div class="absolute inset-0 bg-gradient-to-r from-primary to-accent opacity-10 rounded-full animate-pulse"></div>
+                                    <div class="relative bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 dark:from-amber-500 dark:via-orange-600 dark:to-red-600 rounded-full p-10 shadow-2xl transform hover:scale-105 transition-transform duration-300">
+                                        <i class="fas fa-hourglass-half text-white text-7xl animate-bounce"></i>
+                                    </div>
+                                </div>
+                                <h1 class="text-5xl font-extrabold bg-gradient-to-r from-gray-900 via-primary to-accent dark:from-white dark:via-primary dark:to-accent bg-clip-text text-transparent mb-4">
+                                    Application Under Review
+                                </h1>
+                                <p class="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto leading-relaxed">
+                                    Your profile is being carefully evaluated by our medical verification team
+                                </p>
+                            </div>
+
+                            <!-- Progress Timeline -->
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-10 mb-10 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                                <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-10 text-center">Verification Progress</h2>
+                                <div class="relative px-8">
+                                    <div class="absolute top-6 left-0 right-0 h-1 bg-gradient-to-r from-green-500 via-primary to-gray-300 dark:from-green-600 dark:via-primary dark:to-gray-600" style="margin-left: 3rem; margin-right: 3rem;"></div>
+                                    <div class="relative grid grid-cols-1 md:grid-cols-4 gap-8">
+                                        <div class="flex flex-col items-center group">
+                                            <div class="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-2xl ring-4 ring-white dark:ring-gray-800 transform transition-transform group-hover:scale-110">
+                                                <i class="fas fa-check text-2xl"></i>
+                                            </div>
+                                            <span class="mt-4 text-base font-bold text-green-600 dark:text-green-400">Submitted</span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400 mt-1">✓ Completed</span>
+                                        </div>
+                                        <div class="flex flex-col items-center group">
+                                            <div class="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white shadow-2xl ring-4 ring-white dark:ring-gray-800 animate-pulse transform transition-transform group-hover:scale-110">
+                                                <i class="fas fa-robot text-2xl"></i>
+                                            </div>
+                                            <span class="mt-4 text-base font-bold text-primary dark:text-blue-400">AI Verification</span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400 mt-1">⏳ Processing</span>
+                                        </div>
+                                        <div class="flex flex-col items-center group">
+                                            <div class="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-2xl ring-4 ring-white dark:ring-gray-800 animate-pulse transform transition-transform group-hover:scale-110">
+                                                <i class="fas fa-user-shield text-2xl"></i>
+                                            </div>
+                                            <span class="mt-4 text-base font-bold text-amber-600 dark:text-amber-400">Admin Review</span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400 mt-1">⏳ In Progress</span>
+                                        </div>
+                                        <div class="flex flex-col items-center group">
+                                            <div class="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300 shadow-lg ring-4 ring-white dark:ring-gray-800 transform transition-transform group-hover:scale-110">
+                                                <i class="fas fa-flag-checkered text-2xl"></i>
+                                            </div>
+                                            <span class="mt-4 text-base font-bold text-gray-500 dark:text-gray-400">Approved</span>
+                                            <span class="text-sm text-gray-600 dark:text-gray-400 mt-1">⏱ Pending</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Verification Status Section -->
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-10 mb-10 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                                <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-10 text-center">Document Verification Status</h2>
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+                                    <!-- Aadhaar Card -->
+                                    <div class="border-3 @(onboardingStatus.IsAadhaarVerified ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20" : "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/20") rounded-2xl p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <div class="flex items-center space-x-4">
+                                                <div class="@(onboardingStatus.IsAadhaarVerified ? "bg-gradient-to-br from-green-500 to-emerald-600" : "bg-gradient-to-br from-red-500 to-rose-600") rounded-xl p-3 shadow-lg">
+                                                    <i class="fas fa-id-card text-white text-3xl"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Aadhaar Card</h3>
+                                                    <p class="text-sm text-gray-600 dark:text-gray-300">Identity Verification</p>
+                                                </div>
+                                            </div>
+                                            @if (onboardingStatus.IsAadhaarVerified)
+                                            {
+                                                <span class="flex items-center px-5 py-2 rounded-full text-sm font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg">
+                                                    <i class="fas fa-check-circle mr-2"></i> Verified
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="flex items-center px-5 py-2 rounded-full text-sm font-bold bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg">
+                                                    <i class="fas fa-times-circle mr-2"></i> Failed
+                                                </span>
+                                            }
+                                        </div>
+
+                                        @if (!onboardingStatus.IsAadhaarVerified && !string.IsNullOrEmpty(onboardingStatus.AadhaarVerificationFailureReason))
+                                        {
+                                            <div class="mt-4 p-5 bg-white dark:bg-gray-700 border-2 border-red-400 dark:border-red-500 rounded-xl shadow-md">
+                                                <div class="flex items-start space-x-3">
+                                                    <i class="fas fa-exclamation-triangle text-red-600 dark:text-red-400 text-2xl mt-1"></i>
+                                                    <div class="flex-1">
+                                                        <p class="text-base font-bold text-red-900 dark:text-red-300 mb-2">Verification Failed:</p>
+                                                        <p class="text-sm text-gray-700 dark:text-gray-200 leading-relaxed">@onboardingStatus.AadhaarVerificationFailureReason</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else if (onboardingStatus.IsAadhaarVerified)
+                                        {
+                                            <div class="mt-4 p-5 bg-white dark:bg-gray-700 border-2 border-green-400 dark:border-green-500 rounded-xl shadow-md">
+                                                <p class="text-sm text-gray-700 dark:text-gray-200 flex items-center">
+                                                    <i class="fas fa-check-circle text-green-600 dark:text-green-400 mr-2 text-xl"></i>
+                                                    <span>Your Aadhaar document has been successfully verified by our AI system</span>
+                                                </p>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Medical Certificate -->
+                                    <div class="border-3 @(onboardingStatus.IsMedicalCertificateVerified ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20" : "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/20") rounded-2xl p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <div class="flex items-center space-x-4">
+                                                <div class="@(onboardingStatus.IsMedicalCertificateVerified ? "bg-gradient-to-br from-green-500 to-emerald-600" : "bg-gradient-to-br from-red-500 to-rose-600") rounded-xl p-3 shadow-lg">
+                                                    <i class="fas fa-certificate text-white text-3xl"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Medical Certificate</h3>
+                                                    <p class="text-sm text-gray-600 dark:text-gray-300">Professional Credentials</p>
+                                                </div>
+                                            </div>
+                                            @if (onboardingStatus.IsMedicalCertificateVerified)
+                                            {
+                                                <span class="flex items-center px-5 py-2 rounded-full text-sm font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg">
+                                                    <i class="fas fa-check-circle mr-2"></i> Verified
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="flex items-center px-5 py-2 rounded-full text-sm font-bold bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg">
+                                                    <i class="fas fa-times-circle mr-2"></i> Failed
+                                                </span>
+                                            }
+                                        </div>
+
+                                        @if (!onboardingStatus.IsMedicalCertificateVerified && !string.IsNullOrEmpty(onboardingStatus.MedicalCertificateVerificationFailureReason))
+                                        {
+                                            <div class="mt-4 p-5 bg-white dark:bg-gray-700 border-2 border-red-400 dark:border-red-500 rounded-xl shadow-md">
+                                                <div class="flex items-start space-x-3">
+                                                    <i class="fas fa-exclamation-triangle text-red-600 dark:text-red-400 text-2xl mt-1"></i>
+                                                    <div class="flex-1">
+                                                        <p class="text-base font-bold text-red-900 dark:text-red-300 mb-2">Verification Failed:</p>
+                                                        <p class="text-sm text-gray-700 dark:text-gray-200 leading-relaxed">@onboardingStatus.MedicalCertificateVerificationFailureReason</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else if (onboardingStatus.IsMedicalCertificateVerified)
+                                        {
+                                            <div class="mt-4 p-5 bg-white dark:bg-gray-700 border-2 border-green-400 dark:border-green-500 rounded-xl shadow-md">
+                                                <p class="text-sm text-gray-700 dark:text-gray-200 flex items-center">
+                                                    <i class="fas fa-check-circle text-green-600 dark:text-green-400 mr-2 text-xl"></i>
+                                                    <span>Your medical certificate has been successfully verified by our AI system</span>
+                                                </p>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Two Column Layout for Info and Details -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+
+                                <!-- What's Next Panel -->
+                                <div class="bg-gradient-to-br from-primary via-accent to-purple-600 dark:from-blue-600 dark:via-purple-600 dark:to-indigo-700 rounded-2xl shadow-2xl p-10 text-white transform hover:scale-105 transition-transform duration-300">
+                                    <div class="flex items-center mb-6">
+                                        <div class="bg-white bg-opacity-30 backdrop-blur-sm rounded-xl p-4 mr-4 shadow-lg">
+                                            <i class="fas fa-lightbulb text-4xl"></i>
+                                        </div>
+                                        <h3 class="text-3xl font-bold">What's Next?</h3>
+                                    </div>
+                                    <ul class="space-y-5">
+                                        <li class="flex items-start">
+                                            <div class="bg-white bg-opacity-25 backdrop-blur-sm rounded-full p-2 mr-4 mt-1 shadow-md">
+                                                <i class="fas fa-check text-base"></i>
+                                            </div>
+                                            <span class="text-base leading-relaxed font-medium">Our admin team will manually review your documents and credentials</span>
+                                        </li>
+                                        <li class="flex items-start">
+                                            <div class="bg-white bg-opacity-25 backdrop-blur-sm rounded-full p-2 mr-4 mt-1 shadow-md">
+                                                <i class="fas fa-check text-base"></i>
+                                            </div>
+                                            <span class="text-base leading-relaxed font-medium">You'll receive an email notification once the review is complete</span>
+                                        </li>
+                                        <li class="flex items-start">
+                                            <div class="bg-white bg-opacity-25 backdrop-blur-sm rounded-full p-2 mr-4 mt-1 shadow-md">
+                                                <i class="fas fa-check text-base"></i>
+                                            </div>
+                                            <span class="text-base leading-relaxed font-medium">Average review time is 24-48 hours</span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <!-- Submission Info Panel -->
+                                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-10 border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                                    <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">Submission Details</h3>
+                                    <div class="space-y-8">
+                                        <div class="flex items-center">
+                                            <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl p-5 mr-5 shadow-lg">
+                                                <i class="fas fa-calendar-check text-white text-3xl"></i>
+                                            </div>
+                                            <div>
+                                                <p class="text-sm text-gray-500 dark:text-gray-400 font-semibold">Submitted On</p>
+                                                <p class="text-xl font-bold text-gray-900 dark:text-white">
+                                                    @if (onboardingStatus.ProfileSubmissionDate.HasValue)
+                                                    {
+                                                        @onboardingStatus.ProfileSubmissionDate.Value.ToString("MMM dd, yyyy")
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-gray-400 dark:text-gray-500">N/A</span>
+                                                    }
+                                                </p>
+                                                <p class="text-sm text-gray-600 dark:text-gray-400">
+                                                    @if (onboardingStatus.ProfileSubmissionDate.HasValue)
+                                                    {
+                                                        @onboardingStatus.ProfileSubmissionDate.Value.ToString("hh:mm tt")
+                                                    }
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="border-t dark:border-gray-700 pt-8">
+                                            <div class="flex items-center">
+                                                <div class="bg-gradient-to-br from-amber-400 to-orange-600 rounded-xl p-5 mr-5 shadow-lg">
+                                                    <i class="fas fa-clock text-white text-3xl"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="text-sm text-gray-500 dark:text-gray-400 font-semibold">Current Status</p>
+                                                    <p class="text-xl font-bold text-amber-600 dark:text-amber-400">Pending Admin Approval</p>
+                                                    <p class="text-sm text-gray-600 dark:text-gray-400">Review in progress</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="flex flex-col sm:flex-row items-center justify-center gap-6 mb-8">
+                                <button class="group w-full sm:w-auto inline-flex items-center justify-center px-10 py-5 border-3 border-primary dark:border-accent text-xl font-bold rounded-2xl text-primary dark:text-accent bg-white dark:bg-gray-800 hover:bg-gradient-to-r hover:from-primary hover:to-accent hover:text-white hover:border-transparent focus:outline-none focus:ring-4 focus:ring-primary/50 transition-all duration-300 shadow-2xl hover:shadow-primary/50 hover:scale-105 transform" @onclick="RefreshStatus">
+                                    <i class="fas fa-sync-alt mr-3 group-hover:animate-spin"></i>
+                                    Refresh Status
+                                </button>
+                            </div>
+
+                            <!-- Support Footer -->
+                            <div class="bg-gradient-to-r from-white via-blue-50 to-purple-50 dark:from-gray-800 dark:via-gray-750 dark:to-gray-800 rounded-2xl shadow-2xl p-8 text-center border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+                                <div class="flex items-center justify-center mb-4">
+                                    <div class="bg-gradient-to-br from-primary to-accent rounded-full p-3 shadow-lg">
+                                        <i class="fas fa-headset text-white text-2xl"></i>
+                                    </div>
+                                </div>
+                                <p class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
+                                    Need assistance with your application?
+                                </p>
+                                <p class="text-base text-gray-600 dark:text-gray-300">
+                                    Contact our support team at
+                                    <a href="mailto:support@medichat.ai" class="text-primary dark:text-accent hover:text-accent dark:hover:text-primary font-bold underline decoration-2 underline-offset-2 transition-colors">support@medichat.ai</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <!-- MODERN DOCTOR DASHBOARD - SPLIT PANEL DESIGN -->
+    <div class="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
+
+        <!-- Header with Theme Toggle -->
+        <header class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg shadow-lg border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+            <div class="py-4 px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <div class="bg-gradient-to-br from-primary to-accent p-3 rounded-xl shadow-lg">
+                            <i class="fas fa-stethoscope text-white text-2xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-900 via-primary to-accent dark:from-white dark:via-primary dark:to-accent bg-clip-text text-transparent">
+                                Doctor Dashboard
+                            </h1>
+                            <AuthorizeView>
+                                <Authorized>
+                                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                        Welcome back, <span class="font-semibold text-primary dark:text-accent">Dr. @context.User.FindFirst("firstName")?.Value @context.User.FindFirst("lastName")?.Value</span>
+                                    </p>
+                                </Authorized>
+                            </AuthorizeView>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <DoctorThemeToggle OnOpenModal="@OpenThemeModal" />
+                        <span class="hidden md:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg">
+                            <i class="fas fa-check-circle mr-1.5"></i> Active
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content - Split Panel Layout -->
+        <main class="px-4 sm:px-6 lg:px-8 py-6 w-full">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                <!-- LEFT PANEL (40%) - Schedule & Alerts -->
+                <div class="lg:col-span-5 space-y-6">
+
+                    <!-- Error Message Banner -->
+                    @if (!string.IsNullOrEmpty(dashboardError))
+                    {
+                        <div class="bg-gradient-to-r from-red-500 to-rose-600 rounded-2xl shadow-2xl p-4 text-white">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <i class="fas fa-exclamation-circle text-2xl"></i>
+                                    <div>
+                                        <p class="font-bold">Error Loading Dashboard</p>
+                                        <p class="text-sm opacity-90">@dashboardError</p>
+                                    </div>
+                                </div>
+                                <button @onclick="LoadDashboardData" class="bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                                    Retry
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Emergency Alerts Banner -->
+                    @if (activeAlerts.Any())
+                    {
+                        <div class="bg-gradient-to-r from-red-500 to-rose-600 rounded-2xl shadow-2xl p-4 text-white animate-pulse">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <i class="fas fa-exclamation-triangle text-2xl"></i>
+                                    <div>
+                                        <p class="font-bold">@activeAlerts.Count Critical @(activeAlerts.Count == 1 ? "Alert" : "Alerts")</p>
+                                        <p class="text-xs opacity-90">Require immediate attention</p>
+                                    </div>
+                                </div>
+                                <button class="bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                                    View All
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Appointments Schedule with Tabs -->
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div class="p-6 bg-gradient-to-r from-primary/10 to-accent/10 dark:from-primary/20 dark:to-accent/20 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">Appointments Schedule</h2>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Manage your appointments</p>
+                                </div>
+                                <div class="bg-primary/20 dark:bg-primary/30 p-3 rounded-xl">
+                                    <i class="fas fa-calendar-alt text-primary dark:text-accent text-xl"></i>
+                                </div>
+                            </div>
+
+                            <!-- Tabs -->
+                            <div class="flex space-x-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
+                                <button @onclick='() => selectedAppointmentTab = "past"'
+                                        class='flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all @(selectedAppointmentTab == "past" ? "bg-white dark:bg-gray-600 text-primary dark:text-accent shadow-md" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white")'>
+                                    <i class="fas fa-history mr-2"></i>Past (@pastAppointments.Count)
+                                </button>
+                                <button @onclick='() => selectedAppointmentTab = "today"'
+                                        class='flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all @(selectedAppointmentTab == "today" ? "bg-white dark:bg-gray-600 text-primary dark:text-accent shadow-md" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white")'>
+                                    <i class="fas fa-calendar-day mr-2"></i>Today (@todayAppointments.Count)
+                                </button>
+                                <button @onclick='() => selectedAppointmentTab = "upcoming"'
+                                        class='flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all @(selectedAppointmentTab == "upcoming" ? "bg-white dark:bg-gray-600 text-primary dark:text-accent shadow-md" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white")'>
+                                    <i class="fas fa-calendar-week mr-2"></i>Upcoming (@upcomingAppointments.Count)
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Tab Content -->
+                        <div class="p-6 space-y-4 max-h-[600px] overflow-y-auto">
+                            @if (isDashboardLoading)
+                            {
+                                <div class="text-center py-8">
+                                    <div class="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto"></div>
+                                    <p class="mt-3 text-sm text-gray-600 dark:text-gray-400">Loading appointments...</p>
+                                </div>
+                            }
+                            else if (selectedAppointmentTab == "past")
+                            {
+                                @if (pastAppointments.Any())
+                                {
+                                    foreach (var apt in pastAppointments)
+                                    {
+                                        <div class="group bg-gray-50 dark:bg-gray-700/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl p-4 border-2 border-transparent hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 cursor-pointer">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center space-x-4">
+                                                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-full p-3 shadow-lg group-hover:scale-110 transition-transform">
+                                                        <i class="fas fa-clock text-white"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="font-bold text-gray-900 dark:text-white">@apt.PatientName</p>
+                                                        <p class="text-sm text-gray-600 dark:text-gray-400">@apt.Type</p>
+                                                        <div class="flex items-center space-x-3 mt-1">
+                                                            @if (!string.IsNullOrEmpty(apt.RoomNumber))
+                                                            {
+                                                                <span class="text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                                                                    <i class="fas fa-door-open mr-1"></i>Room @apt.RoomNumber
+                                                                </span>
+                                                            }
+                                                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                                <i class="fas fa-clock mr-1"></i>@apt.Time.ToString("MMM dd, hh:mm tt")
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <span class="px-3 py-1 rounded-full text-xs font-bold @(apt.Status == "Completed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : apt.Status == "Cancelled" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300")">
+                                                    @apt.Status
+                                                </span>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="text-center py-8">
+                                        <i class="fas fa-calendar-times text-gray-300 dark:text-gray-600 text-5xl mb-3"></i>
+                                        <p class="text-gray-600 dark:text-gray-400">No past appointments</p>
+                                    </div>
+                                }
+                            }
+                            else if (selectedAppointmentTab == "upcoming")
+                            {
+                                @if (upcomingAppointments.Any())
+                                {
+                                    foreach (var apt in upcomingAppointments)
+                                    {
+                                        <div class="group bg-gray-50 dark:bg-gray-700/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl p-4 border-2 border-transparent hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 cursor-pointer">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center space-x-4">
+                                                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-full p-3 shadow-lg group-hover:scale-110 transition-transform">
+                                                        <i class="fas fa-clock text-white"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="font-bold text-gray-900 dark:text-white">@apt.PatientName</p>
+                                                        <p class="text-sm text-gray-600 dark:text-gray-400">@apt.Type</p>
+                                                        <div class="flex items-center space-x-3 mt-1">
+                                                            @if (!string.IsNullOrEmpty(apt.RoomNumber))
+                                                            {
+                                                                <span class="text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                                                                    <i class="fas fa-door-open mr-1"></i>Room @apt.RoomNumber
+                                                                </span>
+                                                            }
+                                                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                                <i class="fas fa-clock mr-1"></i>@apt.Time.ToString("MMM dd, hh:mm tt")
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <span class="px-3 py-1 rounded-full text-xs font-bold @(apt.Status == "Completed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : apt.Status == "Cancelled" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300")">
+                                                    @apt.Status
+                                                </span>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="text-center py-8">
+                                        <i class="fas fa-calendar-times text-gray-300 dark:text-gray-600 text-5xl mb-3"></i>
+                                        <p class="text-gray-600 dark:text-gray-400">No upcoming appointments</p>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                @if (todayAppointments.Any())
+                                {
+                                    foreach (var apt in todayAppointments)
+                                    {
+                                        <div class="group bg-gray-50 dark:bg-gray-700/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl p-4 border-2 border-transparent hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 cursor-pointer">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center space-x-4">
+                                                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-full p-3 shadow-lg group-hover:scale-110 transition-transform">
+                                                        <i class="fas fa-clock text-white"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="font-bold text-gray-900 dark:text-white">@apt.PatientName</p>
+                                                        <p class="text-sm text-gray-600 dark:text-gray-400">@apt.Type</p>
+                                                        <div class="flex items-center space-x-3 mt-1">
+                                                            @if (!string.IsNullOrEmpty(apt.RoomNumber))
+                                                            {
+                                                                <span class="text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                                                                    <i class="fas fa-door-open mr-1"></i>Room @apt.RoomNumber
+                                                                </span>
+                                                            }
+                                                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                                <i class="fas fa-clock mr-1"></i>@apt.Time.ToString("MMM dd, hh:mm tt")
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <span class="px-3 py-1 rounded-full text-xs font-bold @(apt.Status == "Completed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : apt.Status == "Cancelled" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300")">
+                                                    @apt.Status
+                                                </span>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="text-center py-8">
+                                        <i class="fas fa-calendar-times text-gray-300 dark:text-gray-600 text-5xl mb-3"></i>
+                                        <p class="text-gray-600 dark:text-gray-400">No appointments scheduled for today</p>
+                                    </div>
+                                }
+                            }
+                        </div>
+
+                        <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700">
+                            <button class="w-full bg-gradient-to-r from-primary to-accent text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all">
+                                <i class="fas fa-calendar-plus mr-2"></i>View Full Schedule
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Patient Vitals Monitor -->
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div class="p-6 bg-gradient-to-r from-red-500/10 to-pink-500/10 dark:from-red-500/20 dark:to-pink-500/20 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">Critical Vitals</h2>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">@criticalVitals.Count @(criticalVitals.Count == 1 ? "patient needs" : "patients need") attention</p>
+                                </div>
+                                <div class="bg-red-500/20 dark:bg-red-500/30 p-3 rounded-xl">
+                                    <i class="fas fa-heartbeat text-red-600 dark:text-red-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-6 space-y-3">
+                            @if (isDashboardLoading)
+                            {
+                                <div class="text-center py-8">
+                                    <div class="animate-spin rounded-full h-12 w-12 border-4 border-red-500 border-t-transparent mx-auto"></div>
+                                    <p class="mt-3 text-sm text-gray-600 dark:text-gray-400">Loading vitals...</p>
+                                </div>
+                            }
+                            else if (criticalVitals.Any())
+                            {
+                                foreach (var vital in criticalVitals.Take(5))
+                                {
+                                    var bgColor = vital.Severity == 3 ? "bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700" : "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700";
+                                    var textColor = vital.Severity == 3 ? "text-red-600 dark:text-red-400" : "text-yellow-600 dark:text-yellow-400";
+                                    var badgeColor = vital.Severity == 3 ? "bg-red-500" : "bg-yellow-500";
+                                    var severityText = vital.Severity == 3 ? "CRITICAL" : "WARNING";
+
+                                    <div class="@bgColor border-2 rounded-xl p-4">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <p class="font-bold text-gray-900 dark:text-white">@(vital.PatientName ?? "Unknown Patient")</p>
+                                            <span class="px-2 py-1 @badgeColor text-white text-xs font-bold rounded-full">@severityText</span>
+                                        </div>
+                                        <div class="text-sm">
+                                            <p class="text-gray-600 dark:text-gray-400">@GetVitalTypeName(vital.VitalType)</p>
+                                            <p class="font-bold @textColor">@vital.Value @vital.Unit</p>
+                                            @if (!string.IsNullOrEmpty(vital.Notes))
+                                            {
+                                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">@vital.Notes</p>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-center py-8">
+                                    <i class="fas fa-check-circle text-green-500 text-5xl mb-3"></i>
+                                    <p class="text-gray-600 dark:text-gray-400">No critical vitals</p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">All patients stable</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT PANEL (60%) - Stats & Analytics -->
+                <div class="lg:col-span-7 space-y-6">
+
+                    <!-- Overview Stats Grid -->
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        @if (isDashboardLoading)
+                        {
+                            for (int i = 0; i < 4; i++)
+                            {
+                                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 animate-pulse">
+                                    <div class="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-xl mb-3"></div>
+                                    <div class="h-8 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-1"></div>
+                                    <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                </div>
+                            }
+                        }
+                        else if (overviewStats != null)
+                        {
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-2xl hover:scale-105 transition-all duration-300">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="bg-gradient-to-br from-blue-500 to-cyan-600 p-3 rounded-xl shadow-lg">
+                                        <i class="fas fa-calendar-check text-white text-xl"></i>
+                                    </div>
+                                </div>
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white mb-1">@overviewStats.TodayAppointments</p>
+                                <p class="text-sm font-semibold text-gray-600 dark:text-gray-400">Appointments</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">@overviewStats.CompletedToday completed</p>
+                            </div>
+
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-2xl hover:scale-105 transition-all duration-300">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="bg-gradient-to-br from-green-500 to-emerald-600 p-3 rounded-xl shadow-lg">
+                                        <i class="fas fa-users text-white text-xl"></i>
+                                    </div>
+                                </div>
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white mb-1">@overviewStats.ActivePatients</p>
+                                <p class="text-sm font-semibold text-gray-600 dark:text-gray-400">Active Patients</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">@overviewStats.CriticalPatients critical</p>
+                            </div>
+
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-2xl hover:scale-105 transition-all duration-300">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="bg-gradient-to-br from-purple-500 to-pink-600 p-3 rounded-xl shadow-lg">
+                                        <i class="fas fa-envelope text-white text-xl"></i>
+                                    </div>
+                                </div>
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white mb-1">@overviewStats.UnreadMessages</p>
+                                <p class="text-sm font-semibold text-gray-600 dark:text-gray-400">Messages</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">Unread</p>
+                            </div>
+
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-2xl hover:scale-105 transition-all duration-300">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="bg-gradient-to-br from-red-500 to-rose-600 p-3 rounded-xl shadow-lg">
+                                        <i class="fas fa-bell text-white text-xl"></i>
+                                    </div>
+                                </div>
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white mb-1">@overviewStats.EmergencyAlerts</p>
+                                <p class="text-sm font-semibold text-gray-600 dark:text-gray-400">Alerts</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">Critical</p>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-6">
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+                            <i class="fas fa-bolt text-yellow-500 mr-3"></i>
+                            Quick Actions
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <button @onclick="NavigateToAppointments" class="group bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 hover:from-blue-100 hover:to-cyan-100 dark:hover:from-blue-900/30 dark:hover:to-cyan-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-xl p-6 text-center transition-all duration-300 hover:shadow-xl hover:scale-105">
+                                <div class="bg-gradient-to-br from-blue-500 to-cyan-600 mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                                    <i class="fas fa-calendar-plus text-white text-2xl"></i>
+                                </div>
+                                <p class="font-bold text-gray-900 dark:text-white">Schedule</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">New Appointment</p>
+                            </button>
+
+                            <button @onclick="NavigateToPatients" class="group bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-900/30 dark:hover:to-emerald-900/30 border-2 border-green-200 dark:border-green-700 rounded-xl p-6 text-center transition-all duration-300 hover:shadow-xl hover:scale-105">
+                                <div class="bg-gradient-to-br from-green-500 to-emerald-600 mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                                    <i class="fas fa-user-plus text-white text-2xl"></i>
+                                </div>
+                                <p class="font-bold text-gray-900 dark:text-white">Add Patient</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Register New</p>
+                            </button>
+
+                            <button @onclick="NavigateToPrescriptions" class="group bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 border-2 border-purple-200 dark:border-purple-700 rounded-xl p-6 text-center transition-all duration-300 hover:shadow-xl hover:scale-105">
+                                <div class="bg-gradient-to-br from-purple-500 to-pink-600 mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                                    <i class="fas fa-prescription text-white text-2xl"></i>
+                                </div>
+                                <p class="font-bold text-gray-900 dark:text-white">Prescription</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Write New</p>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Analytics Preview -->
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                                    <i class="fas fa-chart-line text-primary mr-3"></i>
+                                    Performance Analytics
+                                </h2>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Last 30 days overview</p>
+                            </div>
+                            <button class="bg-gradient-to-r from-primary to-accent text-white px-4 py-2 rounded-lg font-semibold text-sm hover:shadow-lg transition-all">
+                                View Details
+                            </button>
+                        </div>
+                        @if (isDashboardLoading)
+                        {
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                @for (int i = 0; i < 4; i++)
+                                {
+                                    <div class="text-center p-4 bg-gray-100 dark:bg-gray-700/50 rounded-xl animate-pulse">
+                                        <div class="h-8 bg-gray-200 dark:bg-gray-600 rounded mb-2"></div>
+                                        <div class="h-4 bg-gray-200 dark:bg-gray-600 rounded"></div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (analyticsData?.PerformanceMetrics != null || analyticsData?.RevenueAnalytics != null)
+                        {
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div class="text-center p-4 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-xl">
+                                    <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                        @if (analyticsData?.PerformanceMetrics?.AverageSatisfactionRating != null)
+                                        {
+                                            @($"{analyticsData.PerformanceMetrics.AverageSatisfactionRating:F1}%")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-gray-400">N/A</span>
+                                        }
+                                    </p>
+                                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Satisfaction</p>
+                                </div>
+                                <div class="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl">
+                                    <p class="text-2xl font-bold text-green-600 dark:text-green-400">
+                                        @(analyticsData?.PerformanceMetrics?.TotalConsultations ?? 0)
+                                    </p>
+                                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Consultations</p>
+                                </div>
+                                <div class="text-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl">
+                                    <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                                        @if (analyticsData?.PerformanceMetrics?.AverageConsultationTime != null)
+                                        {
+                                            @($"{analyticsData.PerformanceMetrics.AverageConsultationTime} min")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-gray-400">N/A</span>
+                                        }
+                                    </p>
+                                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Avg Time</p>
+                                </div>
+                                <div class="text-center p-4 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl">
+                                    <p class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                                        @if (analyticsData?.RevenueAnalytics?.TotalRevenue != null)
+                                        {
+                                            @($"${analyticsData.RevenueAnalytics.TotalRevenue / 1000:F1}k")
+                                        }
+                                        else
+                                        {
+                                            <span class="text-gray-400">$0</span>
+                                        }
+                                    </p>
+                                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Revenue</p>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-8">
+                                <i class="fas fa-chart-bar text-4xl text-gray-400 dark:text-gray-600 mb-3"></i>
+                                <p class="text-gray-600 dark:text-gray-400">No analytics data available</p>
+                            </div>
+                        }
+                    </div>
+
+                </div>
+            </div>
+            <!-- Recent Activity Feed -->
+            <div class="bg-white mt-6 dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-6 w-full">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+                    <i class="fas fa-history text-indigo-500 mr-3"></i>
+                    Recent Activity
+                </h2>
+                @if (isDashboardLoading)
+                {
+                    <div class="space-y-4">
+                        @for (int i = 0; i < 4; i++)
+                        {
+                            <div class="flex items-center space-x-4 p-3">
+                                <div class="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+                                    <div class="flex-1">
+                                        <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2 animate-pulse"></div>
+                                        <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4 animate-pulse"></div>
+                                    </div>
+                                <div class="w-16 h-3 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (recentActivities.Any())
+                {
+                    <div class="space-y-4">
+                        @foreach (var activity in recentActivities.Take(5))
+                        {
+                            var (icon, color) = GetActivityIconAndColor(activity.Type);
+                            var timeAgo = GetTimeAgo(activity.Timestamp);
+
+                            <div class="flex items-center space-x-4 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors">
+                                <div class="@($"bg-{color}-100 dark:bg-{color}-900/30") p-3 rounded-lg">
+                                    <i class="fas fa-@icon @($"text-{color}-600 dark:text-{color}-400")"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-semibold text-gray-900 dark:text-white">@activity.Type</p>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">@activity.Description</p>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-500">@timeAgo</p>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-8">
+                        <i class="fas fa-history text-4xl text-gray-400 dark:text-gray-600 mb-3"></i>
+                        <p class="text-gray-600 dark:text-gray-400">No recent activities</p>
+                    </div>
+                }
+            </div>
+        </main>
+    </div>
+}
+
+@* Onboarding Modal *@
+@if (showOnboardingModal)
+{
+    <DoctorOnboardingModal OnClose="CloseOnboardingModal" />
+}
+
+<!-- Theme Modal - Rendered at root level, outside main content -->
+<DoctorThemeModal IsOpen="@isThemeModalOpen"
+                  IsOpenChanged="@HandleThemeModalOpenChanged"
+                  OnThemeChanged="@HandleThemeChanged" />
+
+</AuthorizeRouteGuard>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private DoctorOnboardingStatusModel? onboardingStatus;
+    private bool isLoading = true;
+    private bool showOnboardingModal = false;
+    private bool isThemeModalOpen = false;
+
+    // Dashboard data
+    private DoctorDashboardData? dashboardData;
+    private DoctorOverviewStats? overviewStats;
+    private List<TodayAppointment> todayAppointments = new();
+    private List<TodayAppointment> pastAppointments = new();
+    private List<TodayAppointment> upcomingAppointments = new();
+    private List<PatientVital> criticalVitals = new();
+    private List<EmergencyAlert> activeAlerts = new();
+    private List<RecentActivity> recentActivities = new();
+
+    // Appointment tab state
+    private string selectedAppointmentTab = "today";
+    private DoctorAnalyticsData? analyticsData;
+    private bool isDashboardLoading = true;
+    private string? dashboardError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOnboardingStatus();
+
+        // Load dashboard data if onboarding is complete and approved
+        if (onboardingStatus != null && onboardingStatus.IsProfileCompleted && onboardingStatus.IsApprovedByAdmin)
+        {
+            await LoadDashboardData();
+        }
+    }
+
+    private async Task LoadOnboardingStatus()
+    {
+        try
+        {
+            isLoading = true;
+            onboardingStatus = await DoctorOnboardingService.GetOnboardingStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            // Log error or show notification
+            Console.WriteLine($"Error loading onboarding status: {ex.Message}");
+            onboardingStatus = new DoctorOnboardingStatusModel(); // Default to allow dashboard
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowOnboardingModal()
+    {
+        showOnboardingModal = true;
+    }
+
+    private async Task CloseOnboardingModal()
+    {
+        showOnboardingModal = false;
+        await LoadOnboardingStatus(); // Refresh status after closing modal
+    }
+
+    private void OpenThemeModal()
+    {
+        isThemeModalOpen = true;
+    }
+
+    private void HandleThemeModalOpenChanged(bool isOpen)
+    {
+        isThemeModalOpen = isOpen;
+    }
+
+    private Task HandleThemeChanged(string presetName)
+    {
+        Console.WriteLine($"Theme changed to: {presetName}");
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            isDashboardLoading = true;
+            dashboardError = null;
+
+            // Load complete dashboard data
+            dashboardData = await DashboardService.GetDashboardDataAsync();
+
+            if (dashboardData != null)
+            {
+                overviewStats = dashboardData.OverviewStats;
+                todayAppointments = dashboardData.TodayAppointments.ToList();
+                criticalVitals = dashboardData.CriticalVitals.ToList();
+                activeAlerts = dashboardData.ActiveAlerts.ToList();
+                recentActivities = dashboardData.RecentActivities.ToList();
+            }
+
+            // Load past and upcoming appointments
+            pastAppointments = await DashboardService.GetPastAppointmentsAsync(7);
+            upcomingAppointments = await DashboardService.GetUpcomingAppointmentsAsync(7);
+
+            // Load analytics data for last 30 days
+            var endDate = DateTime.UtcNow;
+            var startDate = endDate.AddDays(-30);
+            analyticsData = await DashboardService.GetAnalyticsAsync(startDate, endDate);
+        }
+        catch (Exception ex)
+        {
+            dashboardError = "Failed to load dashboard data. Please refresh the page.";
+            Console.WriteLine($"Error loading dashboard: {ex.Message}");
+        }
+        finally
+        {
+            isDashboardLoading = false;
+        }
+    }
+
+    private async Task RefreshStatus()
+    {
+        await LoadOnboardingStatus();
+    }
+
+    private string GetVitalTypeName(int vitalType)
+    {
+        return vitalType switch
+        {
+            0 => "Heart Rate",
+            1 => "Blood Pressure",
+            2 => "Temperature",
+            3 => "Oxygen Saturation",
+            4 => "Respiratory Rate",
+            5 => "Blood Glucose",
+            _ => "Unknown"
+        };
+    }
+
+    private (string icon, string color) GetActivityIconAndColor(string activityType)
+    {
+        return activityType.ToLower() switch
+        {
+            var t when t.Contains("prescription") || t.Contains("prescribed") => ("prescription", "purple"),
+            var t when t.Contains("vital") || t.Contains("heartbeat") => ("heartbeat", "red"),
+            var t when t.Contains("record") || t.Contains("medical") => ("file-medical", "blue"),
+            var t when t.Contains("message") || t.Contains("chat") => ("comment", "green"),
+            var t when t.Contains("appointment") || t.Contains("schedule") => ("calendar", "cyan"),
+            var t when t.Contains("lab") || t.Contains("test") => ("flask", "orange"),
+            var t when t.Contains("alert") || t.Contains("emergency") => ("exclamation-triangle", "red"),
+            _ => ("circle", "gray")
+        };
+    }
+
+    private string GetTimeAgo(DateTime timestamp)
+    {
+        var timeSpan = DateTime.UtcNow - timestamp;
+
+        if (timeSpan.TotalMinutes < 1)
+            return "Just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes} min{((int)timeSpan.TotalMinutes != 1 ? "s" : "")} ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours} hour{((int)timeSpan.TotalHours != 1 ? "s" : "")} ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays} day{((int)timeSpan.TotalDays != 1 ? "s" : "")} ago";
+
+        return timestamp.ToString("MMM dd, yyyy");
+    }
+
+    private void NavigateToAppointments()
+    {
+        Navigation.NavigateTo("/doctor/appointments");
+    }
+
+    private void NavigateToPatients()
+    {
+        Navigation.NavigateTo("/doctor/patients");
+    }
+
+    private void NavigateToPrescriptions()
+    {
+        Navigation.NavigateTo("/doctor/prescriptions");
+    }
+}

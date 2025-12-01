@@ -1,0 +1,78 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.GraphQL
+@inject IGraphQLService GraphQLService
+
+<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+    <h3 class="text-lg font-semibold text-yellow-800 mb-2">Debug Information</h3>
+    
+    <button @onclick="LoadDebugInfo" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 mb-4">
+        Load Debug Info
+    </button>
+    
+    @if (debugInfo != null)
+    {
+        <div class="space-y-2 text-sm">
+            <p><strong>User ID:</strong> @debugInfo.UserId</p>
+            <p><strong>User Role:</strong> @debugInfo.UserRole</p>
+            <p><strong>Total Requests:</strong> @debugInfo.TotalRequests</p>
+            <p><strong>Pending Requests:</strong> @debugInfo.PendingRequests</p>
+            <p><strong>Doctor Pending Requests:</strong> @debugInfo.DoctorPendingRequests</p>
+        </div>
+    }
+    
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="text-red-600 mt-2">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+</div>
+
+@code {
+    private AppointmentRequestDebugInfo? debugInfo;
+    private string? errorMessage;
+    
+    private async Task LoadDebugInfo()
+    {
+        try
+        {
+            errorMessage = null;
+            
+            const string query = @"
+                query {
+                    appointmentRequestDebugInfo {
+                        userId
+                        userRole
+                        totalRequests
+                        pendingRequests
+                        doctorPendingRequests
+                    }
+                }";
+            
+            var response = await GraphQLService.SendQueryAsync<Dictionary<string, object>>(query);
+            
+            if (response != null && response.ContainsKey("data"))
+            {
+                var data = response["data"] as Dictionary<string, object>;
+                if (data != null && data.ContainsKey("appointmentRequestDebugInfo"))
+                {
+                    var json = System.Text.Json.JsonSerializer.Serialize(data["appointmentRequestDebugInfo"]);
+                    debugInfo = System.Text.Json.JsonSerializer.Deserialize<AppointmentRequestDebugInfo>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine($"Debug info error: {ex.Message}");
+        }
+    }
+    
+    public class AppointmentRequestDebugInfo
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string UserRole { get; set; } = string.Empty;
+        public int TotalRequests { get; set; }
+        public int PendingRequests { get; set; }
+        public int DoctorPendingRequests { get; set; }
+    }
+}

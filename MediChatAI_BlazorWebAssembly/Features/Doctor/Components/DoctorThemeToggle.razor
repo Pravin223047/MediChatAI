@@ -1,0 +1,40 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+
+<button @onclick="OpenThemeModal"
+        class="group relative overflow-hidden px-5 py-2.5 rounded-full font-semibold text-sm transition-all duration-300 transform hover:scale-105 hover:shadow-2xl active:scale-95 @GetButtonClasses()"
+        title="Customize Theme">
+    <!-- Animated gradient background -->
+    <div class="absolute inset-0 bg-gradient-to-r @GetGradientClasses() opacity-90 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+    <!-- Glow effect on hover -->
+    <div class="absolute inset-0 bg-gradient-to-r @GetGradientClasses() blur-xl opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
+
+    <!-- Content -->
+    <div class="relative flex items-center gap-2 text-white">
+        <i class="fas fa-palette text-lg group-hover:rotate-12 transition-transform duration-300"></i>
+        <span class="font-bold tracking-wide">Theme</span>
+    </div>
+</button>
+
+@code {
+    [Parameter] public EventCallback OnOpenModal { get; set; }
+
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    private async Task OpenThemeModal()
+    {
+        await OnOpenModal.InvokeAsync();
+    }
+
+    private string GetButtonClasses()
+    {
+        return "shadow-lg";
+    }
+
+    private string GetGradientClasses()
+    {
+        // Use theme primary and accent colors for gradient
+        return "from-primary to-accent";
+    }
+}

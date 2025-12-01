@@ -1,0 +1,110 @@
+.doctor-theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.theme-toggle-btn {
+    @apply p-2.5 rounded-xl transition-all duration-300 shadow-md hover:shadow-lg;
+}
+
+.theme-toggle-btn.light-mode {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300;
+}
+
+.theme-toggle-btn.dark-mode {
+    @apply bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/50;
+}
+
+.theme-presets-dropdown {
+    position: relative;
+}
+
+.preset-selector-btn {
+    @apply flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg;
+}
+
+.presets-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    min-width: 200px;
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    padding: 0.5rem;
+    z-index: 50;
+    animation: slideDown 0.2s ease-out;
+}
+
+@media (prefers-color-scheme: dark) {
+    .presets-menu {
+        background: #1f2937;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+}
+
+.dark .presets-menu {
+    background: #1f2937;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.preset-option {
+    @apply w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-left transition-all duration-200;
+    @apply text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700;
+}
+
+.preset-option.active {
+    @apply bg-gradient-to-r from-primary to-accent text-white font-semibold shadow-lg;
+}
+
+.preset-option.active:hover {
+    @apply from-primary/90 to-accent/90;
+}
+
+.preset-colors {
+    display: flex;
+    gap: 0.375rem;
+    align-items: center;
+}
+
+.color-dot {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.preset-name {
+    flex: 1;
+    font-size: 0.875rem;
+}
+
+.preset-option i.fa-check {
+    font-size: 0.875rem;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+    .theme-presets-dropdown .preset-selector-btn span {
+        display: none;
+    }
+
+    .presets-menu {
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+}

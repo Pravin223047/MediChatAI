@@ -1,0 +1,149 @@
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-colors">
+    @if (Calendar != null)
+    {
+        <!-- Calendar Grid -->
+        <div class="grid grid-cols-7">
+            <!-- Day Headers -->
+            @foreach (var day in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
+            {
+                <div class="bg-gray-100 dark:bg-gray-700 p-3 text-center font-semibold text-sm text-gray-700 dark:text-gray-300 border-b border-r border-gray-200 dark:border-gray-600">
+                    @day
+                </div>
+            }
+
+            <!-- Calendar Days -->
+            @foreach (var day in Calendar.Days)
+            {
+                <div class="@GetDayClass(day) border-b border-r border-gray-200 dark:border-gray-600 min-h-[120px] p-2 cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                     @onclick="() => OnDayClick.InvokeAsync(day.Date)">
+
+                    <!-- Date Number -->
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="@GetDateNumberClass(day) text-sm font-semibold">
+                            @day.Date.Day
+                        </span>
+
+                        @if (day.HasCriticalAppointment)
+                        {
+                            <svg class="w-4 h-4 text-red-500 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                        }
+                    </div>
+
+                    <!-- Appointment Indicators -->
+                    @if (day.AppointmentCount > 0)
+                    {
+                        var dayAppointments = Calendar.AppointmentsByDate.ContainsKey(day.Date)
+                            ? Calendar.AppointmentsByDate[day.Date]
+                            : new List<AppointmentModel>();
+
+                        <div class="space-y-1">
+                            @foreach (var appointment in dayAppointments.Take(3))
+                            {
+                                <div class="@GetAppointmentBadgeClass(appointment.Status) rounded px-2 py-0.5 text-xs truncate flex items-center space-x-1">
+                                    <svg class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span class="truncate">@FormatTime(appointment.StartTime)</span>
+                                </div>
+                            }
+
+                            @if (dayAppointments.Count > 3)
+                            {
+                                <div class="text-xs text-gray-600 dark:text-gray-400 font-medium px-2">
+                                    +@(dayAppointments.Count - 3) more
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (!day.IsPast && day.IsCurrentMonth)
+                    {
+                        <div class="text-xs text-gray-400 dark:text-gray-600 italic text-center mt-4">
+                            No appointments
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="text-center py-12">
+            <svg class="w-16 h-16 mx-auto text-gray-400 dark:text-gray-600 mb-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <p class="text-gray-500 dark:text-gray-400">Loading calendar...</p>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public CalendarViewModel? Calendar { get; set; }
+    [Parameter] public EventCallback<DateTime> OnDayClick { get; set; }
+
+    private string FormatTime(TimeSpan time)
+    {
+        var dateTime = DateTime.Today.Add(time);
+        return dateTime.ToString("h:mm tt");
+    }
+
+    private string GetDayClass(CalendarDayModel day)
+    {
+        var classes = new List<string> { "relative" };
+
+        if (!day.IsCurrentMonth)
+        {
+            classes.Add("bg-gray-50 dark:bg-gray-900/30");
+        }
+        else if (day.IsToday)
+        {
+            classes.Add("bg-gradient-to-br from-primary/10 to-accent/10 dark:from-primary-dark/20 dark:to-accent-dark/20 ring-2 ring-primary dark:ring-accent");
+        }
+        else if (day.IsPast)
+        {
+            classes.Add("bg-gray-50/50 dark:bg-gray-800/50");
+        }
+        else
+        {
+            classes.Add("bg-white dark:bg-gray-800");
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private string GetDateNumberClass(CalendarDayModel day)
+    {
+        if (day.IsToday)
+        {
+            return "text-primary dark:text-accent font-bold";
+        }
+        else if (!day.IsCurrentMonth)
+        {
+            return "text-gray-400 dark:text-gray-600";
+        }
+        else if (day.IsPast)
+        {
+            return "text-gray-500 dark:text-gray-500";
+        }
+        else
+        {
+            return "text-gray-700 dark:text-gray-300";
+        }
+    }
+
+    private string GetAppointmentBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Confirmed" => "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+            "Scheduled" => "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+            "Completed" => "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+            "Cancelled" => "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
+            "In-Progress" => "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
+            _ => "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+        };
+    }
+}

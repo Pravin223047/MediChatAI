@@ -1,0 +1,366 @@
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Components
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Services
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+@using MediChatAI_BlazorWebAssembly.Features.Authentication.Services
+@using System.Text.Json
+@inject IToastService ToastService
+@inject ITimeBlockService TimeBlockService
+@inject IAuthService AuthService
+
+<ModalBase IsOpen="@IsOpen"
+           Title="Block Time"
+           Subtitle="Reserve time for breaks, lunch, or personal matters"
+           Size="md"
+           OnClose="@Close">
+    <ChildContent>
+        <div class="space-y-6">
+            <!-- Block Type -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                    </svg>
+                    Block Type
+                </label>
+                <select @bind="blockType"
+                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                    <option value="Break">Break</option>
+                    <option value="Lunch">Lunch</option>
+                    <option value="Meeting">Meeting</option>
+                    <option value="Personal">Personal</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <!-- Date -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    Date
+                </label>
+                <input type="date" @bind="blockDate"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" />
+            </div>
+
+            <!-- Time Range -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Start Time
+                    </label>
+                    <input type="time" @bind="startTime"
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        End Time
+                    </label>
+                    <input type="time" @bind="endTime"
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" />
+                </div>
+            </div>
+
+            <!-- Recurring Options -->
+            <div>
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" @bind="isRecurring"
+                           class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary dark:border-gray-600 dark:bg-gray-700" />
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Recurring time block</span>
+                </label>
+            </div>
+
+            @if (isRecurring)
+            {
+                <div class="pl-6 space-y-4 border-l-4 border-primary/20 dark:border-accent/20">
+                    <!-- Frequency -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Frequency
+                        </label>
+                        <select @bind="frequency"
+                                class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                            <option value="Daily">Daily</option>
+                            <option value="Weekly">Weekly</option>
+                            <option value="Monthly">Monthly</option>
+                        </select>
+                    </div>
+
+                    <!-- Days of Week (for Weekly) -->
+                    @if (frequency == "Weekly")
+                    {
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Days of Week
+                            </label>
+                            <div class="grid grid-cols-4 gap-2">
+                                @foreach (var day in daysOfWeek)
+                                {
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox"
+                                               checked="@selectedDays.Contains(day)"
+                                               @onchange="@((e) => ToggleDay(day, (bool)e.Value!))"
+                                               class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary dark:border-gray-600 dark:bg-gray-700" />
+                                        <span class="text-sm text-gray-700 dark:text-gray-300">@day</span>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- End Date -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Repeat Until
+                        </label>
+                        <input type="date" @bind="repeatUntil"
+                               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" />
+                    </div>
+                </div>
+            }
+
+            <!-- Notes -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+                    </svg>
+                    Notes (Optional)
+                </label>
+                <textarea @bind="notes" rows="3" placeholder="Add any additional notes..."
+                          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"></textarea>
+            </div>
+
+            <!-- Preview -->
+            <div class="p-4 bg-primary/5 dark:bg-accent/5 rounded-lg border border-primary/20 dark:border-accent/20">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Summary</h4>
+                <div class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <p><span class="font-medium">Type:</span> @blockType</p>
+                    <p><span class="font-medium">Date:</span> @blockDate.ToString("MMMM dd, yyyy")</p>
+                    <p><span class="font-medium">Time:</span> @startTimeString - @endTimeString</p>
+                    @if (isRecurring)
+                    {
+                        <p><span class="font-medium">Recurring:</span> @frequency @(frequency == "Weekly" && selectedDays.Any() ? $"({string.Join(", ", selectedDays)})" : "")</p>
+                        <p><span class="font-medium">Until:</span> @repeatUntil.ToString("MMMM dd, yyyy")</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" @onclick="SaveTimeBlock" disabled="@isSaving"
+                class="inline-flex justify-center items-center px-6 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50">
+            @if (isSaving)
+            {
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Block Time</span>
+            }
+        </button>
+        <button type="button" @onclick="Close"
+                class="inline-flex justify-center px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-all font-semibold">
+            Cancel
+        </button>
+    </FooterContent>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public DateTime SelectedDate { get; set; }
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private string blockType = "Break";
+    private DateTime blockDate = DateTime.Now;
+    private TimeOnly? startTime = new TimeOnly(12, 0);
+    private TimeOnly? endTime = new TimeOnly(13, 0);
+    private bool isRecurring = false;
+    private string frequency = "Weekly";
+    private DateTime repeatUntil = DateTime.Now.AddMonths(1);
+    private string notes = string.Empty;
+    private bool isSaving = false;
+
+    private string startTimeString => startTime?.ToString("HH:mm") ?? "12:00";
+    private string endTimeString => endTime?.ToString("HH:mm") ?? "13:00";
+
+    private List<string> daysOfWeek = new() { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+    private List<string> selectedDays = new();
+    private string doctorId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var currentUser = await AuthService.GetCurrentUserAsync();
+        if (currentUser != null)
+        {
+            doctorId = currentUser.Id;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen)
+        {
+            blockDate = SelectedDate;
+            // Set default lunch time
+            if (blockType == "Lunch")
+            {
+                startTime = new TimeOnly(12, 0);
+                endTime = new TimeOnly(13, 0);
+            }
+        }
+    }
+
+    private void ToggleDay(string day, bool isSelected)
+    {
+        if (isSelected && !selectedDays.Contains(day))
+        {
+            selectedDays.Add(day);
+        }
+        else if (!isSelected && selectedDays.Contains(day))
+        {
+            selectedDays.Remove(day);
+        }
+    }
+
+    private async Task SaveTimeBlock()
+    {
+        isSaving = true;
+        try
+        {
+            // Validate authentication
+            if (string.IsNullOrEmpty(doctorId))
+            {
+                ToastService.ShowError("You must be logged in as a doctor to create time blocks!");
+                isSaving = false;
+                return;
+            }
+
+            // Validate time fields
+            if (!startTime.HasValue || !endTime.HasValue)
+            {
+                ToastService.ShowError("Please select both start and end times!");
+                isSaving = false;
+                return;
+            }
+
+            // Validate time range
+            if (endTime.Value <= startTime.Value)
+            {
+                ToastService.ShowError("End time must be after start time!");
+                isSaving = false;
+                return;
+            }
+
+            // Validate date is not in the past
+            var blockDateTime = blockDate.Date + startTime.Value.ToTimeSpan();
+            if (blockDateTime < DateTime.Now)
+            {
+                ToastService.ShowError("Cannot create time blocks in the past!");
+                isSaving = false;
+                return;
+            }
+
+            // Validate recurring weekly selection
+            if (isRecurring && frequency == "Weekly" && !selectedDays.Any())
+            {
+                ToastService.ShowError("Please select at least one day for weekly recurring time blocks!");
+                isSaving = false;
+                return;
+            }
+
+            // Validate repeat until date
+            if (isRecurring && repeatUntil <= blockDate)
+            {
+                ToastService.ShowError("Repeat until date must be after the start date!");
+                isSaving = false;
+                return;
+            }
+
+            // Check for conflicts
+            var hasConflict = await TimeBlockService.CheckTimeSlotConflictAsync(
+                blockDate,
+                startTime.Value.ToTimeSpan(),
+                endTime.Value.ToTimeSpan()
+            );
+
+            if (hasConflict)
+            {
+                ToastService.ShowError("This time slot conflicts with an existing time block or appointment!");
+                isSaving = false;
+                return;
+            }
+
+            // Build input model
+            var input = new CreateTimeBlockInput
+            {
+                DoctorId = doctorId,
+                BlockType = blockType,
+                Date = blockDate,
+                StartTime = startTime.Value.ToTimeSpan(),
+                EndTime = endTime.Value.ToTimeSpan(),
+                IsRecurring = isRecurring,
+                RecurrencePattern = isRecurring ? BuildRecurrencePattern() : null,
+                RepeatUntilDate = isRecurring ? repeatUntil : null,
+                Notes = string.IsNullOrWhiteSpace(notes) ? null : notes
+            };
+
+            // Call appropriate service method
+            if (isRecurring)
+            {
+                var results = await TimeBlockService.CreateRecurringTimeBlocksAsync(input);
+                if (results != null && results.Any())
+                {
+                    ToastService.ShowSuccess($"Successfully created {results.Count} recurring {blockType} time block(s)!");
+                    await OnClose.InvokeAsync(true);
+                }
+                else
+                {
+                    ToastService.ShowError("Failed to create recurring time blocks. Please try again.");
+                }
+            }
+            else
+            {
+                var result = await TimeBlockService.CreateTimeBlockAsync(input);
+                if (result != null)
+                {
+                    ToastService.ShowSuccess($"{blockType} time block created successfully!");
+                    await OnClose.InvokeAsync(true);
+                }
+                else
+                {
+                    ToastService.ShowError("Failed to create time block. Please try again.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error creating time block: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private string BuildRecurrencePattern()
+    {
+        var pattern = new
+        {
+            Frequency = frequency,
+            DaysOfWeek = frequency == "Weekly" ? selectedDays : null
+        };
+
+        return JsonSerializer.Serialize(pattern);
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync(false);
+    }
+}

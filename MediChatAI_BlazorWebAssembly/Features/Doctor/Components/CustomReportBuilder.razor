@@ -1,0 +1,362 @@
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+
+<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Custom Report Builder</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Create your own custom report with selected metrics</p>
+        </div>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            @foreach (var step in new[] { new { Number = 1, Label = "Report Type" }, new { Number = 2, Label = "Date Range" }, new { Number = 3, Label = "Metrics" }, new { Number = 4, Label = "Filters" } })
+            {
+                <div class="flex items-center @(step.Number < 4 ? "flex-1" : "")">
+                    <div class="flex items-center gap-2">
+                        <div class="@(CurrentStep >= step.Number ? "bg-primary text-white" : "bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400") w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all">
+                            @step.Number
+                        </div>
+                        <span class="@(CurrentStep >= step.Number ? "text-gray-900 dark:text-white font-semibold" : "text-gray-500 dark:text-gray-400") text-sm">@step.Label</span>
+                    </div>
+                    @if (step.Number < 4)
+                    {
+                        <div class="flex-1 h-1 mx-4 @(CurrentStep > step.Number ? "bg-primary" : "bg-gray-300 dark:bg-gray-600") rounded"></div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Step 1: Report Type -->
+    @if (CurrentStep == 1)
+    {
+        <div class="space-y-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Report Type</label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                @foreach (var type in new[] {
+                    new { Value = "Patient", Label = "Patient Reports", Icon = "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
+                    new { Value = "Appointment", Label = "Appointment Analytics", Icon = "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
+                    new { Value = "Prescription", Label = "Prescription Reports", Icon = "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+                    new { Value = "Revenue", Label = "Revenue & Financial", Icon = "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" }
+                })
+                {
+                    <button @onclick="() => SelectReportType(type.Value)"
+                            class="@(Config.ReportType == type.Value ? "border-primary bg-primary/5" : "border-gray-300 dark:border-gray-600") border-2 rounded-xl p-4 text-left hover:border-primary transition-all group">
+                        <div class="flex items-start gap-3">
+                            <div class="p-2 @(Config.ReportType == type.Value ? "bg-primary text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400") rounded-lg">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="@type.Icon"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white">@type.Label</h4>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Generate detailed @type.Label.ToLower()</p>
+                            </div>
+                        </div>
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Step 2: Date Range -->
+    @if (CurrentStep == 2)
+    {
+        <div class="space-y-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Date Range</label>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                @foreach (var preset in new[] { "Today", "This Week", "This Month", "Last Month" })
+                {
+                    <button @onclick="() => SelectDatePreset(preset)"
+                            class="px-4 py-2 @(SelectedPreset == preset ? "bg-primary text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300") rounded-lg hover:bg-primary hover:text-white transition-colors font-medium text-sm">
+                        @preset
+                    </button>
+                }
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Date</label>
+                    <input type="date" @bind="Config.DateFrom" @bind:event="oninput"
+                           class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Date</label>
+                    <input type="date" @bind="Config.DateTo" @bind:event="oninput"
+                           class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white" />
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 mt-4">
+                <input type="checkbox" id="comparison" @bind="Config.ComparisonEnabled"
+                       class="w-4 h-4 text-primary bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                <label for="comparison" class="text-sm text-gray-700 dark:text-gray-300">Enable comparison with previous period</label>
+            </div>
+        </div>
+    }
+
+    <!-- Step 3: Select Metrics -->
+    @if (CurrentStep == 3)
+    {
+        <div class="space-y-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Metrics to Include</label>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                @foreach (var metric in GetAvailableMetrics())
+                {
+                    <label class="flex items-start gap-3 p-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors">
+                        <input type="checkbox" @bind="metric.IsSelected"
+                               class="mt-1 w-4 h-4 text-primary bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                        <div>
+                            <div class="font-medium text-gray-900 dark:text-white">@metric.Name</div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">@metric.Description</p>
+                        </div>
+                    </label>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Step 4: Filters -->
+    @if (CurrentStep == 4)
+    {
+        <div class="space-y-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Additional Filters (Optional)</label>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                @if (Config.ReportType == "Patient")
+                {
+                    <div>
+                        <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Gender</label>
+                        <select class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
+                            <option>All</option>
+                            <option>Male</option>
+                            <option>Female</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Age Range</label>
+                        <select class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
+                            <option>All Ages</option>
+                            <option>0-18</option>
+                            <option>19-35</option>
+                            <option>36-60</option>
+                            <option>60+</option>
+                        </select>
+                    </div>
+                }
+                @if (Config.ReportType == "Appointment")
+                {
+                    <div>
+                        <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Appointment Type</label>
+                        <select class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
+                            <option>All Types</option>
+                            <option>Consultation</option>
+                            <option>Follow-up</option>
+                            <option>Emergency</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                        <select class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white">
+                            <option>All Statuses</option>
+                            <option>Completed</option>
+                            <option>Cancelled</option>
+                            <option>No-Show</option>
+                        </select>
+                    </div>
+                }
+            </div>
+
+            <div class="flex items-center gap-2 mt-4">
+                <input type="checkbox" id="includeCharts" @bind="Config.IncludeCharts"
+                       class="w-4 h-4 text-primary bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary" />
+                <label for="includeCharts" class="text-sm text-gray-700 dark:text-gray-300">Include charts and visualizations in report</label>
+            </div>
+        </div>
+    }
+
+    <!-- Navigation Buttons -->
+    <div class="flex items-center justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+        <button @onclick="PreviousStep"
+                disabled="@(CurrentStep == 1)"
+                class="@(CurrentStep == 1 ? "opacity-50 cursor-not-allowed" : "") px-6 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Previous
+        </button>
+
+        @if (CurrentStep < 4)
+        {
+            <button @onclick="NextStep"
+                    class="px-6 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-lg hover:shadow-lg transition-all font-medium flex items-center gap-2">
+                Next
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </button>
+        }
+        else
+        {
+            <div class="flex gap-3">
+                <button @onclick="SaveAsTemplate"
+                        class="px-6 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium">
+                    Save as Template
+                </button>
+                <button @onclick="GenerateReport"
+                        class="px-6 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-lg hover:shadow-lg transition-all font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Generate Report
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<CustomReportConfiguration> OnReportGenerated { get; set; }
+    [Parameter] public EventCallback<CustomReportConfiguration> OnTemplateSaved { get; set; }
+
+    private int CurrentStep = 1;
+    private string SelectedPreset = "";
+    private CustomReportConfiguration Config = new()
+    {
+        DateFrom = DateTime.Now.AddMonths(-1),
+        DateTo = DateTime.Now,
+        IncludeCharts = true
+    };
+
+    private List<MetricOption> AvailableMetrics = new();
+
+    protected override void OnInitialized()
+    {
+        // Initialize with default values
+        Config.ReportType = "Patient";
+    }
+
+    private void SelectReportType(string type)
+    {
+        Config.ReportType = type;
+    }
+
+    private void SelectDatePreset(string preset)
+    {
+        SelectedPreset = preset;
+        var now = DateTime.Now;
+
+        switch (preset)
+        {
+            case "Today":
+                Config.DateFrom = now.Date;
+                Config.DateTo = now.Date;
+                break;
+            case "This Week":
+                Config.DateFrom = now.AddDays(-(int)now.DayOfWeek);
+                Config.DateTo = now;
+                break;
+            case "This Month":
+                Config.DateFrom = new DateTime(now.Year, now.Month, 1);
+                Config.DateTo = now;
+                break;
+            case "Last Month":
+                var lastMonth = now.AddMonths(-1);
+                Config.DateFrom = new DateTime(lastMonth.Year, lastMonth.Month, 1);
+                Config.DateTo = new DateTime(lastMonth.Year, lastMonth.Month, DateTime.DaysInMonth(lastMonth.Year, lastMonth.Month));
+                break;
+        }
+    }
+
+    private List<MetricOption> GetAvailableMetrics()
+    {
+        var metrics = new List<MetricOption>();
+
+        switch (Config.ReportType)
+        {
+            case "Patient":
+                metrics.AddRange(new[]
+                {
+                    new MetricOption { Name = "Total Active Patients", Description = "Number of currently active patients", IsSelected = true },
+                    new MetricOption { Name = "New Patients", Description = "New patient registrations in period", IsSelected = true },
+                    new MetricOption { Name = "Patient Demographics", Description = "Age, gender, and location distribution", IsSelected = true },
+                    new MetricOption { Name = "Visit Trends", Description = "Patient visit patterns over time", IsSelected = false },
+                    new MetricOption { Name = "Top Conditions", Description = "Most common patient conditions", IsSelected = false }
+                });
+                break;
+            case "Appointment":
+                metrics.AddRange(new[]
+                {
+                    new MetricOption { Name = "Total Appointments", Description = "All appointments in period", IsSelected = true },
+                    new MetricOption { Name = "Completion Rate", Description = "Percentage of completed appointments", IsSelected = true },
+                    new MetricOption { Name = "Appointment Trends", Description = "Appointment volume over time", IsSelected = true },
+                    new MetricOption { Name = "Hourly Distribution", Description = "Appointments by time of day", IsSelected = false },
+                    new MetricOption { Name = "Weekly Patterns", Description = "Appointments by day of week", IsSelected = false }
+                });
+                break;
+            case "Prescription":
+                metrics.AddRange(new[]
+                {
+                    new MetricOption { Name = "Total Prescriptions", Description = "All prescriptions written", IsSelected = true },
+                    new MetricOption { Name = "Medication Breakdown", Description = "Prescriptions by category", IsSelected = true },
+                    new MetricOption { Name = "Top Medications", Description = "Most prescribed medications", IsSelected = true },
+                    new MetricOption { Name = "Prescription Trends", Description = "Prescription volume over time", IsSelected = false },
+                    new MetricOption { Name = "Refill Requests", Description = "Number of refill requests", IsSelected = false }
+                });
+                break;
+            case "Revenue":
+                metrics.AddRange(new[]
+                {
+                    new MetricOption { Name = "Total Revenue", Description = "Total earnings in period", IsSelected = true },
+                    new MetricOption { Name = "Revenue Trends", Description = "Revenue over time", IsSelected = true },
+                    new MetricOption { Name = "Revenue by Service", Description = "Earnings breakdown by service type", IsSelected = true },
+                    new MetricOption { Name = "Payment Methods", Description = "Revenue by payment method", IsSelected = false },
+                    new MetricOption { Name = "Monthly Comparison", Description = "Month-over-month comparison", IsSelected = false }
+                });
+                break;
+        }
+
+        return metrics;
+    }
+
+    private void NextStep()
+    {
+        if (CurrentStep < 4)
+        {
+            CurrentStep++;
+        }
+    }
+
+    private void PreviousStep()
+    {
+        if (CurrentStep > 1)
+        {
+            CurrentStep--;
+        }
+    }
+
+    private async Task GenerateReport()
+    {
+        Config.SelectedMetrics = GetAvailableMetrics().Where(m => m.IsSelected).Select(m => m.Name).ToList();
+        Config.ReportName = $"{Config.ReportType} Report - {Config.DateFrom:yyyy-MM-dd} to {Config.DateTo:yyyy-MM-dd}";
+        await OnReportGenerated.InvokeAsync(Config);
+    }
+
+    private async Task SaveAsTemplate()
+    {
+        Config.SelectedMetrics = GetAvailableMetrics().Where(m => m.IsSelected).Select(m => m.Name).ToList();
+        await OnTemplateSaved.InvokeAsync(Config);
+    }
+
+    private class MetricOption
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public bool IsSelected { get; set; }
+    }
+}

@@ -1,0 +1,402 @@
+@page "/doctor/consultation"
+@using MediChatAI_BlazorWebAssembly.Core.Services.Consultation
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Services
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IConsultationRoomService ConsultationRoomService
+@inject IAppointmentService AppointmentService
+@inject IPatientManagementService PatientService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Consultations - MediChatAI</PageTitle>
+
+<div class="min-h-screen bg-gray-900 p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">Consultations</h1>
+            <p class="text-gray-400">Manage your active and past consultations</p>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="flex items-center justify-center py-20">
+                <div class="text-center">
+                    <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                    <p class="text-gray-300 text-lg">Loading consultations...</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Active Consultations -->
+            @if (activeConsultations.Any())
+            {
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+                        <span class="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></span>
+                        Active Consultations
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach (var consultation in activeConsultations)
+                        {
+                            <div class="bg-gray-800 border border-green-500/30 rounded-lg p-5 hover:border-green-500/60 transition-all">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h3 class="text-white font-semibold text-lg mb-1">@consultation.PatientName</h3>
+                                        <p class="text-gray-400 text-sm">Session #@consultation.SessionId</p>
+                                    </div>
+                                    <span class="px-2 py-1 bg-green-900/30 text-green-400 text-xs font-medium rounded">
+                                        @consultation.Status
+                                    </span>
+                                </div>
+                                <div class="space-y-2 mb-4">
+                                    <div class="flex items-center text-sm text-gray-300">
+                                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        Started: @consultation.StartTime?.ToString("MMM dd, hh:mm tt")
+                                    </div>
+                                    <div class="flex items-center text-sm text-gray-300">
+                                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                                        </svg>
+                                        @consultation.ParticipantCount participant(s)
+                                    </div>
+                                    @if (consultation.Duration != null)
+                                    {
+                                        <div class="flex items-center text-sm text-green-400 font-medium">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                            </svg>
+                                            Live for @consultation.Duration
+                                        </div>
+                                    }
+                                </div>
+                                <button @onclick="() => JoinConsultation(consultation.AppointmentId)"
+                                        class="w-full btn btn-primary">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                    Rejoin Consultation
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Upcoming Consultations -->
+            @if (upcomingConsultations.Any())
+            {
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Upcoming Consultations
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach (var consultation in upcomingConsultations)
+                        {
+                            <div class="bg-gray-800 border border-gray-700 rounded-lg p-5 hover:border-gray-600 transition-all">
+                                <div class="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h3 class="text-white font-semibold text-lg mb-1">@consultation.PatientName</h3>
+                                        <p class="text-gray-400 text-sm">Appointment #@consultation.AppointmentId</p>
+                                    </div>
+                                    <span class="px-2 py-1 bg-blue-900/30 text-blue-400 text-xs font-medium rounded">
+                                        Scheduled
+                                    </span>
+                                </div>
+                                <div class="space-y-2 mb-4">
+                                    <div class="flex items-center text-sm text-gray-300">
+                                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                        </svg>
+                                        @consultation.ScheduledTime?.ToString("MMM dd, yyyy")
+                                    </div>
+                                    <div class="flex items-center text-sm text-gray-300">
+                                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        @consultation.ScheduledTime?.ToString("hh:mm tt")
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(consultation.Reason))
+                                    {
+                                        <div class="flex items-start text-sm text-gray-300">
+                                            <svg class="w-4 h-4 mr-2 mt-0.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                            </svg>
+                                            <span class="line-clamp-2">@consultation.Reason</span>
+                                        </div>
+                                    }
+                                </div>
+                                <button @onclick="() => StartConsultation(consultation.AppointmentId)"
+                                        class="w-full btn btn-outline btn-primary">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                    Start Consultation
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Recent Consultations -->
+            @if (recentConsultations.Any())
+            {
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Recent Consultations
+                    </h2>
+                    <div class="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="table w-full">
+                                <thead class="bg-gray-850">
+                                    <tr>
+                                        <th class="text-gray-400 font-medium">Patient</th>
+                                        <th class="text-gray-400 font-medium">Date</th>
+                                        <th class="text-gray-400 font-medium">Duration</th>
+                                        <th class="text-gray-400 font-medium">Status</th>
+                                        <th class="text-gray-400 font-medium">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var consultation in recentConsultations)
+                                    {
+                                        <tr class="hover:bg-gray-750 transition-colors">
+                                            <td class="text-white">
+                                                <div>
+                                                    <div class="font-semibold">@consultation.PatientName</div>
+                                                    <div class="text-xs text-gray-400">Session #@consultation.SessionId</div>
+                                                </div>
+                                            </td>
+                                            <td class="text-gray-300">
+                                                @consultation.StartTime?.ToString("MMM dd, yyyy")
+                                                <div class="text-xs text-gray-400">@consultation.StartTime?.ToString("hh:mm tt")</div>
+                                            </td>
+                                            <td class="text-gray-300">
+                                                @consultation.Duration
+                                            </td>
+                                            <td>
+                                                <span class="px-2 py-1 @GetStatusClass(consultation.Status) text-xs font-medium rounded">
+                                                    @consultation.Status
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button @onclick="() => ViewConsultationSummary(consultation.SessionId)"
+                                                        class="btn btn-sm btn-ghost text-primary-400 hover:text-primary-300">
+                                                    View Summary
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (!activeConsultations.Any() && !upcomingConsultations.Any() && !recentConsultations.Any())
+            {
+                <div class="text-center py-20">
+                    <svg class="w-20 h-20 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                    <h3 class="text-xl font-semibold text-gray-400 mb-2">No Consultations Found</h3>
+                    <p class="text-gray-500 mb-6">You don't have any consultations at the moment.</p>
+                    <button @onclick="GoToAppointments" class="btn btn-primary">
+                        Go to Appointments
+                    </button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private string doctorId = string.Empty;
+
+    private List<ConsultationListItemDto> activeConsultations = new();
+    private List<ConsultationListItemDto> upcomingConsultations = new();
+    private List<ConsultationListItemDto> recentConsultations = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            doctorId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+
+            await LoadConsultations();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load consultations: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadConsultations()
+    {
+        try
+        {
+            // Load active consultations
+            var activeSessions = await ConsultationRoomService.GetDoctorActiveConsultationsAsync(doctorId);
+            if (activeSessions != null)
+            {
+                foreach (var session in activeSessions)
+                {
+                    var appointment = await AppointmentService.GetAppointmentByIdAsync(session.AppointmentId.ToString());
+                    var patient = appointment?.PatientId != null
+                        ? await PatientService.GetPatientByIdAsync(appointment.PatientId)
+                        : null;
+
+                    var duration = session.ActualStartTime != null
+                        ? FormatDuration(DateTime.UtcNow - session.ActualStartTime.Value)
+                        : null;
+
+                    activeConsultations.Add(new ConsultationListItemDto
+                    {
+                        SessionId = session.Id,
+                        AppointmentId = session.AppointmentId,
+                        PatientName = patient?.FullName ?? "Unknown Patient",
+                        Status = session.Status,
+                        StartTime = session.ActualStartTime,
+                        Duration = duration,
+                        ParticipantCount = session.Participants?.Count ?? 0
+                    });
+                }
+            }
+
+            // Load upcoming appointments (that can become consultations)
+            var appointments = await AppointmentService.GetDoctorAppointmentsAsync();
+            if (appointments != null)
+            {
+                var upcoming = appointments
+                    .Where(a => a.Status.ToString() == "Scheduled" || a.Status.ToString() == "Confirmed")
+                    .Where(a => a.AppointmentDateTime >= DateTime.UtcNow)
+                    .OrderBy(a => a.AppointmentDateTime)
+                    .Take(6);
+
+                foreach (var apt in upcoming)
+                {
+                    var patient = apt.PatientId != null
+                        ? await PatientService.GetPatientByIdAsync(apt.PatientId)
+                        : null;
+
+                    upcomingConsultations.Add(new ConsultationListItemDto
+                    {
+                        AppointmentId = apt.Id,
+                        PatientName = patient?.FullName ?? apt.PatientName ?? "Unknown Patient",
+                        Status = "Scheduled",
+                        ScheduledTime = apt.AppointmentDateTime,
+                        Reason = apt.ReasonForVisit
+                    });
+                }
+            }
+
+            // Load recent completed consultations
+            var recentSessions = await ConsultationRoomService.GetDoctorRecentConsultationsAsync(doctorId, 10);
+            if (recentSessions != null)
+            {
+                foreach (var session in recentSessions)
+                {
+                    var appointment = await AppointmentService.GetAppointmentByIdAsync(session.AppointmentId.ToString());
+                    var patient = appointment?.PatientId != null
+                        ? await PatientService.GetPatientByIdAsync(appointment.PatientId)
+                        : null;
+
+                    var duration = session.ActualStartTime != null && session.ActualEndTime != null
+                        ? FormatDuration(session.ActualEndTime.Value - session.ActualStartTime.Value)
+                        : "N/A";
+
+                    recentConsultations.Add(new ConsultationListItemDto
+                    {
+                        SessionId = session.Id,
+                        AppointmentId = session.AppointmentId,
+                        PatientName = patient?.FullName ?? "Unknown Patient",
+                        Status = session.Status,
+                        StartTime = session.ActualStartTime,
+                        Duration = duration
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading consultations: {ex.Message}");
+        }
+    }
+
+    private void JoinConsultation(int appointmentId)
+    {
+        Navigation.NavigateTo($"/doctor/consultation/{appointmentId}");
+    }
+
+    private void StartConsultation(int appointmentId)
+    {
+        Navigation.NavigateTo($"/doctor/consultation/{appointmentId}");
+    }
+
+    private void ViewConsultationSummary(int sessionId)
+    {
+        ToastService.ShowInfo("Consultation summary view coming soon");
+        // Future: Navigate to detailed consultation summary page
+        // Navigation.NavigateTo($"/doctor/consultation/summary/{sessionId}");
+    }
+
+    private void GoToAppointments()
+    {
+        Navigation.NavigateTo("/doctor/appointments");
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Completed" => "bg-blue-900/30 text-blue-400",
+            "Cancelled" => "bg-red-900/30 text-red-400",
+            "Active" => "bg-green-900/30 text-green-400",
+            _ => "bg-gray-700 text-gray-300"
+        };
+    }
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        else if (duration.TotalMinutes >= 1)
+            return $"{(int)duration.TotalMinutes}m";
+        else
+            return $"{(int)duration.TotalSeconds}s";
+    }
+
+    private class ConsultationListItemDto
+    {
+        public int SessionId { get; set; }
+        public int AppointmentId { get; set; }
+        public string PatientName { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public DateTime? StartTime { get; set; }
+        public DateTime? ScheduledTime { get; set; }
+        public string? Duration { get; set; }
+        public int ParticipantCount { get; set; }
+        public string? Reason { get; set; }
+    }
+}

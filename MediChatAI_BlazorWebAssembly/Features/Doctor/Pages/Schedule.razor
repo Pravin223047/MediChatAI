@@ -1,0 +1,486 @@
+@page "/doctor/schedule"
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Models
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Services
+@using MediChatAI_BlazorWebAssembly.Features.Doctor.Components
+@inject IAppointmentService AppointmentService
+@inject IToastService ToastService
+@inject NavigationManager NavigationManager
+
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <!-- Header with Gradient Background -->
+    <div class="bg-gradient-to-r from-primary to-accent dark:from-primary-dark dark:to-accent-dark text-white shadow-lg">
+        <div class="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex flex-col space-y-4">
+                <!-- Title Row -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-3xl font-bold">My Schedule</h1>
+                            <p class="text-white/90 text-sm mt-1">Manage appointments and time blocks</p>
+                        </div>
+                    </div>
+
+                    <!-- View Mode Switcher -->
+                    <div class="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-xl p-1">
+                        <button @onclick="() => SetViewMode(AppointmentViewMode.Week)"
+                                class="@GetViewButtonClass(AppointmentViewMode.Week) px-4 py-2 rounded-lg transition-all">
+                            <svg class="w-5 h-5 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                            </svg>
+                            Week
+                        </button>
+                        <button @onclick="() => SetViewMode(AppointmentViewMode.Month)"
+                                class="@GetViewButtonClass(AppointmentViewMode.Month) px-4 py-2 rounded-lg transition-all">
+                            <svg class="w-5 h-5 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            Month
+                        </button>
+                        <button @onclick="() => SetViewMode(AppointmentViewMode.Day)"
+                                class="@GetViewButtonClass(AppointmentViewMode.Day) px-4 py-2 rounded-lg transition-all">
+                            <svg class="w-5 h-5 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Day
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Bar -->
+                <ScheduleStatsBar Statistics="@statistics" IsLoading="@isLoadingStats" />
+
+                <!-- Navigation Controls -->
+                <div class="flex items-center justify-between bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                    <button @onclick="NavigatePrevious"
+                            class="flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                        <span class="font-semibold">Previous</span>
+                    </button>
+
+                    <div class="flex items-center space-x-4">
+                        <button @onclick="NavigateToToday"
+                                class="px-6 py-2 bg-white text-primary hover:bg-white/90 rounded-lg font-semibold transition-all shadow-md">
+                            Today
+                        </button>
+                        <span class="text-xl font-bold">@GetDateRangeDisplay()</span>
+                    </div>
+
+                    <button @onclick="NavigateNext"
+                            class="flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all">
+                        <span class="font-semibold">Next</span>
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center justify-end space-x-3">
+                    <button @onclick="() => showTimeBlockModal = true"
+                            class="flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span>Block Time</span>
+                    </button>
+                    <button @onclick="() => showExportModal = true"
+                            class="flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                        </svg>
+                        <span>Export</span>
+                    </button>
+                    <FixMidnightAppointmentsButton OnAppointmentsFixed="HandleAppointmentsFixed" />
+                    <button @onclick="RefreshSchedule"
+                            class="flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all">
+                        <svg class="w-5 h-5 @(isLoading ? "animate-spin" : "")" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        @if (isLoading)
+        {
+            <div class="flex flex-col justify-center items-center py-20">
+                <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-primary dark:border-accent"></div>
+                <p class="mt-4 text-gray-600 dark:text-gray-400 text-lg">Loading schedule...</p>
+            </div>
+        }
+        else if (hasError)
+        {
+            <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-6 rounded-lg">
+                <div class="flex items-center">
+                    <svg class="w-8 h-8 text-red-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <h3 class="text-lg font-semibold text-red-800 dark:text-red-200">Error Loading Schedule</h3>
+                        <p class="text-red-700 dark:text-red-300">@errorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            @switch (currentViewMode)
+            {
+                case AppointmentViewMode.Week:
+                    <WeekTimelineView WeekSchedule="@weekSchedule"
+                                      PendingRequests="@pendingRequests"
+                                      OnAppointmentClick="@onAppointmentClick"
+                                      OnAppointmentReschedule="@onAppointmentReschedule"
+                                      OnTimeSlotClick="@onTimeSlotClick" />
+                    break;
+
+                case AppointmentViewMode.Month:
+                    <MonthCalendarView Calendar="@monthCalendar"
+                                       OnDayClick="@HandleDayClick" />
+                    break;
+
+                case AppointmentViewMode.Day:
+                    <DayTimelineView DaySchedule="@daySchedule"
+                                     OnAppointmentClick="@onAppointmentClick"
+                                     OnTimeSlotClick="@((time) => HandleDayTimeSlotClick(time))" />
+                    break;
+            }
+        }
+    </div>
+</div>
+
+<!-- Modals -->
+<TimeBlockModal IsOpen="@showTimeBlockModal"
+                SelectedDate="@currentDate"
+                OnClose="@HandleTimeBlockModalClose" />
+
+<ExportScheduleModal IsOpen="@showExportModal"
+                     StartDate="@GetCurrentStartDate()"
+                     EndDate="@GetCurrentEndDate()"
+                     OnClose="@(() => showExportModal = false)" />
+
+@code {
+    private AppointmentViewMode currentViewMode = AppointmentViewMode.Week;
+    private DateTime currentDate = DateTime.Now;
+    private WeekScheduleModel? weekSchedule;
+    private CalendarViewModel? monthCalendar;
+    private DayScheduleModel? daySchedule;
+    private AppointmentStatisticsModel? statistics;
+    private List<AppointmentRequestDto> pendingRequests = new();
+
+    private bool isLoading = false;
+    private bool isLoadingStats = false;
+    private bool hasError = false;
+    private string errorMessage = string.Empty;
+
+    private bool showTimeBlockModal = false;
+    private bool showExportModal = false;
+
+    private EventCallback<string> onAppointmentClick => EventCallback.Factory.Create<string>(this, HandleAppointmentClick);
+    private EventCallback<(string, DateTime, TimeSpan)> onAppointmentReschedule => EventCallback.Factory.Create<(string, DateTime, TimeSpan)>(this, HandleReschedule);
+    private EventCallback<(DateTime, TimeSpan)> onTimeSlotClick => EventCallback.Factory.Create<(DateTime, TimeSpan)>(this, HandleTimeSlotClick);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadScheduleData();
+        await LoadStatistics();
+    }
+
+    private async Task LoadScheduleData()
+    {
+        isLoading = true;
+        hasError = false;
+
+        try
+        {
+            switch (currentViewMode)
+            {
+                case AppointmentViewMode.Week:
+                    var weekStart = GetWeekStart(currentDate);
+                    weekSchedule = await AppointmentService.GetWeekScheduleAsync(weekStart);
+                    pendingRequests = await AppointmentService.GetPendingAppointmentRequestsAsync();
+                    break;
+
+                case AppointmentViewMode.Month:
+                    monthCalendar = await AppointmentService.GetMonthCalendarAsync(currentDate);
+                    break;
+
+                case AppointmentViewMode.Day:
+                    daySchedule = await AppointmentService.GetDayScheduleAsync(currentDate);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            hasError = true;
+            errorMessage = $"Failed to load schedule: {ex.Message}";
+            ToastService.ShowError(errorMessage);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadStatistics()
+    {
+        isLoadingStats = true;
+        try
+        {
+            var today = DateTime.Now.Date;
+            statistics = await AppointmentService.GetStatisticsAsync(today, today.AddMonths(1));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading statistics: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingStats = false;
+        }
+    }
+
+    private void SetViewMode(AppointmentViewMode mode)
+    {
+        if (currentViewMode != mode)
+        {
+            currentViewMode = mode;
+            _ = LoadScheduleData();
+        }
+    }
+
+    private string GetViewButtonClass(AppointmentViewMode mode)
+    {
+        return currentViewMode == mode
+            ? "bg-white text-primary font-semibold shadow-md"
+            : "text-white hover:bg-white/10";
+    }
+
+    private void NavigatePrevious()
+    {
+        currentDate = currentViewMode switch
+        {
+            AppointmentViewMode.Week => currentDate.AddDays(-7),
+            AppointmentViewMode.Month => currentDate.AddMonths(-1),
+            AppointmentViewMode.Day => currentDate.AddDays(-1),
+            _ => currentDate
+        };
+        _ = LoadScheduleData();
+    }
+
+    private void NavigateNext()
+    {
+        currentDate = currentViewMode switch
+        {
+            AppointmentViewMode.Week => currentDate.AddDays(7),
+            AppointmentViewMode.Month => currentDate.AddMonths(1),
+            AppointmentViewMode.Day => currentDate.AddDays(1),
+            _ => currentDate
+        };
+        _ = LoadScheduleData();
+    }
+
+    private void NavigateToToday()
+    {
+        currentDate = DateTime.Now;
+        _ = LoadScheduleData();
+    }
+
+    private string GetDateRangeDisplay()
+    {
+        return currentViewMode switch
+        {
+            AppointmentViewMode.Week => $"{GetWeekStart(currentDate):MMM dd} - {GetWeekStart(currentDate).AddDays(6):MMM dd, yyyy}",
+            AppointmentViewMode.Month => currentDate.ToString("MMMM yyyy"),
+            AppointmentViewMode.Day => currentDate.ToString("MMMM dd, yyyy"),
+            _ => string.Empty
+        };
+    }
+
+    private DateTime GetWeekStart(DateTime date)
+    {
+        var diff = (7 + (date.DayOfWeek - DayOfWeek.Sunday)) % 7;
+        return date.AddDays(-1 * diff).Date;
+    }
+
+    private DateTime GetCurrentStartDate()
+    {
+        return currentViewMode switch
+        {
+            AppointmentViewMode.Week => GetWeekStart(currentDate),
+            AppointmentViewMode.Month => new DateTime(currentDate.Year, currentDate.Month, 1),
+            AppointmentViewMode.Day => currentDate.Date,
+            _ => currentDate
+        };
+    }
+
+    private DateTime GetCurrentEndDate()
+    {
+        return currentViewMode switch
+        {
+            AppointmentViewMode.Week => GetWeekStart(currentDate).AddDays(6),
+            AppointmentViewMode.Month => new DateTime(currentDate.Year, currentDate.Month, 1).AddMonths(1).AddDays(-1),
+            AppointmentViewMode.Day => currentDate.Date,
+            _ => currentDate
+        };
+    }
+
+    private async Task RefreshSchedule()
+    {
+        await LoadScheduleData();
+        await LoadStatistics();
+        ToastService.ShowSuccess("Schedule refreshed!");
+    }
+
+    private void HandleAppointmentClick(string appointmentId)
+    {
+        NavigationManager.NavigateTo($"/doctor/appointments/{appointmentId}");
+    }
+
+    private async Task HandleReschedule((string appointmentId, DateTime newDate, TimeSpan newTime) args)
+    {
+        try
+        {
+            // Parse appointment ID
+            if (!int.TryParse(args.appointmentId, out var aptId))
+            {
+                ToastService.ShowError("Invalid appointment ID!");
+                return;
+            }
+
+            // Combine date and time for new appointment datetime
+            var newAppointmentDateTime = args.newDate.Date.Add(args.newTime);
+
+#if DEBUG
+            Console.WriteLine($"🔄 Rescheduling Appointment {aptId}:");
+            Console.WriteLine($"   New Date: {args.newDate:yyyy-MM-dd}");
+            Console.WriteLine($"   New Time: {args.newTime}");
+            Console.WriteLine($"   Combined DateTime: {newAppointmentDateTime:yyyy-MM-dd HH:mm:ss}");
+#endif
+
+            // Check if the new time is in the past
+            if (newAppointmentDateTime < DateTime.Now)
+            {
+                ToastService.ShowError("Cannot reschedule appointment to a past date/time!");
+                return;
+            }
+
+            // Call the reschedule service
+            var result = await AppointmentService.RescheduleAppointmentAsync(aptId, newAppointmentDateTime);
+
+#if DEBUG
+            if (result != null)
+            {
+                Console.WriteLine($"✅ Reschedule successful. Result:");
+                Console.WriteLine($"   Appointment ID: {result.Id}");
+                Console.WriteLine($"   Appointment DateTime: {result.AppointmentDateTime:yyyy-MM-dd HH:mm:ss}");
+                Console.WriteLine($"   Patient: {result.PatientName}");
+            }
+            else
+            {
+                Console.WriteLine($"❌ Reschedule failed - service returned null");
+            }
+#endif
+
+            if (result != null)
+            {
+                ToastService.ShowSuccess($"Appointment rescheduled to {newAppointmentDateTime:MMM dd, yyyy h:mm tt}");
+
+                // Reload schedule data
+                await LoadScheduleData();
+
+#if DEBUG
+                // Verify the reloaded data
+                if (weekSchedule != null)
+                {
+                    var reloadedAppt = weekSchedule.Days
+                        .SelectMany(d => d.Appointments)
+                        .FirstOrDefault(a => a.AppointmentId == aptId.ToString());
+
+                    if (reloadedAppt != null)
+                    {
+                        Console.WriteLine($"📊 Reloaded appointment data:");
+                        Console.WriteLine($"   Appointment ID: {reloadedAppt.AppointmentId}");
+                        Console.WriteLine($"   Date: {reloadedAppt.AppointmentDate:yyyy-MM-dd}");
+                        Console.WriteLine($"   StartTime: {reloadedAppt.StartTime}");
+                        Console.WriteLine($"   EndTime: {reloadedAppt.EndTime}");
+
+                        if (reloadedAppt.StartTime == TimeSpan.Zero)
+                        {
+                            Console.WriteLine($"⚠️ WARNING: Appointment has midnight time (00:00:00)!");
+                            Console.WriteLine($"   This will cause it to not render in any 7 AM - 9 PM time slot!");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"⚠️ WARNING: Could not find appointment {aptId} in reloaded data!");
+                    }
+                }
+#endif
+
+                StateHasChanged(); // Force UI update after rescheduling
+            }
+            else
+            {
+                ToastService.ShowError("Failed to reschedule appointment. Please try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception in HandleReschedule: {ex.Message}");
+            Console.WriteLine($"   Stack trace: {ex.StackTrace}");
+            ToastService.ShowError($"Failed to reschedule: {ex.Message}");
+        }
+    }
+
+    private void HandleTimeSlotClick((DateTime date, TimeSpan time) args)
+    {
+        // Open appointment creation modal or navigate to appointments page
+        NavigationManager.NavigateTo($"/doctor/appointments?create=true&date={args.date:yyyy-MM-dd}&time={args.time}");
+    }
+
+    private async Task HandleAppointmentsFixed()
+    {
+        Console.WriteLine("🔄 Appointments fixed! Refreshing schedule...");
+        await LoadScheduleData();
+        await LoadStatistics();
+        ToastService.ShowSuccess("Schedule refreshed with fixed appointments!");
+    }
+
+    private async Task HandleDayClick(DateTime date)
+    {
+        // Switch to day view for the selected date
+        currentDate = date;
+        currentViewMode = AppointmentViewMode.Day;
+        await LoadScheduleData();
+    }
+
+    private void HandleDayTimeSlotClick(TimeSpan time)
+    {
+        // Open appointment creation for the selected time slot
+        if (daySchedule != null)
+        {
+            NavigationManager.NavigateTo($"/doctor/appointments?create=true&date={daySchedule.Date:yyyy-MM-dd}&time={time}");
+        }
+    }
+
+    private async Task HandleTimeBlockModalClose(bool changed)
+    {
+        showTimeBlockModal = false;
+        if (changed)
+        {
+            await LoadScheduleData();
+        }
+    }
+}

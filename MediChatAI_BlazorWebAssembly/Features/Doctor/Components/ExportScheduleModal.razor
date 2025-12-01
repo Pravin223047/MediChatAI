@@ -1,0 +1,405 @@
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Components
+@inject IToastService ToastService
+@inject IJSRuntime JSRuntime
+
+<ModalBase IsOpen="@IsOpen"
+           Title="Export Schedule"
+           Subtitle="Print or download your schedule"
+           Size="md"
+           OnClose="@Close">
+    <ChildContent>
+        <div class="space-y-6">
+            <!-- Export Type -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Export Format
+                </label>
+                <div class="grid grid-cols-2 gap-4">
+                    <button @onclick="SelectPdf"
+                            class="@PdfButtonClass">
+                        <svg class="w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                        <span class="font-semibold">PDF Document</span>
+                    </button>
+                    <button @onclick="SelectPrint"
+                            class="@PrintButtonClass">
+                        <svg class="w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                        </svg>
+                        <span class="font-semibold">Print</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Date Range -->
+            <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Date Range</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                            From
+                        </label>
+                        <input type="date" @bind="startDate"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                            To
+                        </label>
+                        <input type="date" @bind="endDate"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Include Options -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Include in Export
+                </label>
+                <div class="space-y-2">
+                    <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+                        <input type="checkbox" @bind="includeAppointments"
+                               class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary dark:border-gray-600 dark:bg-gray-700" />
+                        <div class="flex-1">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Confirmed Appointments</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Include all confirmed appointments</p>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+                        <input type="checkbox" @bind="includePendingRequests"
+                               class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary dark:border-gray-600 dark:bg-gray-700" />
+                        <div class="flex-1">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Pending Requests</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Include pending appointment requests</p>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+                        <input type="checkbox" @bind="includeTimeBlocks"
+                               class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary dark:border-gray-600 dark:bg-gray-700" />
+                        <div class="flex-1">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Time Blocks</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Include blocked time (breaks, lunch, etc.)</p>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+                        <input type="checkbox" @bind="includePatientDetails"
+                               class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary dark:border-gray-600 dark:bg-gray-700" />
+                        <div class="flex-1">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Patient Details</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Include patient contact information</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Layout Options (PDF only) -->
+            @if (exportType == "PDF")
+            {
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        Layout
+                    </label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button @onclick="SelectTimelineLayout"
+                                class="@TimelineLayoutClass">
+                            Timeline View
+                        </button>
+                        <button @onclick="SelectListLayout"
+                                class="@ListLayoutClass">
+                            List View
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Preview Info -->
+            <div class="p-4 bg-gradient-to-r from-primary/10 to-accent/10 dark:from-primary-dark/10 dark:to-accent-dark/10 rounded-lg border border-primary/20 dark:border-accent/20">
+                <div class="flex items-start">
+                    <svg class="w-5 h-5 text-primary dark:text-accent mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="text-sm text-gray-700 dark:text-gray-300">
+                        <p class="font-semibold mb-1">Export Summary</p>
+                        <p>Format: <span class="font-medium">@exportType</span></p>
+                        <p>Period: <span class="font-medium">@startDate.ToString("MMM dd") - @endDate.ToString("MMM dd, yyyy")</span></p>
+                        @if (exportType == "PDF")
+                        {
+                            <p>Layout: <span class="font-medium">@layoutType</span></p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" @onclick="HandleExport" disabled="@isExporting"
+                class="inline-flex justify-center items-center px-6 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50">
+            @if (isExporting)
+            {
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>@(exportType == "Print" ? "Preparing..." : "Generating...")</span>
+            }
+            else
+            {
+                @if (exportType == "Print")
+                {
+                    <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                    </svg>
+                }
+                else
+                {
+                    <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                }
+                <span>@(exportType == "Print" ? "Print" : "Download PDF")</span>
+            }
+        </button>
+        <button type="button" @onclick="Close"
+                class="inline-flex justify-center px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-all font-semibold">
+            Cancel
+        </button>
+    </FooterContent>
+</ModalBase>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public DateTime StartDate { get; set; }
+    [Parameter] public DateTime EndDate { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string exportType = "PDF";
+    private DateTime startDate;
+    private DateTime endDate;
+    private string layoutType = "Timeline";
+    private bool includeAppointments = true;
+    private bool includePendingRequests = false;
+    private bool includeTimeBlocks = false;
+    private bool includePatientDetails = true;
+    private bool isExporting = false;
+
+    private string PdfButtonClass => $"text-center p-4 rounded-lg border-2 transition-all {(exportType == "PDF" ? "border-primary dark:border-accent bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent" : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary dark:hover:border-accent")}";
+    private string PrintButtonClass => $"text-center p-4 rounded-lg border-2 transition-all {(exportType == "Print" ? "border-primary dark:border-accent bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent" : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary dark:hover:border-accent")}";
+    private string TimelineLayoutClass => $"text-center font-medium p-3 rounded-lg border-2 text-sm transition-all {(layoutType == "Timeline" ? "border-primary dark:border-accent bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent" : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary dark:hover:border-accent")}";
+    private string ListLayoutClass => $"text-center font-medium p-3 rounded-lg border-2 text-sm transition-all {(layoutType == "List" ? "border-primary dark:border-accent bg-primary/10 dark:bg-accent/10 text-primary dark:text-accent" : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary dark:hover:border-accent")}";
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen)
+        {
+            startDate = StartDate;
+            endDate = EndDate;
+        }
+    }
+
+    private void SelectPdf() => exportType = "PDF";
+    private void SelectPrint() => exportType = "Print";
+    private void SelectTimelineLayout() => layoutType = "Timeline";
+    private void SelectListLayout() => layoutType = "List";
+
+    private async Task HandleExport()
+    {
+        if (endDate < startDate)
+        {
+            ToastService.ShowError("End date must be after start date!");
+            return;
+        }
+
+        isExporting = true;
+        try
+        {
+            // Generate export data
+            var exportHtml = GenerateExportHtml();
+
+            if (exportType == "Print")
+            {
+                // Open print dialog - user can choose to print or save as PDF from browser
+                await JSRuntime.InvokeVoidAsync("eval", @"
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`" + exportHtml + @"`);
+                    printWindow.document.close();
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 250);
+                ");
+                ToastService.ShowSuccess("Opening print dialog...");
+            }
+            else
+            {
+                // For PDF export, use the same approach but with guidance
+                await JSRuntime.InvokeVoidAsync("eval", @"
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`" + exportHtml + @"`);
+                    printWindow.document.close();
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 250);
+                ");
+                ToastService.ShowSuccess("Use 'Save as PDF' in the print dialog to download as PDF!");
+            }
+
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Export failed: {ex.Message}");
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private string GenerateExportHtml()
+    {
+        // Create a formatted HTML document for printing/PDF export
+        var title = $"Schedule Export - {startDate:MMM dd, yyyy} to {endDate:MMM dd, yyyy}";
+        var dateGenerated = DateTime.Now.ToString("MMMM dd, yyyy h:mm tt");
+
+        var html = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <title>{title}</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            color: #333;
+        }}
+        .header {{
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #4F46E5;
+        }}
+        .header h1 {{
+            color: #4F46E5;
+            margin: 0 0 10px 0;
+        }}
+        .header p {{
+            color: #666;
+            margin: 5px 0;
+        }}
+        .section {{
+            margin: 20px 0;
+            page-break-inside: avoid;
+        }}
+        .section h2 {{
+            color: #4F46E5;
+            border-bottom: 2px solid #E0E7FF;
+            padding-bottom: 5px;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }}
+        th, td {{
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }}
+        th {{
+            background-color: #4F46E5;
+            color: white;
+        }}
+        tr:nth-child(even) {{
+            background-color: #f9f9f9;
+        }}
+        .footer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }}
+        @media print {{
+            body {{ margin: 0; }}
+            .header {{ page-break-after: avoid; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class='header'>
+        <h1>MediChatAI Schedule Export</h1>
+        <p><strong>Period:</strong> {startDate:MMMM dd, yyyy} - {endDate:MMMM dd, yyyy}</p>
+        <p><strong>Layout:</strong> {layoutType}</p>
+        <p><strong>Generated:</strong> {dateGenerated}</p>
+    </div>
+
+    <div class='section'>
+        <h2>Schedule Overview</h2>
+        <p>This export contains your appointments and time blocks for the specified period.</p>
+        <p><em>Note: This is a sample export. Full implementation would fetch actual data from the backend.</em></p>
+    </div>
+
+    <div class='section'>
+        <h2>Appointments</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date & Time</th>
+                    <th>Patient</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan='5' style='text-align: center; color: #666;'>
+                        Sample data - Connect to appointment service to display actual appointments
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class='section'>
+        <h2>Time Blocks</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date & Time</th>
+                    <th>Type</th>
+                    <th>Duration</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan='4' style='text-align: center; color: #666;'>
+                        Sample data - Connect to time block service to display actual blocks
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class='footer'>
+        <p>Generated by MediChatAI on {dateGenerated}</p>
+        <p>This is an automated export. For questions, contact your administrator.</p>
+    </div>
+</body>
+</html>";
+
+        return html;
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+}
