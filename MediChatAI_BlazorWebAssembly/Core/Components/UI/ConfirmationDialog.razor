@@ -1,0 +1,153 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+@implements IDisposable
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-80 transition-opacity"
+             @onclick="@HandleBackdropClick"></div>
+
+        <!-- Modal Content -->
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div class="inline-block align-bottom @(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full animate-scale-in">
+                <!-- Header -->
+                <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") px-6 pt-6 pb-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full @GetIconBgClass()">
+                                <i class="@Icon text-2xl @GetIconColorClass()"></i>
+                            </div>
+                        </div>
+                        <div class="ml-4 flex-1">
+                            <h3 class="text-lg font-bold @(IsDarkMode ? "text-white" : "text-gray-900")" id="modal-title">
+                                @Title
+                            </h3>
+                            @if (!string.IsNullOrEmpty(Message))
+                            {
+                                <p class="mt-2 text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-600")">
+                                    @Message
+                                </p>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="@(IsDarkMode ? "bg-gray-750" : "bg-gray-50") px-6 py-4 sm:flex sm:flex-row-reverse gap-3">
+                    <button type="button"
+                            @onclick="@HandleConfirm"
+                            class="w-full sm:w-auto inline-flex justify-center rounded-xl px-6 py-3 text-base font-semibold text-white shadow-lg @GetConfirmButtonClass() transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 sm:text-sm">
+                        @ConfirmText
+                    </button>
+                    <button type="button"
+                            @onclick="@HandleCancel"
+                            class="mt-3 sm:mt-0 w-full sm:w-auto inline-flex justify-center rounded-xl px-6 py-3 text-base font-semibold @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-white hover:bg-gray-50 text-gray-900") border @(IsDarkMode ? "border-gray-600" : "border-gray-300") shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary sm:text-sm">
+                        @CancelText
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm Action";
+    [Parameter] public string Message { get; set; } = string.Empty;
+    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+    [Parameter] public string Icon { get; set; } = "fas fa-question-circle";
+    [Parameter] public ConfirmationDialogType Type { get; set; } = ConfirmationDialogType.Info;
+    [Parameter] public bool CloseOnBackdropClick { get; set; } = false;
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    protected override void OnInitialized()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleConfirm()
+    {
+        await OnConfirm.InvokeAsync();
+    }
+
+    private async Task HandleCancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+
+    private async Task HandleBackdropClick()
+    {
+        if (CloseOnBackdropClick)
+        {
+            await HandleCancel();
+        }
+    }
+
+    private string GetIconBgClass()
+    {
+        return Type switch
+        {
+            ConfirmationDialogType.Danger => IsDarkMode ? "bg-red-900/30" : "bg-red-100",
+            ConfirmationDialogType.Warning => IsDarkMode ? "bg-amber-900/30" : "bg-amber-100",
+            ConfirmationDialogType.Success => IsDarkMode ? "bg-green-900/30" : "bg-green-100",
+            _ => IsDarkMode ? "bg-blue-900/30" : "bg-blue-100"
+        };
+    }
+
+    private string GetIconColorClass()
+    {
+        return Type switch
+        {
+            ConfirmationDialogType.Danger => "text-red-600 dark:text-red-400",
+            ConfirmationDialogType.Warning => "text-amber-600 dark:text-amber-400",
+            ConfirmationDialogType.Success => "text-green-600 dark:text-green-400",
+            _ => "text-blue-600 dark:text-blue-400"
+        };
+    }
+
+    private string GetConfirmButtonClass()
+    {
+        return Type switch
+        {
+            ConfirmationDialogType.Danger => "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 focus:ring-red-500",
+            ConfirmationDialogType.Warning => "bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 focus:ring-amber-500",
+            ConfirmationDialogType.Success => "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:ring-green-500",
+            _ => "bg-gradient-to-r from-primary to-accent hover:shadow-xl focus:ring-primary"
+        };
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}
+
+<style>
+    @@keyframes scale-in {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    .animate-scale-in {
+        animation: scale-in 0.2s ease-out;
+    }
+</style>

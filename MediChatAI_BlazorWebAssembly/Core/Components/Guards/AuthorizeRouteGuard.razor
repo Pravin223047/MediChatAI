@@ -1,0 +1,99 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject AppSettingsState AppSettings
+
+@if (IsAuthorized)
+{
+    @ChildContent
+}
+else
+{
+    <div class="min-h-screen flex items-center justify-center bg-gray-50">
+        <div class="max-w-md w-full text-center">
+            <div class="mx-auto h-12 w-auto flex items-center justify-center mb-8">
+                <h1 class="text-3xl font-bold text-primary">@AppSettings.Settings.SiteName</h1>
+            </div>
+            @if (!IsAuthenticated)
+            {
+                <div class="bg-white shadow rounded-lg p-6">
+                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Authentication Required</h3>
+                    <p class="text-gray-600 mb-4">You need to be logged in to access this page.</p>
+                    <a href="/login" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary">
+                        Sign In
+                    </a>
+                </div>
+            }
+            else
+            {
+                <div class="bg-white shadow rounded-lg p-6">
+                    <svg class="mx-auto h-12 w-12 text-red-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
+                    <p class="text-gray-600 mb-4">You don't have permission to access this page.</p>
+                    <button @onclick="RedirectToDashboard" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary">
+                        Go to Dashboard
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? RequiredRole { get; set; }
+    [Parameter] public bool RequireAuthentication { get; set; } = true;
+
+    private bool IsAuthenticated { get; set; }
+    private bool IsAuthorized { get; set; }
+    private string? UserRole { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAuthorizationAsync();
+    }
+
+    private async Task CheckAuthorizationAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        IsAuthenticated = authState.User?.Identity?.IsAuthenticated == true;
+
+        if (!RequireAuthentication)
+        {
+            IsAuthorized = true;
+            return;
+        }
+
+        if (!IsAuthenticated)
+        {
+            IsAuthorized = false;
+            return;
+        }
+
+        if (string.IsNullOrEmpty(RequiredRole))
+        {
+            IsAuthorized = true;
+            return;
+        }
+
+        UserRole = authState.User?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        IsAuthorized = !string.IsNullOrEmpty(UserRole) && UserRole.Equals(RequiredRole, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RedirectToDashboard()
+    {
+        var dashboardUrl = UserRole switch
+        {
+            "Admin" => "/admin/dashboard",
+            "Doctor" => "/doctor/dashboard",
+            "Patient" => "/patient/dashboard",
+            _ => "/login"
+        };
+        NavigationManager.NavigateTo(dashboardUrl);
+    }
+}

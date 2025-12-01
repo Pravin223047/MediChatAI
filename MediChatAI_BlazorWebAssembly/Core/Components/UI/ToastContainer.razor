@@ -1,0 +1,163 @@
+@inject IToastService ToastService
+@implements IDisposable
+
+<div class="fixed bottom-4 right-4 z-[9999] flex flex-col gap-4 pointer-events-none">
+    @foreach (var toast in _toasts)
+    {
+        <div class="w-full max-w-sm p-4 rounded-xl shadow-xl flex items-start gap-4 pointer-events-auto border-l-4 transition-all duration-300 ease-out
+                    toast-@toast.Type.ToString().ToLower() @( _animatingOut.Contains(toast.Id) ? "animate-fadeOut" : "animate-slideInRight" )"
+             @key="toast.Id">
+            <div class="shrink-0">
+                @switch (toast.Type)
+                {
+                    case ToastType.Success:
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        break;
+                    case ToastType.Error:
+                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        break;
+                    case ToastType.Warning:
+                        <svg class="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        break;
+                    case ToastType.Info:
+                        <svg class="w-6 h-6 text-primary dark:text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        break;
+                }
+            </div>
+            <div class="flex-1">
+                <p class="text-sm font-medium text-gray-800 leading-snug">@toast.Message</p>
+            </div>
+            <button @onclick="() => RemoveToast(toast.Id)" class="shrink-0 text-gray-400 hover:text-gray-600 transition-colors" aria-label="Close">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+    }
+</div>
+
+<style>
+    @@keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @@keyframes fadeOut {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0;
+        }
+    }
+
+    .animate-slideInRight {
+        animation: slideInRight 0.3s ease-out forwards;
+    }
+
+    .animate-fadeOut {
+        animation: fadeOut 0.2s ease-in forwards;
+    }
+
+    .toast-success {
+        background-color: #ecfdf5;
+        border-color: #22c55e;
+    }
+
+    .toast-error {
+        background-color: #fef2f2;
+        border-color: #ef4444;
+    }
+
+    .toast-warning {
+        background-color: #fefce8;
+        border-color: #eab308;
+    }
+
+    .toast-info {
+        background-color: #eff6ff;
+        border-color: #3b82f6;
+    }
+</style>
+
+@code {
+    private readonly List<ToastMessage> _toasts = new();
+    private readonly HashSet<Guid> _animatingOut = new();
+    private readonly Dictionary<Guid, System.Threading.Timer> _timers = new();
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += HandleShowToast;
+        ToastService.OnHide += HandleHideToast;
+    }
+
+    private void HandleShowToast(ToastMessage toast)
+    {
+        InvokeAsync(() =>
+        {
+            _toasts.Add(toast);
+            StateHasChanged();
+
+            var timer = new System.Threading.Timer(_ =>
+            {
+                InvokeAsync(() => RemoveToast(toast.Id));
+            }, null, toast.Duration, Timeout.Infinite);
+
+            _timers[toast.Id] = timer;
+        });
+    }
+
+    private void HandleHideToast(Guid toastId)
+    {
+        InvokeAsync(() => RemoveToast(toastId));
+    }
+
+    private void RemoveToast(Guid toastId)
+    {
+        _animatingOut.Add(toastId);
+        StateHasChanged();
+
+        Task.Delay(200).ContinueWith(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                _toasts.RemoveAll(t => t.Id == toastId);
+                _animatingOut.Remove(toastId);
+
+                if (_timers.TryGetValue(toastId, out var timer))
+                {
+                    timer.Dispose();
+                    _timers.Remove(toastId);
+                }
+
+                StateHasChanged();
+            });
+        });
+    }
+
+    public void Dispose()
+    {
+        ToastService.OnShow -= HandleShowToast;
+        ToastService.OnHide -= HandleHideToast;
+
+        foreach (var timer in _timers.Values)
+        {
+            timer.Dispose();
+        }
+        _timers.Clear();
+    }
+}

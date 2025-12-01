@@ -1,0 +1,28 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Routing
+
+<NavLink href="@Href" 
+         class=@($"group flex items-center px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-primary hover:text-white dark:hover:bg-primary transition-all duration-200 {(IsFirst ? "rounded-t-xl" : "")} {(IsLast ? "rounded-b-xl" : "")}")>
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <span class="mr-3 flex-shrink-0">
+            @((MarkupString)Icon)
+        </span>
+    }
+    <div class="flex-1">
+        <div class="font-medium">@Text</div>
+        @if (!string.IsNullOrEmpty(Description))
+        {
+            <div class="text-xs opacity-75 mt-0.5">@Description</div>
+        }
+    </div>
+</NavLink>
+
+@code {
+    [Parameter] public string Href { get; set; } = string.Empty;
+    [Parameter] public string Text { get; set; } = string.Empty;
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public bool IsFirst { get; set; }
+    [Parameter] public bool IsLast { get; set; }
+}

@@ -1,0 +1,57 @@
+@using Markdig
+
+<div class="markdown-content @CssClass">
+    @((MarkupString)RenderedHtml)
+</div>
+
+@code {
+    [Parameter] public string? Content { get; set; }
+    [Parameter] public string? CssClass { get; set; }
+
+    private string RenderedHtml => ConvertMarkdownToHtml(Content ?? string.Empty);
+
+    private static string ConvertMarkdownToHtml(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return string.Empty;
+
+        try
+        {
+            var pipeline = new MarkdownPipelineBuilder()
+                .UseAdvancedExtensions() // Enables tables, task lists, etc.
+                .Build();
+
+            var html = Markdown.ToHtml(markdown, pipeline);
+
+            // Basic XSS protection - sanitize the HTML
+            html = SanitizeHtml(html);
+
+            return html;
+        }
+        catch
+        {
+            // If markdown parsing fails, return the original content escaped
+            return System.Net.WebUtility.HtmlEncode(markdown);
+        }
+    }
+
+    private static string SanitizeHtml(string html)
+    {
+        // Remove potentially dangerous elements and attributes
+        // This is a basic sanitization - for production, consider using HtmlSanitizer library
+
+        var dangerousTags = new[] { "<script", "<iframe", "<object", "<embed", "<link", "<meta" };
+        foreach (var tag in dangerousTags)
+        {
+            html = html.Replace(tag, "&lt;script", StringComparison.OrdinalIgnoreCase);
+        }
+
+        var dangerousAttributes = new[] { "javascript:", "onload=", "onerror=", "onclick=", "onmouseover=" };
+        foreach (var attr in dangerousAttributes)
+        {
+            html = html.Replace(attr, "", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return html;
+    }
+}

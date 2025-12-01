@@ -1,0 +1,710 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject IGraphQLService GraphQLService
+
+<!-- Live Navigation Modal -->
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <!-- Background overlay -->
+        <div class="fixed inset-0 bg-gray-900 bg-opacity-75 dark:bg-opacity-90 transition-opacity backdrop-blur-sm"></div>
+
+        <!-- Modal panel -->
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="relative w-full max-w-4xl transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 shadow-2xl transition-all">
+
+                <!-- Header -->
+                <div class="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-700 dark:to-blue-800 px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-6 h-6 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                            </svg>
+                            <h3 class="text-xl font-bold text-white" id="modal-title">
+                                Live Navigation
+                            </h3>
+                        </div>
+                        <button @onclick="CloseModal"
+                                class="text-white hover:text-gray-200 transition-colors p-2 hover:bg-white/10 rounded-lg">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="p-0">
+                    <!-- Destination Overview (replaces map iframe) -->
+                    <div class="relative bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-900" style="min-height: 280px;">
+                        @if (hasLocationError)
+                        {
+                            <!-- Error State -->
+                            <div class="p-8">
+                                <div class="bg-red-50 dark:bg-red-900/20 rounded-xl p-6 text-center border-2 border-red-200 dark:border-red-800">
+                                    <svg class="w-16 h-16 text-red-500 dark:text-red-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.99-.833-2.76 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                                    </svg>
+                                    <h3 class="text-lg font-bold text-red-900 dark:text-red-100 mb-2">Location Tracking Error</h3>
+                                    <p class="text-red-700 dark:text-red-300 mb-4">@errorMessage</p>
+
+                                    <button @onclick="RetryNavigation"
+                                            class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg">
+                                        <div class="flex items-center space-x-2">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                            </svg>
+                                            <span>Retry Location Tracking</span>
+                                        </div>
+                                    </button>
+
+                                    <div class="mt-4 text-left bg-red-100 dark:bg-red-900/30 rounded-lg p-4">
+                                        <p class="text-sm font-semibold text-red-900 dark:text-red-100 mb-2">Troubleshooting Tips:</p>
+                                        <ul class="text-sm text-red-800 dark:text-red-200 space-y-1">
+                                            <li class="flex items-start">
+                                                <span class="mr-2">•</span>
+                                                <span>Enable location permissions in browser settings</span>
+                                            </li>
+                                            <li class="flex items-start">
+                                                <span class="mr-2">•</span>
+                                                <span>Move to an area with clear sky view (outdoors)</span>
+                                            </li>
+                                            <li class="flex items-start">
+                                                <span class="mr-2">•</span>
+                                                <span>Check if location services are enabled on your device</span>
+                                            </li>
+                                            <li class="flex items-start">
+                                                <span class="mr-2">•</span>
+                                                <span>Try refreshing the page or restarting your browser</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- Success State - Static Map or Loading -->
+                            @if (!string.IsNullOrEmpty(StaticMapUrl))
+                            {
+                                <!-- Static Map Image with overlay info -->
+                                <div class="relative">
+                                    <img src="@StaticMapUrl"
+                                         alt="Route Map"
+                                         class="w-full h-full object-cover"
+                                         style="min-height: 280px; max-height: 350px;" />
+
+                                    <!-- Overlay gradient for better text visibility -->
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+
+                                    <!-- Route Info Overlay -->
+                                    @if (RealDistanceKm.HasValue && RealTimeMinutes.HasValue)
+                                    {
+                                        <div class="absolute bottom-4 left-4 right-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg p-4 shadow-xl">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="bg-blue-100 dark:bg-blue-900/50 rounded-full p-2">
+                                                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <p class="text-sm text-gray-600 dark:text-gray-400">Route Distance</p>
+                                                        <p class="text-lg font-bold text-gray-900 dark:text-white">@($"{RealDistanceKm.Value:F1} km")</p>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="bg-green-100 dark:bg-green-900/50 rounded-full p-2">
+                                                        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <p class="text-sm text-gray-600 dark:text-gray-400">Est. Time</p>
+                                                        <p class="text-lg font-bold text-gray-900 dark:text-white">@($"{RealTimeMinutes.Value} min")</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <!-- Live Status Badge -->
+                                    <div class="absolute top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 animate-pulse">
+                                        <span class="w-2 h-2 bg-white rounded-full"></span>
+                                        <span class="font-semibold text-sm">LIVE</span>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <!-- Loading state - Show animated icon while fetching route -->
+                                <div class="p-8">
+                                    <div class="flex items-center justify-center mb-6">
+                                        <div class="relative">
+                                            <div class="absolute inset-0 bg-blue-400 dark:bg-blue-500 rounded-full opacity-20 animate-ping"></div>
+                                            <div class="relative bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 rounded-full p-6 shadow-xl">
+                                                <svg class="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-center mb-4">
+                                        <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                                            Loading Route...
+                                        </h3>
+                                        <p class="text-gray-600 dark:text-gray-400">
+                                            Calculating optimal route • Please wait
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Live Status Badge -->
+                                <div class="absolute top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center space-x-2">
+                                    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                    <span class="font-semibold text-sm">LOADING</span>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <!-- Navigation Info Panel -->
+                    <div class="p-6 space-y-4 bg-white dark:bg-gray-800">
+                        <!-- Destination Info -->
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-750 rounded-xl p-4">
+                            <div class="flex items-start space-x-3">
+                                <div class="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm text-gray-600 dark:text-gray-400">Navigating to</p>
+                                    <p class="text-lg font-bold text-gray-900 dark:text-white">@DestinationName</p>
+                                    @if (!string.IsNullOrEmpty(DestinationAddress))
+                                    {
+                                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">@DestinationAddress</p>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Stats Grid -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <!-- Distance Remaining -->
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                                    </svg>
+                                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Distance</p>
+                                </div>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                                    @if (CurrentDistance.HasValue)
+                                    {
+                                        @($"{CurrentDistance.Value:F1} km")
+                                    }
+                                    else
+                                    {
+                                        <span class="text-lg">--</span>
+                                    }
+                                </p>
+                            </div>
+
+                            <!-- ETA -->
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400">ETA</p>
+                                </div>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                                    @if (!string.IsNullOrEmpty(CurrentETA))
+                                    {
+                                        @CurrentETA
+                                    }
+                                    else
+                                    {
+                                        <span class="text-lg">--</span>
+                                    }
+                                </p>
+                            </div>
+
+                            <!-- Current Speed -->
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Speed</p>
+                                </div>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                                    @if (CurrentSpeed.HasValue)
+                                    {
+                                        @($"{Math.Round(CurrentSpeed.Value * 3.6):F0} km/h")
+                                    }
+                                    else
+                                    {
+                                        <span class="text-lg">--</span>
+                                    }
+                                </p>
+                            </div>
+
+                            <!-- Accuracy -->
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Accuracy</p>
+                                </div>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                                    @if (CurrentAccuracy.HasValue)
+                                    {
+                                        @($"±{Math.Round(CurrentAccuracy.Value):F0}m")
+                                    }
+                                    else
+                                    {
+                                        <span class="text-lg">--</span>
+                                    }
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Turn-by-Turn Directions (if available) -->
+                        @if (TurnByTurnSteps != null && TurnByTurnSteps.Any())
+                        {
+                            <div class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-700 dark:to-gray-750 rounded-xl p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center space-x-2">
+                                        <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                                        </svg>
+                                        <h4 class="font-bold text-gray-900 dark:text-white">Turn-by-Turn Directions</h4>
+                                    </div>
+                                    <span class="text-sm text-gray-600 dark:text-gray-400">@TurnByTurnSteps.Count steps</span>
+                                </div>
+
+                                <div class="space-y-2 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-indigo-300 dark:scrollbar-thumb-gray-600">
+                                    @foreach (var (step, index) in TurnByTurnSteps.Select((s, i) => (s, i)))
+                                    {
+                                        <div class="flex items-start space-x-3 bg-white/80 dark:bg-gray-800/80 rounded-lg p-3">
+                                            <div class="flex-shrink-0 w-6 h-6 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center">
+                                                <span class="text-xs font-bold text-indigo-700 dark:text-indigo-300">@(index + 1)</span>
+                                            </div>
+                                            <div class="flex-1">
+                                                <p class="text-sm text-gray-900 dark:text-white">@step.Instruction</p>
+                                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    @($"{Math.Round(step.DistanceMeters / 1000, 2)} km") • @($"{Math.Ceiling(step.TimeSeconds / 60.0)} min")
+                                                </p>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Current Location Display -->
+                        @if (CurrentLatitude.HasValue && CurrentLongitude.HasValue)
+                        {
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-2">
+                                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                        </svg>
+                                        <div>
+                                            <p class="text-xs text-gray-600 dark:text-gray-400">Current Location</p>
+                                            <p class="text-sm font-mono text-gray-900 dark:text-white">
+                                                @($"{CurrentLatitude.Value:F6}, {CurrentLongitude.Value:F6}")
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button @onclick="ShareCurrentLocation"
+                                            class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors p-2 hover:bg-blue-50 dark:hover:bg-gray-600 rounded-lg">
+                                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Last Update Time -->
+                        @if (!string.IsNullOrEmpty(LastUpdateTime))
+                        {
+                            <p class="text-xs text-gray-500 dark:text-gray-400 text-center">
+                                Last updated: @LastUpdateTime
+                            </p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="bg-gray-50 dark:bg-gray-750 px-6 py-4 flex items-center justify-between space-x-4">
+                    <button @onclick="RefreshNavigation"
+                            class="flex-1 inline-flex justify-center items-center px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 font-medium transition-all duration-200 space-x-2">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+
+                    <button @onclick="OpenInGoogleMaps"
+                            class="flex-1 inline-flex justify-center items-center px-4 py-3 border border-transparent text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 rounded-lg font-medium transition-all duration-200 space-x-2 shadow-md">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                        <span>Open in Maps</span>
+                    </button>
+
+                    <button @onclick="StopNavigation"
+                            class="flex-1 inline-flex justify-center items-center px-4 py-3 border border-transparent text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 rounded-lg font-medium transition-all duration-200 space-x-2 shadow-md">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                        <span>Stop Navigation</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter] public string DestinationName { get; set; } = string.Empty;
+    [Parameter] public string DestinationAddress { get; set; } = string.Empty;
+    [Parameter] public double DestinationLatitude { get; set; }
+    [Parameter] public double DestinationLongitude { get; set; }
+
+    private double? CurrentLatitude { get; set; }
+    private double? CurrentLongitude { get; set; }
+    private double? CurrentDistance { get; set; }
+    private string? CurrentETA { get; set; }
+    private double? CurrentSpeed { get; set; }
+    private double? CurrentAccuracy { get; set; }
+    private string? LastUpdateTime { get; set; }
+
+    // Error handling
+    private bool hasLocationError = false;
+    private string? errorMessage = null;
+
+    // Geoapify route data
+    private string? StaticMapUrl { get; set; }
+    private double? RealDistanceKm { get; set; }
+    private int? RealTimeMinutes { get; set; }
+    private List<RouteStep>? TurnByTurnSteps { get; set; }
+
+    private DotNetObjectReference<LiveNavigationModal>? dotNetReference;
+    private bool isWatching = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && !isWatching)
+        {
+            await StartNavigation();
+        }
+        else if (!IsOpen && isWatching)
+        {
+            await StopNavigationInternal();
+        }
+    }
+
+    private async Task StartNavigation()
+    {
+        try
+        {
+            // Clear any previous errors and route data
+            hasLocationError = false;
+            errorMessage = null;
+            StaticMapUrl = null;
+            RealDistanceKm = null;
+            RealTimeMinutes = null;
+            TurnByTurnSteps = null;
+
+            // Create .NET reference for JS callbacks
+            dotNetReference = DotNetObjectReference.Create(this);
+
+            // Get initial position
+            var position = await JS.InvokeAsync<LocationData>("geolocationHelper.getCurrentPosition");
+
+            if (position != null)
+            {
+                UpdateLocationData(position);
+
+                // Fetch route data from Geoapify
+                await FetchRouteDataAsync(position.Latitude, position.Longitude);
+            }
+
+            // Start watching position
+            await JS.InvokeVoidAsync("geolocationHelper.startWatchingPosition", dotNetReference);
+            isWatching = true;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Navigation start error: {ex.Message}");
+            hasLocationError = true;
+            errorMessage = ex.Message.Contains("denied")
+                ? "Location permission denied. Please enable location access in your browser settings."
+                : $"Failed to start navigation: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task FetchRouteDataAsync(double originLat, double originLng)
+    {
+        try
+        {
+            var query = @"
+                query GetRoute($request: GeoapifyRouteRequestInput!) {
+                    route(request: $request) {
+                        success
+                        errorMessage
+                        distanceKm
+                        timeMinutes
+                        staticMapUrl
+                        steps {
+                            instruction
+                            distanceMeters
+                            timeSeconds
+                        }
+                    }
+                }";
+
+            var variables = new
+            {
+                request = new
+                {
+                    originLat = originLat,
+                    originLng = originLng,
+                    destLat = DestinationLatitude,
+                    destLng = DestinationLongitude,
+                    mode = "drive"
+                }
+            };
+
+            var response = await GraphQLService.SendQueryAsync<GetRouteResponse>(query, variables);
+
+            if (response?.Route?.Success == true)
+            {
+                StaticMapUrl = response.Route.StaticMapUrl;
+                RealDistanceKm = response.Route.DistanceKm;
+                RealTimeMinutes = response.Route.TimeMinutes;
+                TurnByTurnSteps = response.Route.Steps;
+
+                Console.WriteLine($"Route loaded: {RealDistanceKm}km, {RealTimeMinutes}min, Map: {!string.IsNullOrEmpty(StaticMapUrl)}");
+                StateHasChanged();
+            }
+            else
+            {
+                Console.Error.WriteLine($"Route fetch failed: {response?.Route?.ErrorMessage ?? "Unknown error"}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error fetching route: {ex.Message}");
+            // Don't show error to user, fallback to Haversine distance calculation
+        }
+    }
+
+    [JSInvokable]
+    public void OnLocationUpdated(LocationData locationData)
+    {
+        // Clear error state on successful update
+        hasLocationError = false;
+        errorMessage = null;
+
+        UpdateLocationData(locationData);
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnLocationError(LocationError error)
+    {
+        Console.Error.WriteLine($"Location error: {error.Message}");
+
+        hasLocationError = true;
+        errorMessage = error.Code switch
+        {
+            1 => "Location permission denied. Please enable location access in your browser settings and try again.",
+            2 => "Location information is unavailable. Please check your device's location settings.",
+            3 => error.Message, // Use the enhanced message from JS with retry info
+            _ => $"Location error: {error.Message}"
+        };
+
+        StateHasChanged();
+    }
+
+    private void UpdateLocationData(LocationData data)
+    {
+        CurrentLatitude = data.Latitude;
+        CurrentLongitude = data.Longitude;
+        CurrentSpeed = data.Speed;
+        CurrentAccuracy = data.Accuracy;
+        LastUpdateTime = DateTime.Now.ToString("HH:mm:ss");
+
+        // Calculate distance to destination
+        if (CurrentLatitude.HasValue && CurrentLongitude.HasValue)
+        {
+            CurrentDistance = CalculateDistance(
+                CurrentLatitude.Value,
+                CurrentLongitude.Value,
+                DestinationLatitude,
+                DestinationLongitude
+            );
+
+            // Calculate ETA
+            if (CurrentDistance.HasValue)
+            {
+                CurrentETA = CalculateETA(CurrentDistance.Value);
+            }
+        }
+    }
+
+    private double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double R = 6371; // Earth's radius in km
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLon = (lon2 - lon1) * Math.PI / 180;
+        var a =
+            Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+            Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) *
+            Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return R * c;
+    }
+
+    private string CalculateETA(double distanceKm)
+    {
+        // Use actual speed if available, otherwise use default 40 km/h for urban emergency driving
+        var speedKmh = CurrentSpeed.HasValue && CurrentSpeed.Value > 0
+            ? CurrentSpeed.Value * 3.6  // Convert m/s to km/h
+            : 40.0;
+
+        var timeInMinutes = Math.Round((distanceKm / speedKmh) * 60);
+
+        if (timeInMinutes < 1) return "< 1 min";
+        if (timeInMinutes < 60) return $"{timeInMinutes} min";
+
+        var hours = Math.Floor(timeInMinutes / 60);
+        var minutes = timeInMinutes % 60;
+
+        return minutes > 0 ? $"{hours}h {minutes}m" : $"{hours}h";
+    }
+
+    private async Task RefreshNavigation()
+    {
+        await StartNavigation();
+    }
+
+    private async Task RetryNavigation()
+    {
+        // Stop any existing tracking
+        await StopNavigationInternal();
+
+        // Wait a moment before retrying
+        await Task.Delay(500);
+
+        // Restart navigation
+        await StartNavigation();
+    }
+
+    private async Task ShareCurrentLocation()
+    {
+        if (CurrentLatitude.HasValue && CurrentLongitude.HasValue)
+        {
+            var message = $"I'm currently navigating to {DestinationName}. My current location:";
+            await JS.InvokeVoidAsync("geolocationHelper.shareLocation",
+                CurrentLatitude.Value,
+                CurrentLongitude.Value,
+                message);
+        }
+    }
+
+    private async Task OpenInGoogleMaps()
+    {
+        if (CurrentLatitude.HasValue && CurrentLongitude.HasValue)
+        {
+            await JS.InvokeVoidAsync("geolocationHelper.navigateToDestination",
+                DestinationLatitude,
+                DestinationLongitude,
+                DestinationName);
+        }
+    }
+
+    private async Task StopNavigation()
+    {
+        await StopNavigationInternal();
+        await CloseModal();
+    }
+
+    private async Task StopNavigationInternal()
+    {
+        if (isWatching)
+        {
+            await JS.InvokeVoidAsync("geolocationHelper.stopWatchingPosition");
+            isWatching = false;
+        }
+
+        dotNetReference?.Dispose();
+        dotNetReference = null;
+    }
+
+    private async Task CloseModal()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopNavigationInternal();
+    }
+
+    // Data models for JS interop
+    public class LocationData
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public double? Accuracy { get; set; }
+        public double? Heading { get; set; }
+        public double? Speed { get; set; }
+        public long? Timestamp { get; set; }
+    }
+
+    public class LocationError
+    {
+        public int Code { get; set; }
+        public string Message { get; set; } = string.Empty;
+    }
+
+    // GraphQL response models for Geoapify
+    public class GetRouteResponse
+    {
+        public GeoapifyRouteData? Route { get; set; }
+    }
+
+    public class GeoapifyRouteData
+    {
+        public bool Success { get; set; }
+        public string? ErrorMessage { get; set; }
+        public double? DistanceKm { get; set; }
+        public int? TimeMinutes { get; set; }
+        public string? StaticMapUrl { get; set; }
+        public List<RouteStep>? Steps { get; set; }
+    }
+
+    public class RouteStep
+    {
+        public string Instruction { get; set; } = string.Empty;
+        public double DistanceMeters { get; set; }
+        public int TimeSeconds { get; set; }
+    }
+}

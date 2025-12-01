@@ -1,0 +1,85 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="relative nav-dropdown-container" @onmouseenter="ShowDropdown" @onmouseleave="HideDropdown">
+    <!-- Dropdown Trigger -->
+    <button class="border-transparent text-gray-500 hover:border-primary hover:text-primary dark:text-gray-300 dark:hover:text-primary inline-flex items-center px-4 pt-1 border-b-2 text-sm font-medium transition-all duration-200 group h-full"
+            @onclick="ToggleDropdown">
+        @if (!string.IsNullOrEmpty(Icon))
+        {
+            <span class="mr-2">@((MarkupString)Icon)</span>
+        }
+        <span>@Title</span>
+        <svg class="ml-1 w-4 h-4 transition-transform duration-200 @(isOpen ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+    </button>
+
+    <!-- Dropdown Menu -->
+    @if (isOpen)
+    {
+        <div class="absolute left-0 mt-12 w-64 rounded-xl shadow-xl bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 backdrop-blur-lg z-50 animate-dropdown-slide">
+            @* <div class="py-2"> *@
+                @ChildContent
+            @* </div> *@
+        </div>
+    }
+</div>
+
+<style>
+    @@keyframes dropdown-slide {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-dropdown-slide {
+        animation: dropdown-slide 0.2s ease-out;
+    }
+
+    .nav-dropdown-container {
+        display: inline-flex;
+        align-items: stretch;
+    }
+</style>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool isOpen = false;
+    private System.Threading.Timer? closeTimer;
+
+    private void ShowDropdown()
+    {
+        closeTimer?.Dispose();
+        isOpen = true;
+        StateHasChanged();
+    }
+
+    private void HideDropdown()
+    {
+        // Delay closing to allow mouse to move to dropdown
+        closeTimer?.Dispose();
+        closeTimer = new System.Threading.Timer(_ =>
+        {
+            isOpen = false;
+            InvokeAsync(StateHasChanged);
+        }, null, 200, Timeout.Infinite);
+    }
+
+    private void ToggleDropdown()
+    {
+        isOpen = !isOpen;
+    }
+
+    public void Dispose()
+    {
+        closeTimer?.Dispose();
+    }
+}
