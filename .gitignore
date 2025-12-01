@@ -1,5 +1,8 @@
 # MediChatAI .gitignore
 
+## Claude Code
+.claude/
+
 ## .NET / C# / Visual Studio
 # Build results
 [Dd]ebug/
