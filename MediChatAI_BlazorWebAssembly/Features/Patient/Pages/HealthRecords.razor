@@ -1,0 +1,800 @@
+@page "/patient/health-records"
+@using Microsoft.AspNetCore.Components.Authorization
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Components
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@inject ThemeState ThemeState
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IToastService ToastService
+@inject ILogger<HealthRecords> Logger
+@inject AppSettingsState AppSettings
+@inject IJSRuntime JS
+@inject MediChatAI_BlazorWebAssembly.Features.Patient.Services.IHealthRecordService HealthRecordService
+
+<PageTitle>Health Records - @AppSettings.Settings.SiteName</PageTitle>
+
+<AuthorizeRouteGuard RequiredRole="Patient">
+
+<div class="min-h-screen transition-colors duration-300 @(IsDarkMode ? "bg-gray-900" : "bg-gradient-to-br from-gray-50 to-gray-100") py-8">
+    <div class="w-full mx-auto px-4 sm:px-6 lg:px-8">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <button @onclick='() => Navigation.NavigateTo("/patient/dashboard")'
+                        class="inline-flex items-center gap-2 @(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900") mb-4 transition-colors">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Back to Dashboard</span>
+                </button>
+                <h1 class="text-4xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                    <i class="fas fa-folder-open text-purple-500 mr-3"></i>
+                    Health Records
+                </h1>
+                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-lg">
+                    Manage and view all your medical documents
+                </p>
+            </div>
+            <button @onclick="() => showUploadModal = true"
+                    class="px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:shadow-xl transition-all font-semibold flex items-center gap-2 group">
+                <i class="fas fa-cloud-upload-alt group-hover:scale-110 transition-transform duration-300"></i>
+                <span>Upload Document</span>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+            <!-- Left Sidebar - Categories -->
+            <div class="lg:col-span-1">
+                <div class="@GetCardClasses() p-6 sticky top-6">
+                    <h3 class="text-lg font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
+                        Categories
+                    </h3>
+                    <div class="space-y-2">
+                        @foreach (var category in categories)
+                        {
+                            <button @onclick="() => SelectCategory(category.Key)"
+                                    class='w-full text-left px-4 py-3 rounded-lg transition-all flex items-center justify-between group @GetCategoryButtonClass(category.Key)'>
+                                <div class="flex items-center gap-3">
+                                    <i class="fas @category.Value.Icon text-lg @category.Value.Color"></i>
+                                    <span class="font-medium">@category.Key</span>
+                                </div>
+                                <span class="text-xs px-2 py-0.5 rounded-full @(selectedCategory == category.Key ? "bg-white/20" : IsDarkMode ? "bg-gray-700" : "bg-gray-200")">
+                                    @GetDocumentCountByCategory(category.Key)
+                                </span>
+                            </button>
+                        }
+                    </div>
+
+                    <!-- Storage Info -->
+                    <div class="mt-6 p-4 rounded-lg @(IsDarkMode ? "bg-gray-700/50" : "bg-gray-100")">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700")">Storage Used</span>
+                            <span class="text-sm font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                @storageUsed MB / @storageLimit MB
+                            </span>
+                        </div>
+                        <div class="w-full bg-gray-300 dark:bg-gray-600 rounded-full h-2">
+                            <div class="bg-gradient-to-r from-primary to-accent h-2 rounded-full"
+                                 style="width: @((storageUsed / (double)storageLimit * 100))%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="lg:col-span-3">
+
+                <!-- Search & View Toggle -->
+                <div class="@GetCardClasses() p-4 mb-6">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div class="relative flex-1 w-full">
+                            <input @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch"
+                                   type="text"
+                                   placeholder="Search documents..."
+                                   class="w-full pl-10 pr-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary" />
+                            <i class="fas fa-search absolute left-3 top-3 @(IsDarkMode ? "text-gray-400" : "text-gray-500")"></i>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button @onclick='() => viewMode = "grid"'
+                                    class='px-3 py-2 rounded-lg @(viewMode == "grid" ? "bg-primary text-white" : IsDarkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-700") transition-colors'>
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button @onclick='() => viewMode = "list"'
+                                    class='px-3 py-2 rounded-lg @(viewMode == "list" ? "bg-primary text-white" : IsDarkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-700") transition-colors'>
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                @if (isLoading)
+                {
+                    <!-- Loading State -->
+                    <div class="@GetCardClasses() p-16 text-center">
+                        <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent mb-4"></div>
+                        <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-lg">Loading documents...</p>
+                    </div>
+                }
+                else if (filteredDocuments.Count == 0)
+                {
+                    <!-- Empty State -->
+                    <div class="@GetCardClasses() p-16 text-center">
+                        <div class="mx-auto w-24 h-24 bg-gradient-to-br @(IsDarkMode ? "from-gray-700 to-gray-600" : "from-gray-100 to-gray-200") rounded-full flex items-center justify-center mb-6">
+                            <i class="fas fa-folder-open text-5xl @(IsDarkMode ? "text-gray-500" : "text-gray-400")"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                            No Documents Found
+                        </h3>
+                        <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-6">
+                            @(string.IsNullOrEmpty(searchQuery)
+                                ? $"You don't have any {selectedCategory.ToLower()} documents yet."
+                                : "No documents match your search criteria.")
+                        </p>
+                        <button @onclick="() => showUploadModal = true"
+                                class="px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:shadow-xl transition-all font-semibold">
+                            <i class="fas fa-cloud-upload-alt mr-2"></i>
+                            Upload Your First Document
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    @if (viewMode == "grid")
+                    {
+                        <!-- Grid View -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            @foreach (var doc in filteredDocuments)
+                            {
+                                <div class="@GetCardClasses() p-4 hover:shadow-xl transition-all group cursor-pointer"
+                                     @onclick="() => PreviewDocument(doc.Id)">
+                                    <!-- Document Thumbnail -->
+                                    <div class="relative mb-4 rounded-lg overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800 h-48 flex items-center justify-center">
+                                        @if (doc.MimeType?.StartsWith("image/") == true)
+                                        {
+                                            <img src="@doc.FileUrl" alt="@doc.FileName" class="w-full h-full object-cover" />
+                                        }
+                                        else
+                                        {
+                                            <i class="fas @GetFileIcon(doc.MimeType ?? "application/pdf") text-6xl text-white/50"></i>
+                                        }
+                                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                                            <i class="fas fa-search-plus text-white text-3xl opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                        </div>
+                                    </div>
+
+                                    <!-- Document Info -->
+                                    <div class="mb-3">
+                                        <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-1 truncate">
+                                            @doc.FileName
+                                        </h4>
+                                        <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") flex items-center gap-2">
+                                            <i class="fas fa-calendar"></i>
+                                            @doc.UploadedAt.ToString("MMM dd, yyyy")
+                                        </p>
+                                        <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") flex items-center gap-2 mt-1">
+                                            <i class="fas fa-file"></i>
+                                            @FormatFileSize(doc.FileSizeBytes)
+                                        </p>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="flex gap-2" @onclick:stopPropagation>
+                                        <button @onclick="() => DownloadDocument(doc.Id)"
+                                                class="flex-1 px-3 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-all text-sm">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        <button @onclick="() => ShareDocument(doc.Id)"
+                                                class="flex-1 px-3 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-all text-sm">
+                                            <i class="fas fa-share-alt"></i>
+                                        </button>
+                                        <button @onclick="() => DeleteDocument(doc.Id)"
+                                                class="px-3 py-2 bg-red-500 text-white hover:bg-red-600 rounded-lg transition-all text-sm">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- List View -->
+                        <div class="@GetCardClasses() divide-y @(IsDarkMode ? "divide-gray-700" : "divide-gray-200")">
+                            @foreach (var doc in filteredDocuments)
+                            {
+                                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all flex items-center gap-4 cursor-pointer"
+                                     @onclick="() => PreviewDocument(doc.Id)">
+                                    <!-- Icon -->
+                                    <div class="flex-shrink-0 w-12 h-12 rounded-lg @(IsDarkMode ? "bg-gray-700" : "bg-gray-100") flex items-center justify-center">
+                                        <i class="fas @GetFileIcon(doc.MimeType ?? "application/pdf") text-xl text-primary"></i>
+                                    </div>
+
+                                    <!-- Info -->
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") truncate">
+                                            @doc.FileName
+                                        </h4>
+                                        <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                            @doc.DocumentType.ToString() • @FormatFileSize(doc.FileSizeBytes) • @doc.UploadedAt.ToString("MMM dd, yyyy")
+                                        </p>
+                                    </div>
+
+                                    <!-- Actions -->
+                                    <div class="flex gap-2" @onclick:stopPropagation>
+                                        <button @onclick="() => DownloadDocument(doc.Id)"
+                                                class="px-4 py-2 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") rounded-lg hover:opacity-80 transition-opacity">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        <button @onclick="() => ShareDocument(doc.Id)"
+                                                class="px-4 py-2 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") rounded-lg hover:opacity-80 transition-opacity">
+                                            <i class="fas fa-share-alt"></i>
+                                        </button>
+                                        <button @onclick="() => DeleteDocument(doc.Id)"
+                                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+@if (showUploadModal)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="@GetCardClasses() max-w-2xl w-full p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                    <i class="fas fa-cloud-upload-alt text-primary mr-2"></i>
+                    Upload Document
+                </h3>
+                <button @onclick="() => showUploadModal = false"
+                        class="w-10 h-10 rounded-full @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") flex items-center justify-center transition-all">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Category Selection -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                    Document Category *
+                </label>
+                <select @bind="selectedUploadCategory"
+                        class="w-full px-4 py-3 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary">
+                    @foreach (var category in categories)
+                    {
+                        <option value="@category.Key">@category.Key</option>
+                    }
+                </select>
+            </div>
+
+            <!-- File Upload Component -->
+            <FileUploadComponent AllowMultiple="true"
+                                AcceptedFileTypes="image/*,.pdf,.doc,.docx"
+                                MaxFileSizeMB="10"
+                                FileTypeMessage="Images, PDF, Word documents up to 10MB"
+                                OnFilesUploaded="HandleFilesUploaded" />
+
+            <div class="mt-6 flex gap-3">
+                <button @onclick="() => showUploadModal = false"
+                        class="flex-1 px-4 py-3 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") text-gray-700 dark:text-gray-300 rounded-lg hover:opacity-80 transition-opacity font-semibold">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmUpload" disabled="@(uploadedFiles.Count == 0)"
+                        class="flex-1 px-4 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-lg hover:opacity-90 transition-opacity font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                    Upload (@uploadedFiles.Count) Files
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Share Modal -->
+@if (showShareModal)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="@GetCardClasses() max-w-md w-full p-6">
+            <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
+                <i class="fas fa-share-alt text-primary mr-2"></i>
+                Share Document
+            </h3>
+            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-4">
+                Share this direct link to your document with your doctor or specialist.
+            </p>
+            <div class="p-4 rounded-lg @(IsDarkMode ? "bg-gray-700/50" : "bg-gray-100") mb-4">
+                <div class="flex items-center gap-2 mb-2">
+                    <input type="text" readonly value="@shareLink"
+                           class="flex-1 px-3 py-2 rounded bg-transparent text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700")" />
+                    <button @onclick="CopyShareLink"
+                            class="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-semibold">
+                        <i class="fas fa-copy mr-1"></i>
+                        Copy
+                    </button>
+                </div>
+                <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-600")">
+                    Anyone with this link can view the document
+                </p>
+            </div>
+            <button @onclick="() => showShareModal = false"
+                    class="w-full px-4 py-2 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") text-gray-700 dark:text-gray-300 rounded-lg hover:opacity-80 transition-opacity font-semibold">
+                Close
+            </button>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal && selectedDocument != null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="@GetCardClasses() max-w-md w-full p-6">
+            <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
+                <i class="fas fa-trash text-red-500 mr-2"></i>
+                Delete Document
+            </h3>
+            <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-4">
+                Are you sure you want to delete <strong>"@selectedDocument.FileName"</strong>?
+            </p>
+            <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-6">
+                This action cannot be undone.
+            </p>
+            <div class="flex gap-3">
+                <button @onclick="() => { showDeleteModal = false; selectedDocument = null; }"
+                        disabled="@isDeleting"
+                        class="flex-1 px-4 py-2 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") text-gray-700 dark:text-gray-300 rounded-lg hover:opacity-80 transition-opacity font-semibold disabled:opacity-50">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmDelete"
+                        disabled="@isDeleting"
+                        class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
+                    @if (isDeleting)
+                    {
+                        <span class="animate-spin">⏳</span>
+                    }
+                    <span>Delete</span>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Preview Modal -->
+@if (showPreviewModal && previewDocument != null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" @onclick="() => { showPreviewModal = false; previewDocument = null; }">
+        <div class="@GetCardClasses() max-w-4xl w-full p-6" @onclick:stopPropagation="true">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                    <i class="fas fa-eye text-primary mr-2"></i>
+                    Document Preview
+                </h3>
+                <button @onclick="() => { showPreviewModal = false; previewDocument = null; }"
+                        class="@(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900") transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Document Info -->
+            <div class="mb-4 p-4 rounded-lg @(IsDarkMode ? "bg-gray-700/50" : "bg-gray-100")">
+                <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">@previewDocument.FileName</h4>
+                <div class="flex flex-wrap gap-4 text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-600")">
+                    <span><i class="fas fa-tag mr-1"></i>@previewDocument.DocumentType</span>
+                    <span><i class="fas fa-calendar mr-1"></i>@previewDocument.UploadedAt.ToString("MMM dd, yyyy")</span>
+                    <span><i class="fas fa-database mr-1"></i>@((previewDocument.FileSizeBytes / 1024.0 / 1024.0).ToString("F2")) MB</span>
+                </div>
+                @if (!string.IsNullOrEmpty(previewDocument.Description))
+                {
+                    <p class="mt-2 text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">@previewDocument.Description</p>
+                }
+            </div>
+
+            <!-- Preview Content -->
+            <div class="mb-4 rounded-lg overflow-hidden @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") max-h-[60vh] flex items-center justify-center">
+                @if (IsImageFile(previewDocument.MimeType))
+                {
+                    <img src="@previewDocument.FileUrl" alt="@previewDocument.FileName" class="max-w-full max-h-[60vh] object-contain" />
+                }
+                else if (IsPdfFile(previewDocument.MimeType))
+                {
+                    <div class="p-8 text-center">
+                        <i class="fas fa-file-pdf text-6xl text-red-500 mb-4"></i>
+                        <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-4">PDF files cannot be previewed inline.</p>
+                        <button @onclick="() => OpenDocumentInNewTab(previewDocument.FileUrl)"
+                                class="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity font-semibold">
+                            <i class="fas fa-external-link-alt mr-2"></i>Open in New Tab
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-8 text-center">
+                        <i class="fas fa-file text-6xl @(IsDarkMode ? "text-gray-500" : "text-gray-400") mb-4"></i>
+                        <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-4">This file type cannot be previewed.</p>
+                        <button @onclick="() => OpenDocumentInNewTab(previewDocument.FileUrl)"
+                                class="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity font-semibold">
+                            <i class="fas fa-external-link-alt mr-2"></i>Open in New Tab
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-3">
+                <button @onclick="async () => await DownloadDocument(previewDocument.Id)"
+                        class="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity font-semibold flex items-center justify-center gap-2">
+                    <i class="fas fa-download"></i>
+                    <span>Download</span>
+                </button>
+                <button @onclick="() => { showPreviewModal = false; previewDocument = null; }"
+                        class="flex-1 px-4 py-2 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") text-gray-700 dark:text-gray-300 rounded-lg hover:opacity-80 transition-opacity font-semibold">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+</AuthorizeRouteGuard>
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    // State
+    private bool isLoading = true;
+    private string selectedCategory = "All Documents";
+    private string searchQuery = "";
+    private string viewMode = "grid";
+    private bool showUploadModal = false;
+    private bool showShareModal = false;
+    private bool showDeleteModal = false;
+    private bool showPreviewModal = false;
+    private PatientDocumentDto? selectedDocument = null;
+    private PatientDocumentDto? previewDocument = null;
+    private bool isDeleting = false;
+    private string selectedUploadCategory = "Lab Results";
+    private string shareLink = "";
+    private double storageUsed = 0;
+    private int storageLimit = 500;
+
+    // Data
+    private List<PatientDocumentDto> allDocuments = new();
+    private List<PatientDocumentDto> filteredDocuments = new();
+    private List<FileUploadComponent.UploadedFileInfo> uploadedFiles = new();
+
+    private Dictionary<string, (string Icon, string Color)> categories = new()
+    {
+        { "All Documents", ("fa-folder", "text-purple-500") },
+        { "Lab Results", ("fa-flask", "text-blue-500") },
+        { "Imaging", ("fa-x-ray", "text-green-500") },
+        { "Prescriptions", ("fa-pills", "text-orange-500") },
+        { "Vaccination Records", ("fa-syringe", "text-red-500") },
+        { "Discharge Summaries", ("fa-file-medical", "text-indigo-500") },
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadDocuments();
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading health records");
+            ToastService.ShowError("Failed to load health records");
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadDocuments()
+    {
+        allDocuments = await HealthRecordService.GetMyDocumentsAsync();
+        CalculateStorageUsed();
+        FilterDocuments();
+    }
+
+    private void CalculateStorageUsed()
+    {
+        // Calculate total storage in MB from bytes
+        long totalBytes = allDocuments.Sum(d => d.FileSizeBytes);
+        storageUsed = Math.Round(totalBytes / (1024.0 * 1024.0), 2);
+    }
+
+    private void SelectCategory(string category)
+    {
+        selectedCategory = category;
+        FilterDocuments();
+    }
+
+    private void FilterDocuments()
+    {
+        var filtered = allDocuments.AsEnumerable();
+
+        if (selectedCategory != "All Documents")
+        {
+            if (selectedCategory == "Lab Results")
+            {
+                filtered = filtered.Where(d => d.DocumentType == DocumentType.LabResult);
+            }
+            else if (selectedCategory == "Imaging")
+            {
+                // Include all imaging types
+                filtered = filtered.Where(d => d.DocumentType == DocumentType.XRay ||
+                                              d.DocumentType == DocumentType.MRI ||
+                                              d.DocumentType == DocumentType.CTScan ||
+                                              d.DocumentType == DocumentType.Ultrasound);
+            }
+            else if (selectedCategory == "Prescriptions")
+            {
+                filtered = filtered.Where(d => d.DocumentType == DocumentType.Prescription);
+            }
+            else if (selectedCategory == "Vaccination Records" || selectedCategory == "Discharge Summaries")
+            {
+                filtered = filtered.Where(d => d.DocumentType == DocumentType.MedicalReport);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+            filtered = filtered.Where(d => d.FileName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                                         (d.Description != null && d.Description.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)));
+
+        filteredDocuments = filtered.OrderByDescending(d => d.UploadedAt).ToList();
+    }
+
+    private void HandleSearch() => FilterDocuments();
+
+    private int GetDocumentCountByCategory(string category)
+    {
+        if (category == "All Documents") return allDocuments.Count;
+
+        if (category == "Lab Results")
+            return allDocuments.Count(d => d.DocumentType == DocumentType.LabResult);
+
+        if (category == "Imaging")
+            return allDocuments.Count(d => d.DocumentType == DocumentType.XRay ||
+                                          d.DocumentType == DocumentType.MRI ||
+                                          d.DocumentType == DocumentType.CTScan ||
+                                          d.DocumentType == DocumentType.Ultrasound);
+
+        if (category == "Prescriptions")
+            return allDocuments.Count(d => d.DocumentType == DocumentType.Prescription);
+
+        if (category == "Vaccination Records" || category == "Discharge Summaries")
+            return allDocuments.Count(d => d.DocumentType == DocumentType.MedicalReport);
+
+        return 0;
+    }
+
+    private string GetCategoryButtonClass(string category)
+    {
+        if (selectedCategory == category)
+            return $"bg-primary text-white shadow-lg";
+        return IsDarkMode ? "bg-gray-700/50 text-gray-300 hover:bg-gray-700" : "bg-gray-100 text-gray-700 hover:bg-gray-200";
+    }
+
+    private string GetFileIcon(string fileType)
+    {
+        return fileType.ToLower() switch
+        {
+            "pdf" => "fa-file-pdf",
+            "image" => "fa-file-image",
+            "doc" or "docx" => "fa-file-word",
+            _ => "fa-file"
+        };
+    }
+
+    private void PreviewDocument(int documentId)
+    {
+        previewDocument = allDocuments.FirstOrDefault(d => d.Id == documentId);
+        if (previewDocument != null)
+        {
+            showPreviewModal = true;
+        }
+    }
+
+    private bool IsImageFile(string? mimeType)
+    {
+        if (string.IsNullOrEmpty(mimeType)) return false;
+        return mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsPdfFile(string? mimeType)
+    {
+        if (string.IsNullOrEmpty(mimeType)) return false;
+        return mimeType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task OpenDocumentInNewTab(string fileUrl)
+    {
+        await JS.InvokeVoidAsync("open", fileUrl, "_blank");
+    }
+
+    private async Task DownloadDocument(int documentId)
+    {
+        try
+        {
+            var document = allDocuments.FirstOrDefault(d => d.Id == documentId);
+            if (document != null && !string.IsNullOrEmpty(document.FileUrl))
+            {
+                var success = await JS.InvokeAsync<bool>("downloadFile", document.FileUrl, document.FileName);
+                if (success)
+                {
+                    ToastService.ShowSuccess("Download started!");
+                }
+                else
+                {
+                    ToastService.ShowError("Failed to download document");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error downloading document");
+            ToastService.ShowError("Failed to download document");
+        }
+    }
+
+    private void ShareDocument(int documentId)
+    {
+        var document = allDocuments.FirstOrDefault(d => d.Id == documentId);
+        if (document != null)
+        {
+            // Use the actual Cloudinary URL as the share link
+            shareLink = document.FileUrl;
+            showShareModal = true;
+        }
+    }
+
+    private async Task CopyShareLink()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", shareLink);
+        ToastService.ShowSuccess("Link copied to clipboard!");
+    }
+
+    private void DeleteDocument(int documentId)
+    {
+        selectedDocument = allDocuments.FirstOrDefault(d => d.Id == documentId);
+        if (selectedDocument != null)
+        {
+            showDeleteModal = true;
+        }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (selectedDocument == null) return;
+
+        isDeleting = true;
+        try
+        {
+            var success = await HealthRecordService.DeleteDocumentAsync(selectedDocument.Id);
+            if (success)
+            {
+                ToastService.ShowSuccess("Document deleted successfully");
+                await LoadDocuments();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to delete document");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error deleting document");
+            ToastService.ShowError("An error occurred while deleting the document");
+        }
+        finally
+        {
+            isDeleting = false;
+            showDeleteModal = false;
+            selectedDocument = null;
+        }
+    }
+
+    private void HandleFilesUploaded(List<FileUploadComponent.UploadedFileInfo> files)
+    {
+        uploadedFiles = files;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmUpload()
+    {
+        try
+        {
+            if (uploadedFiles.Count == 0)
+            {
+                ToastService.ShowWarning("No files to upload");
+                return;
+            }
+
+            // Map category to DocumentType
+            var documentType = selectedUploadCategory switch
+            {
+                "Lab Results" => DocumentType.LabResult,
+                "Imaging" => DocumentType.XRay, // Using XRay as default imaging type
+                "Prescriptions" => DocumentType.Prescription,
+                "Vaccination Records" => DocumentType.MedicalReport,
+                "Discharge Summaries" => DocumentType.MedicalReport,
+                _ => DocumentType.Other
+            };
+
+            int successCount = 0;
+            int failureCount = 0;
+
+            foreach (var file in uploadedFiles)
+            {
+                try
+                {
+                    if (string.IsNullOrEmpty(file.CloudinaryUrl))
+                    {
+                        Logger.LogWarning("File {FileName} has no Cloudinary URL, skipping", file.FileName);
+                        failureCount++;
+                        continue;
+                    }
+
+                    await HealthRecordService.UploadDocumentAsync(
+                        fileName: file.FileName,
+                        fileUrl: file.CloudinaryUrl,
+                        documentType: documentType,
+                        mimeType: file.ContentType,
+                        fileSizeBytes: file.Size
+                    );
+
+                    successCount++;
+                    Logger.LogInformation("Successfully saved document {FileName} to database", file.FileName);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error saving document {FileName} to database", file.FileName);
+                    failureCount++;
+                }
+            }
+
+            if (successCount > 0)
+            {
+                ToastService.ShowSuccess($"{successCount} document(s) uploaded successfully!");
+            }
+
+            if (failureCount > 0)
+            {
+                ToastService.ShowError($"{failureCount} document(s) failed to upload");
+            }
+
+            showUploadModal = false;
+            uploadedFiles.Clear();
+            await LoadDocuments();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error uploading documents");
+            ToastService.ShowError("Failed to upload documents");
+        }
+    }
+
+    private string GetCardClasses()
+    {
+        return IsDarkMode
+            ? "bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-lg"
+            : "bg-white/80 backdrop-blur-sm rounded-xl shadow-lg";
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.#} {sizes[order]}";
+    }
+}

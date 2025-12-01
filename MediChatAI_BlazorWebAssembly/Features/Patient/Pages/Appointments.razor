@@ -1,0 +1,530 @@
+@page "/patient/appointments"
+@using Microsoft.AspNetCore.Components.Authorization
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using PatientAppointmentDto = MediChatAI_BlazorWebAssembly.Features.Patient.DTOs.AppointmentDto
+@inject ThemeState ThemeState
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IToastService ToastService
+@inject ILogger<Appointments> Logger
+@inject AppSettingsState AppSettings
+@inject MediChatAI_BlazorWebAssembly.Features.Patient.Services.IAppointmentService AppointmentService
+
+<PageTitle>My Appointments - @AppSettings.Settings.SiteName</PageTitle>
+
+<AuthorizeRouteGuard RequiredRole="Patient">
+
+<div class="min-h-screen transition-colors duration-300 @(IsDarkMode ? "bg-gray-900" : "bg-gradient-to-br from-gray-50 to-gray-100") py-8">
+    <div class="w-full mx-auto px-4 sm:px-6 lg:px-8">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <button @onclick='() => Navigation.NavigateTo("/patient/dashboard")'
+                        class="inline-flex items-center gap-2 @(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900") mb-4 transition-colors">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Back to Dashboard</span>
+                </button>
+                <h1 class="text-4xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                    <i class="fas fa-calendar-alt text-primary mr-3"></i>
+                    My Appointments
+                </h1>
+                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-lg">
+                    View and manage all your medical appointments
+                </p>
+            </div>
+            <button @onclick='() => Navigation.NavigateTo("/patient/book-appointment")'
+                    class="px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:shadow-xl transition-all font-semibold flex items-center gap-2 group">
+                <i class="fas fa-plus-circle group-hover:rotate-90 transition-transform duration-300"></i>
+                <span>Book New Appointment</span>
+            </button>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="@GetCardClasses() p-6 mb-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div class="flex flex-wrap gap-2">
+                    <button @onclick='() => SelectFilter("all")'
+                            class='@GetFilterButtonClass("all")'>
+                        <i class="fas fa-list mr-2"></i>
+                        All (@totalCount)
+                    </button>
+                    <button @onclick='() => SelectFilter("upcoming")'
+                            class='@GetFilterButtonClass("upcoming")'>
+                        <i class="fas fa-clock mr-2"></i>
+                        Upcoming (@upcomingCount)
+                    </button>
+                    <button @onclick='() => SelectFilter("past")'
+                            class='@GetFilterButtonClass("past")'>
+                        <i class="fas fa-history mr-2"></i>
+                        Past (@pastCount)
+                    </button>
+                    <button @onclick='() => SelectFilter("cancelled")'
+                            class='@GetFilterButtonClass("cancelled")'>
+                        <i class="fas fa-ban mr-2"></i>
+                        Cancelled (@cancelledCount)
+                    </button>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="relative w-full sm:w-64">
+                    <input @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch"
+                           type="text"
+                           placeholder="Search by doctor or date..."
+                           class="w-full pl-10 pr-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary" />
+                    <i class="fas fa-search absolute left-3 top-3 @(IsDarkMode ? "text-gray-400" : "text-gray-500")"></i>
+                </div>
+            </div>
+
+            <!-- View Toggle -->
+            <div class="flex items-center gap-2">
+                <span class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">View:</span>
+                <button @onclick='() => viewMode = "list"'
+                        class='px-3 py-1.5 rounded-lg @(viewMode == "list" ? "bg-primary text-white" : IsDarkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-700") transition-colors'>
+                    <i class="fas fa-list"></i> List
+                </button>
+                <button @onclick='() => viewMode = "calendar"'
+                        class='px-3 py-1.5 rounded-lg @(viewMode == "calendar" ? "bg-primary text-white" : IsDarkMode ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-700") transition-colors'>
+                    <i class="fas fa-calendar"></i> Calendar
+                </button>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <!-- Loading State -->
+            <div class="@GetCardClasses() p-16 text-center">
+                <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent mb-4"></div>
+                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-lg">Loading appointments...</p>
+            </div>
+        }
+        else if (filteredAppointments.Count == 0)
+        {
+            <!-- Empty State -->
+            <div class="@GetCardClasses() p-16 text-center">
+                <div class="mx-auto w-24 h-24 bg-gradient-to-br @(IsDarkMode ? "from-gray-700 to-gray-600" : "from-gray-100 to-gray-200") rounded-full flex items-center justify-center mb-6">
+                    <i class="fas fa-calendar-times text-5xl @(IsDarkMode ? "text-gray-500" : "text-gray-400")"></i>
+                </div>
+                <h3 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                    @(currentFilter == "upcoming" ? "No Upcoming Appointments" :
+                      currentFilter == "past" ? "No Past Appointments" :
+                      currentFilter == "cancelled" ? "No Cancelled Appointments" : "No Appointments Found")
+                </h3>
+                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-6">
+                    @(string.IsNullOrEmpty(searchQuery)
+                        ? "You don't have any appointments in this category yet."
+                        : "No appointments match your search criteria.")
+                </p>
+                @if (currentFilter == "upcoming" && string.IsNullOrEmpty(searchQuery))
+                {
+                    <button @onclick='() => Navigation.NavigateTo("/patient/book-appointment")'
+                            class="px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:shadow-xl transition-all font-semibold">
+                        <i class="fas fa-plus-circle mr-2"></i>
+                        Book Your First Appointment
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            @if (viewMode == "list")
+            {
+                <!-- List View -->
+                <div class="space-y-4">
+                    @foreach (var appointment in filteredAppointments)
+                    {
+                        <div class="@GetCardClasses() p-6 hover:shadow-xl transition-all group">
+                            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <!-- Left Section - Doctor & Date Info -->
+                                <div class="flex items-start gap-4 flex-1">
+                                    <!-- Doctor Avatar -->
+                                    <div class="flex-shrink-0">
+                                        <div class="w-16 h-16 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-white text-xl font-bold">
+                                            @GetDoctorInitials(appointment.DoctorName)
+                                        </div>
+                                    </div>
+
+                                    <!-- Appointment Details -->
+                                    <div class="flex-1">
+                                        <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-1">
+                                            Dr. @appointment.DoctorName
+                                        </h3>
+                                        <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-2">
+                                            <i class="fas fa-stethoscope mr-1"></i>@(appointment.DoctorSpecialization ?? "General Medicine")
+                                        </p>
+                                        <div class="flex flex-wrap gap-3 text-sm">
+                                            <span class="flex items-center @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                                <i class="fas fa-calendar mr-2 text-primary"></i>
+                                                @appointment.AppointmentDateTime.ToString("MMMM dd, yyyy")
+                                            </span>
+                                            <span class="flex items-center @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                                <i class="fas fa-clock mr-2 text-primary"></i>
+                                                @appointment.AppointmentDateTime.ToString("hh:mm tt")
+                                            </span>
+                                            <span class="flex items-center @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                                <i class="fas fa-tag mr-2 text-primary"></i>
+                                                @appointment.Type.ToString()
+                                            </span>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(appointment.ReasonForVisit))
+                                        {
+                                            <p class="mt-2 text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") italic">
+                                                <i class="fas fa-notes-medical mr-1"></i>
+                                                "@appointment.ReasonForVisit"
+                                            </p>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Right Section - Status & Actions -->
+                                <div class="flex flex-col items-end gap-3">
+                                    <span class='@GetStatusBadgeClass(appointment.Status)'>
+                                        @GetStatusIcon(appointment.Status)
+                                        @appointment.Status.ToString()
+                                    </span>
+
+                                    <div class="flex gap-2 flex-wrap">
+                                        @if (appointment.Status == AppointmentStatus.Confirmed && appointment.AppointmentDateTime >= DateTime.Now)
+                                        {
+                                            @if (appointment.IsVirtual)
+                                            {
+                                                <button @onclick="() => JoinVirtualConsultation(appointment.Id.ToString())"
+                                                        class="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold flex items-center gap-2">
+                                                    <i class="fas fa-video"></i>
+                                                    Join Call
+                                                </button>
+                                            }
+                                            <button @onclick="() => RescheduleAppointment(appointment.Id.ToString())"
+                                                    class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") text-gray-700 dark:text-gray-300 rounded-lg transition-all text-sm font-semibold">
+                                                <i class="fas fa-calendar-alt mr-1"></i>
+                                                Reschedule
+                                            </button>
+                                            <button @onclick="() => ShowCancelModal(appointment.Id)"
+                                                    class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all text-sm font-semibold">
+                                                <i class="fas fa-times mr-1"></i>
+                                                Cancel
+                                            </button>
+                                        }
+                                        else if (appointment.Status == AppointmentStatus.Completed)
+                                        {
+                                            <button @onclick="() => ViewConsultationNotes(appointment.Id.ToString())"
+                                                    class="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all text-sm font-semibold">
+                                                <i class="fas fa-file-medical mr-1"></i>
+                                                View Notes
+                                            </button>
+                                        }
+
+                                        <!-- Chat with Doctor Button - Available on all appointments -->
+                                        <button @onclick="() => ChatWithDoctor(appointment.DoctorId)"
+                                                class="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold flex items-center gap-2"
+                                                title="Chat with @appointment.DoctorName">
+                                            <i class="fas fa-comment-medical"></i>
+                                            <span class="hidden sm:inline">Chat</span>
+                                        </button>
+
+                                        <button @onclick="() => ViewAppointmentDetails(appointment.Id.ToString())"
+                                                class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") text-gray-700 dark:text-gray-300 rounded-lg transition-all text-sm font-semibold">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Pagination -->
+                @if (totalPages > 1)
+                {
+                    <div class="@GetCardClasses() p-4 mt-6 flex items-center justify-between">
+                        <div class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                            Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredAppointments.Count) of @filteredAppointments.Count appointments
+                        </div>
+                        <div class="flex gap-2">
+                            <button @onclick="PreviousPage" disabled="@(currentPage == 1)"
+                                    class="px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-700") disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 transition-opacity">
+                                <i class="fas fa-chevron-left mr-1"></i>
+                                Previous
+                            </button>
+                            <button @onclick="NextPage" disabled="@(currentPage >= totalPages)"
+                                    class="px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-700") disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 transition-opacity">
+                                Next
+                                <i class="fas fa-chevron-right ml-1"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <!-- Calendar View -->
+                <div class="@GetCardClasses() p-6 text-center">
+                    <i class="fas fa-calendar-alt text-6xl text-gray-400 mb-4"></i>
+                    <p class="text-lg @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                        Calendar view coming soon!
+                    </p>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<!-- Cancel Confirmation Modal -->
+@if (showCancelModal)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="@GetCardClasses() max-w-md w-full p-6 transform transition-all">
+            <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
+                <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>
+                Cancel Appointment?
+            </h3>
+            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-4">
+                Are you sure you want to cancel this appointment? This action cannot be undone.
+            </p>
+            <div class="mb-4">
+                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                    Reason for cancellation (optional)
+                </label>
+                <textarea @bind="cancellationReason" rows="3"
+                          class="w-full px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary"
+                          placeholder="Please provide a reason..."></textarea>
+            </div>
+            <div class="flex gap-3">
+                <button @onclick="CloseCancelModal"
+                        class="flex-1 px-4 py-2 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") text-gray-700 dark:text-gray-300 rounded-lg hover:opacity-80 transition-opacity font-semibold">
+                    Keep Appointment
+                </button>
+                <button @onclick="ConfirmCancelAppointment"
+                        class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-semibold">
+                    Yes, Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+</AuthorizeRouteGuard>
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    // State
+    private bool isLoading = true;
+    private string currentFilter = "all";
+    private string viewMode = "list";
+    private string searchQuery = "";
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private bool showCancelModal = false;
+    private int? selectedAppointmentId = null;
+    private string cancellationReason = "";
+
+    // Data
+    private List<PatientAppointmentDto> allAppointments = new();
+    private List<PatientAppointmentDto> filteredAppointments = new();
+    private int totalCount => allAppointments.Count;
+    private int upcomingCount => allAppointments.Count(a => a.Status != AppointmentStatus.Cancelled && a.AppointmentDateTime >= DateTime.Now);
+    private int pastCount => allAppointments.Count(a => a.Status == AppointmentStatus.Completed || a.AppointmentDateTime < DateTime.Now);
+    private int cancelledCount => allAppointments.Count(a => a.Status == AppointmentStatus.Cancelled);
+    private int totalPages => (int)Math.Ceiling(filteredAppointments.Count / (double)pageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadAppointments();
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading appointments");
+            ToastService.ShowError("Failed to load appointments");
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadAppointments()
+    {
+        allAppointments = await AppointmentService.GetMyAppointmentsAsync();
+        FilterAppointments();
+    }
+
+    private void SelectFilter(string filter)
+    {
+        currentFilter = filter;
+        currentPage = 1;
+        FilterAppointments();
+    }
+
+    private void FilterAppointments()
+    {
+        var filtered = allAppointments.AsEnumerable();
+
+        // Apply filter
+        if (currentFilter == "upcoming")
+            filtered = filtered.Where(a => a.Status != AppointmentStatus.Cancelled && a.AppointmentDateTime >= DateTime.Now);
+        else if (currentFilter == "past")
+            filtered = filtered.Where(a => a.Status == AppointmentStatus.Completed || a.AppointmentDateTime < DateTime.Now);
+        else if (currentFilter == "cancelled")
+            filtered = filtered.Where(a => a.Status == AppointmentStatus.Cancelled);
+
+        // Apply search
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filtered = filtered.Where(a =>
+                a.DoctorName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                (a.DoctorSpecialization != null && a.DoctorSpecialization.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)) ||
+                a.AppointmentDateTime.ToString("MMMM dd, yyyy").Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
+        }
+
+        filteredAppointments = filtered.OrderBy(a => a.AppointmentDateTime).ToList();
+    }
+
+    private void HandleSearch()
+    {
+        currentPage = 1;
+        FilterAppointments();
+    }
+
+    private string GetFilterButtonClass(string filter)
+    {
+        var baseClass = "px-4 py-2 rounded-lg font-semibold transition-all";
+        if (currentFilter == filter)
+            return $"{baseClass} bg-primary text-white shadow-lg";
+        return $"{baseClass} {(IsDarkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300")}";
+    }
+
+    private string GetStatusBadgeClass(AppointmentStatus status)
+    {
+        var baseClass = "px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1";
+        return status switch
+        {
+            AppointmentStatus.Confirmed => $"{baseClass} bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+            AppointmentStatus.Pending => $"{baseClass} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+            AppointmentStatus.InProgress => $"{baseClass} bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+            AppointmentStatus.Completed => $"{baseClass} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+            AppointmentStatus.Cancelled => $"{baseClass} bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+            AppointmentStatus.NoShow => $"{baseClass} bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+            _ => $"{baseClass} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+        };
+    }
+
+    private string GetStatusIcon(AppointmentStatus status)
+    {
+        return status switch
+        {
+            AppointmentStatus.Confirmed => "✓",
+            AppointmentStatus.Pending => "⏱",
+            AppointmentStatus.InProgress => "▶",
+            AppointmentStatus.Completed => "✔",
+            AppointmentStatus.Cancelled => "✕",
+            AppointmentStatus.NoShow => "⊗",
+            _ => "◯"
+        };
+    }
+
+    private string GetDoctorInitials(string name)
+    {
+        var parts = name.Split(' ');
+        return parts.Length >= 2 ? $"{parts[0][0]}{parts[1][0]}" : name.Substring(0, Math.Min(2, name.Length));
+    }
+
+    private void ShowCancelModal(int appointmentId)
+    {
+        selectedAppointmentId = appointmentId;
+        cancellationReason = "";
+        showCancelModal = true;
+    }
+
+    private void CloseCancelModal()
+    {
+        showCancelModal = false;
+        selectedAppointmentId = null;
+        cancellationReason = "";
+    }
+
+    private async Task ConfirmCancelAppointment()
+    {
+        try
+        {
+            if (selectedAppointmentId == null)
+                return;
+
+            var success = await AppointmentService.CancelAppointmentAsync(
+                selectedAppointmentId.Value,
+                cancellationReason);
+
+            if (success)
+            {
+                ToastService.ShowSuccess("Appointment cancelled successfully");
+                await LoadAppointments(); // Reload to get updated data
+            }
+            else
+            {
+                ToastService.ShowError("Failed to cancel appointment. Please try again.");
+            }
+
+            CloseCancelModal();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cancelling appointment");
+            ToastService.ShowError("Failed to cancel appointment");
+        }
+    }
+
+    private void JoinVirtualConsultation(string appointmentId)
+    {
+        // TODO: Navigate to virtual consultation room
+        ToastService.ShowInfo("Virtual consultation feature coming soon!");
+    }
+
+    private void RescheduleAppointment(string appointmentId)
+    {
+        // TODO: Navigate to reschedule page
+        ToastService.ShowInfo("Reschedule feature coming soon!");
+    }
+
+    private void ViewAppointmentDetails(string appointmentId)
+    {
+        // TODO: Show appointment details modal
+        ToastService.ShowInfo("Appointment details view coming soon!");
+    }
+
+    private void ViewConsultationNotes(string appointmentId)
+    {
+        Navigation.NavigateTo($"/patient/consultations?appointment={appointmentId}");
+    }
+
+    private void ChatWithDoctor(string doctorId)
+    {
+        // Navigate to messages page with the doctor conversation pre-selected
+        Navigation.NavigateTo($"/patient/messages?doctorId={doctorId}");
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private string GetCardClasses()
+    {
+        return IsDarkMode
+            ? "bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-lg"
+            : "bg-white/80 backdrop-blur-sm rounded-xl shadow-lg";
+    }
+}

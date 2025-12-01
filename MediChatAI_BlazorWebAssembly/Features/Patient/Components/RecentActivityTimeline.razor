@@ -1,0 +1,254 @@
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+
+<!-- Recent Activity Timeline Component -->
+<div class="space-y-4">
+    @if (ActivityItems.Count == 0)
+    {
+        <div class="text-center py-8">
+            <i class="fas fa-history text-4xl @(IsDarkMode ? "text-gray-700" : "text-gray-300") mb-3"></i>
+            <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                No recent activity
+            </p>
+        </div>
+    }
+    else
+    {
+        @foreach (var activity in ActivityItems.Take(MaxItems))
+        {
+            <div class="flex items-start gap-3 @(IsDarkMode ? "hover:bg-gray-700/30" : "hover:bg-gray-50") rounded-lg p-3 transition-colors">
+                <!-- Activity Icon -->
+                <div class="flex-shrink-0">
+                    <div class="@GetActivityIconClasses(activity.Type)">
+                        <i class="@GetActivityIcon(activity.Type)"></i>
+                    </div>
+                </div>
+
+                <!-- Activity Content -->
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium @(IsDarkMode ? "text-white" : "text-gray-900")">
+                        @activity.Title
+                    </p>
+                    @if (!string.IsNullOrEmpty(activity.Description))
+                    {
+                        <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-0.5">
+                            @activity.Description
+                        </p>
+                    }
+                    <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400") mt-1">
+                        <i class="fas fa-clock mr-1"></i>
+                        @GetTimeAgo(activity.Timestamp)
+                    </p>
+                </div>
+            </div>
+        }
+
+        @if (ActivityItems.Count > MaxItems)
+        {
+            <div class="text-center pt-2">
+                <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")">
+                    +@(ActivityItems.Count - MaxItems) more activities
+                </p>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<UpcomingAppointment> Appointments { get; set; } = new();
+
+    [Parameter]
+    public List<ActivePrescription> Prescriptions { get; set; } = new();
+
+    [Parameter]
+    public List<RecentDocument> Documents { get; set; } = new();
+
+    [Parameter]
+    public List<RecentNotification> Notifications { get; set; } = new();
+
+    [Parameter]
+    public LatestVitals? LatestVitals { get; set; }
+
+    [Parameter]
+    public int MaxItems { get; set; } = 10;
+
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    private List<ActivityItem> ActivityItems { get; set; } = new();
+
+    protected override void OnParametersSet()
+    {
+        GenerateActivityTimeline();
+    }
+
+    private void GenerateActivityTimeline()
+    {
+        var activities = new List<ActivityItem>();
+
+        // Add appointment activities
+        foreach (var appointment in Appointments)
+        {
+            var activityType = appointment.Status switch
+            {
+                "Confirmed" => ActivityType.AppointmentConfirmed,
+                "Pending" => ActivityType.AppointmentBooked,
+                "Rescheduled" => ActivityType.AppointmentRescheduled,
+                _ => ActivityType.AppointmentBooked
+            };
+
+            activities.Add(new ActivityItem
+            {
+                Type = activityType,
+                Title = $"Appointment {GetStatusText(appointment.Status)}",
+                Description = $"Dr. {appointment.DoctorName} - {appointment.AppointmentDate:MMM dd, yyyy} at {appointment.AppointmentTime}",
+                Timestamp = appointment.AppointmentDate
+            });
+        }
+
+        // Add prescription activities
+        foreach (var prescription in Prescriptions)
+        {
+            activities.Add(new ActivityItem
+            {
+                Type = ActivityType.PrescriptionIssued,
+                Title = "New Prescription",
+                Description = $"{prescription.MedicationName} prescribed by Dr. {prescription.DoctorName}",
+                Timestamp = prescription.StartDate ?? DateTime.Now
+            });
+        }
+
+        // Add document activities
+        foreach (var document in Documents)
+        {
+            activities.Add(new ActivityItem
+            {
+                Type = ActivityType.DocumentUploaded,
+                Title = "Document Uploaded",
+                Description = $"{document.DocumentName} ({document.DocumentCategory})",
+                Timestamp = document.UploadedDate
+            });
+        }
+
+        // Add notification activities (only unread or recent)
+        foreach (var notification in Notifications.Take(5))
+        {
+            var notificationType = notification.Category.ToLower() switch
+            {
+                "appointment" => ActivityType.AppointmentConfirmed,
+                "prescription" => ActivityType.PrescriptionIssued,
+                "vital" => ActivityType.VitalRecorded,
+                _ => ActivityType.General
+            };
+
+            activities.Add(new ActivityItem
+            {
+                Type = notificationType,
+                Title = notification.Title,
+                Description = notification.Message,
+                Timestamp = notification.CreatedAt
+            });
+        }
+
+        // Add vitals activity if available
+        if (LatestVitals != null && LatestVitals.LastRecorded != DateTime.MinValue)
+        {
+            activities.Add(new ActivityItem
+            {
+                Type = ActivityType.VitalRecorded,
+                Title = "Vitals Recorded",
+                Description = $"BP: {LatestVitals.BloodPressure}, HR: {LatestVitals.HeartRate} bpm",
+                Timestamp = LatestVitals.LastRecorded
+            });
+        }
+
+        // Sort by timestamp descending (most recent first)
+        ActivityItems = activities
+            .OrderByDescending(a => a.Timestamp)
+            .ToList();
+    }
+
+    private string GetActivityIcon(ActivityType type)
+    {
+        return type switch
+        {
+            ActivityType.AppointmentBooked => "fas fa-calendar-plus",
+            ActivityType.AppointmentConfirmed => "fas fa-calendar-check",
+            ActivityType.AppointmentRescheduled => "fas fa-calendar-alt",
+            ActivityType.PrescriptionIssued => "fas fa-prescription",
+            ActivityType.DocumentUploaded => "fas fa-file-upload",
+            ActivityType.VitalRecorded => "fas fa-heartbeat",
+            ActivityType.General => "fas fa-bell",
+            _ => "fas fa-info-circle"
+        };
+    }
+
+    private string GetActivityIconClasses(ActivityType type)
+    {
+        var baseClasses = "w-8 h-8 rounded-full flex items-center justify-center text-white text-sm";
+        var colorClasses = type switch
+        {
+            ActivityType.AppointmentBooked => "bg-blue-500",
+            ActivityType.AppointmentConfirmed => "bg-green-500",
+            ActivityType.AppointmentRescheduled => "bg-yellow-500",
+            ActivityType.PrescriptionIssued => "bg-purple-500",
+            ActivityType.DocumentUploaded => "bg-indigo-500",
+            ActivityType.VitalRecorded => "bg-red-500",
+            ActivityType.General => "bg-gray-500",
+            _ => "bg-gray-400"
+        };
+
+        return $"{baseClasses} {colorClasses}";
+    }
+
+    private string GetStatusText(string status)
+    {
+        return status switch
+        {
+            "Confirmed" => "confirmed by doctor",
+            "Pending" => "awaiting confirmation",
+            "Rescheduled" => "rescheduled",
+            _ => status.ToLower()
+        };
+    }
+
+    private string GetTimeAgo(DateTime timestamp)
+    {
+        var timeSpan = DateTime.Now - timestamp;
+
+        if (timeSpan.TotalMinutes < 1)
+            return "Just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours}h ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays}d ago";
+        if (timeSpan.TotalDays < 30)
+            return $"{(int)(timeSpan.TotalDays / 7)}w ago";
+        if (timeSpan.TotalDays < 365)
+            return $"{(int)(timeSpan.TotalDays / 30)}mo ago";
+
+        return timestamp.ToString("MMM dd, yyyy");
+    }
+
+    private class ActivityItem
+    {
+        public ActivityType Type { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+    }
+
+    private enum ActivityType
+    {
+        AppointmentBooked,
+        AppointmentConfirmed,
+        AppointmentRescheduled,
+        PrescriptionIssued,
+        DocumentUploaded,
+        VitalRecorded,
+        General
+    }
+}

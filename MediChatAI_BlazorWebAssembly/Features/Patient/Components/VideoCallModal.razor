@@ -1,0 +1,425 @@
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+<div class="video-call-modal @(IsVisible ? "visible" : "hidden")">
+    <div class="fixed inset-0 z-50 bg-black">
+        <!-- Remote Video (Full Screen) -->
+        <video id="remoteVideo" autoplay playsinline muted controls="false"
+               class="w-full h-full object-cover hidden"
+               style="background-color: #1f2937;"></video>
+
+        <!-- Remote User Thumbnail (when camera off or audio call) -->
+        <div id="remoteThumbnail" class="w-full h-full flex items-center justify-center"
+             style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="text-center text-white">
+                <div class="w-40 h-40 rounded-full bg-white/20 backdrop-blur-sm mx-auto mb-6 flex items-center justify-center border-4 border-white/30 shadow-2xl">
+                    @if (!string.IsNullOrEmpty(PartnerImage))
+                    {
+                        <img src="@PartnerImage" alt="@PartnerName" class="w-full h-full rounded-full object-cover" />
+                    }
+                    else
+                    {
+                        <div class="w-full h-full rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                            <span class="text-4xl font-bold text-white">@GetInitials(PartnerName)</span>
+                        </div>
+                    }
+                </div>
+                <h2 class="text-3xl font-semibold mb-2 drop-shadow-lg">@PartnerName</h2>
+                <p class="text-xl text-white/80 mb-4">@CallStatusText</p>
+                <div class="flex items-center justify-center gap-2 text-white/60">
+                    <i class="fas fa-@(IsVideoCall ? "video" : "phone") text-lg"></i>
+                    <span>@(IsVideoCall ? "Camera Off" : "Voice Call")</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Local Video (Picture-in-Picture) -->
+        @if (IsVideoCall && (CallState == CallStatus.Connected || CallState == CallStatus.Connecting))
+        {
+            <div class="absolute top-4 right-4 w-48 h-36 rounded-lg overflow-hidden shadow-2xl border-2 border-white/20">
+                <video id="localVideo" autoplay playsinline muted controls="false"
+                       class="w-full h-full object-cover"
+                       style="background-color: #374151;"></video>
+                <!-- Local User Thumbnail (when local camera off) -->
+                <div id="localThumbnail" class="hidden absolute inset-0 flex items-center justify-center"
+                     style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="text-center text-white">
+                        <div class="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm mx-auto mb-2 flex items-center justify-center border-2 border-white/30">
+                            <div class="w-full h-full rounded-full bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center">
+                                <span class="text-lg font-bold text-white">You</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-white/80">Camera Off</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Call Information Overlay -->
+        <div class="absolute top-4 left-4 text-white space-y-2">
+            <div class="bg-black bg-opacity-50 rounded-lg px-4 py-2 backdrop-blur-sm">
+                <p class="font-semibold">@PartnerName</p>
+                @if (CallState == CallStatus.Connected)
+                {
+                    <p class="text-sm text-gray-300">@CallDuration</p>
+                }
+                else
+                {
+                    <p class="text-sm text-gray-300">@CallStatusText</p>
+                }
+            </div>
+        </div>
+
+        <!-- Call Controls -->
+        <div class="absolute bottom-8 left-0 right-0 flex justify-center items-center gap-4">
+            @if (CallState == CallStatus.Incoming)
+            {
+                <!-- Incoming Call Controls -->
+                <button @onclick="AcceptCall"
+                        class="w-16 h-16 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center transition-all transform hover:scale-110 shadow-lg">
+                    <i class="fas fa-phone text-2xl"></i>
+                </button>
+                <button @onclick="RejectCall"
+                        class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all transform hover:scale-110 shadow-lg">
+                    <i class="fas fa-phone-slash text-2xl"></i>
+                </button>
+            }
+            else if (CallState == CallStatus.Connected)
+            {
+                <!-- Active Call Controls -->
+                @if (IsVideoCall)
+                {
+                    <button @onclick="ToggleVideo"
+                            class="w-14 h-14 rounded-full @(isVideoMuted ? "bg-red-600" : "bg-gray-700 hover:bg-gray-600") text-white flex items-center justify-center transition-all shadow-lg">
+                        <i class="fas fa-video@(isVideoMuted ? "-slash" : "") text-xl"></i>
+                    </button>
+                }
+
+                <button @onclick="ToggleAudio"
+                        class="w-14 h-14 rounded-full @(isAudioMuted ? "bg-red-600" : "bg-gray-700 hover:bg-gray-600") text-white flex items-center justify-center transition-all shadow-lg">
+                    <i class="fas fa-microphone@(isAudioMuted ? "-slash" : "") text-xl"></i>
+                </button>
+
+                @if (IsVideoCall)
+                {
+                    <button @onclick="SwitchCamera"
+                            class="w-14 h-14 rounded-full bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center transition-all shadow-lg">
+                        <i class="fas fa-sync-alt text-xl"></i>
+                    </button>
+                }
+
+                <button @onclick="EndCall"
+                        class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all transform hover:scale-110 shadow-lg">
+                    <i class="fas fa-phone-slash text-2xl"></i>
+                </button>
+            }
+            else if (CallState == CallStatus.Ringing)
+            {
+                <!-- Outgoing Call - Show only end call button -->
+                <button @onclick="EndCall"
+                        class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all transform hover:scale-110 shadow-lg">
+                    <i class="fas fa-phone-slash text-2xl"></i>
+                </button>
+            }
+        </div>
+
+        <!-- Connection Quality Indicator -->
+        @if (CallState == CallStatus.Connected && showConnectionQuality)
+        {
+            <div class="absolute bottom-24 left-4 bg-black bg-opacity-50 rounded-lg px-3 py-2 backdrop-blur-sm text-white text-sm">
+                <i class="fas fa-signal mr-2"></i>
+                <span>@connectionQuality</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public string PartnerId { get; set; } = string.Empty;
+
+    [Parameter]
+    public string PartnerName { get; set; } = string.Empty;
+
+    [Parameter]
+    public string PartnerImage { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsVideoCall { get; set; }
+
+    [Parameter]
+    public CallStatus CallState { get; set; } = CallStatus.Idle;
+
+    [Parameter]
+    public bool IsDarkMode { get; set; }
+
+    [Parameter]
+    public EventCallback OnCallAccepted { get; set; }
+
+    [Parameter]
+    public EventCallback OnCallRejected { get; set; }
+
+    [Parameter]
+    public EventCallback OnCallEnded { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnIceCandidateGenerated { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnOfferCreated { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnAnswerCreated { get; set; }
+
+    private bool isAudioMuted = false;
+    private bool isVideoMuted = false;
+    private System.Timers.Timer? callTimer;
+    private int callDurationSeconds = 0;
+    private bool showConnectionQuality = false;
+    private string connectionQuality = "Good";
+    private DotNetObjectReference<VideoCallModal>? objRef;
+
+    public enum CallStatus
+    {
+        Idle,
+        Incoming,
+        Ringing,
+        Connecting,
+        Connected,
+        Ended
+    }
+
+    private string CallStatusText => CallState switch
+    {
+        CallStatus.Incoming => "Incoming call...",
+        CallStatus.Ringing => "Calling...",
+        CallStatus.Connecting => "Connecting...",
+        CallStatus.Connected => "Connected",
+        CallStatus.Ended => "Call ended",
+        _ => ""
+    };
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+    }
+
+    private string CallDuration
+    {
+        get
+        {
+            var minutes = callDurationSeconds / 60;
+            var seconds = callDurationSeconds % 60;
+            return $"{minutes:D2}:{seconds:D2}";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("webrtc.initialize", objRef);
+        }
+    }
+
+    public async Task<bool> StartLocalStream()
+    {
+        try
+        {
+            var success = await JSRuntime.InvokeAsync<bool>("webrtc.startLocalStream", "localVideo", !IsVideoCall);
+            if (!success)
+            {
+                Console.WriteLine("Failed to start local stream, but continuing with call");
+                // Continue anyway for same device testing
+                return true;
+            }
+            Console.WriteLine($"Local stream started: {success}");
+            return success;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error starting local stream: {ex.Message}");
+            // Return true to allow call to continue for testing
+            return true;
+        }
+    }
+
+    public async Task<string?> CreateOffer()
+    {
+        try
+        {
+            var offer = await JSRuntime.InvokeAsync<string>("webrtc.createOffer", PartnerId, IsVideoCall);
+            return offer;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating offer: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<string?> HandleOffer(string offerJson)
+    {
+        try
+        {
+            var answer = await JSRuntime.InvokeAsync<string>("webrtc.handleOffer", offerJson, "remoteVideo", IsVideoCall);
+            return answer;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling offer: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<bool> HandleAnswer(string answerJson)
+    {
+        try
+        {
+            var success = await JSRuntime.InvokeAsync<bool>("webrtc.handleAnswer", answerJson, "remoteVideo");
+            Console.WriteLine($"Answer handled: {success}");
+            return success;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling answer: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<bool> AddIceCandidate(string candidateJson)
+    {
+        try
+        {
+            var success = await JSRuntime.InvokeAsync<bool>("webrtc.addIceCandidate", candidateJson);
+            Console.WriteLine($"ICE candidate added: {success}");
+            return success;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error adding ICE candidate: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task AcceptCall()
+    {
+        CallState = CallStatus.Connecting;
+        await StartLocalStream();
+        await OnCallAccepted.InvokeAsync();
+    }
+
+    private async Task RejectCall()
+    {
+        CallState = CallStatus.Ended;
+        await OnCallRejected.InvokeAsync();
+    }
+
+    private async Task EndCall()
+    {
+        CallState = CallStatus.Ended;
+        StopCallTimer();
+        await JSRuntime.InvokeVoidAsync("webrtc.endCall");
+        await OnCallEnded.InvokeAsync();
+    }
+
+    private async Task ToggleAudio()
+    {
+        isAudioMuted = !isAudioMuted;
+        await JSRuntime.InvokeAsync<bool>("webrtc.toggleAudio", isAudioMuted);
+    }
+
+    private async Task ToggleVideo()
+    {
+        isVideoMuted = !isVideoMuted;
+        await JSRuntime.InvokeAsync<bool>("webrtc.toggleVideo", isVideoMuted);
+        StateHasChanged();
+    }
+
+    private async Task SwitchCamera()
+    {
+        try
+        {
+            await JSRuntime.InvokeAsync<bool>("webrtc.switchCamera", "localVideo");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error switching camera: {ex.Message}");
+        }
+    }
+
+    private void StartCallTimer()
+    {
+        callDurationSeconds = 0;
+        callTimer = new System.Timers.Timer(1000);
+        callTimer.Elapsed += (s, e) =>
+        {
+            callDurationSeconds++;
+            InvokeAsync(StateHasChanged);
+        };
+        callTimer.Start();
+    }
+
+    private void StopCallTimer()
+    {
+        callTimer?.Stop();
+        callTimer?.Dispose();
+        callTimer = null;
+        callDurationSeconds = 0;
+    }
+
+    // JavaScript callbacks
+    [JSInvokable]
+    public async Task OnIceCandidate(string candidateJson)
+    {
+        await OnIceCandidateGenerated.InvokeAsync(candidateJson);
+    }
+
+    [JSInvokable]
+    public async Task OnConnectionStateChanged(string state)
+    {
+        Console.WriteLine($"Connection state changed: {state}");
+
+        if (state == "connected")
+        {
+            CallState = CallStatus.Connected;
+            connectionQuality = "Good";
+            StartCallTimer();
+        }
+        else if (state == "failed" || state == "disconnected")
+        {
+            connectionQuality = "Poor";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnMediaError(string error)
+    {
+        Console.WriteLine($"Media error: {error}");
+        // Handle media errors (e.g., permission denied)
+        await EndCall();
+    }
+
+    [JSInvokable]
+    public async Task OnCallError(string error)
+    {
+        Console.WriteLine($"Call error: {error}");
+        await EndCall();
+    }
+
+    public void Dispose()
+    {
+        StopCallTimer();
+        objRef?.Dispose();
+    }
+}

@@ -1,0 +1,310 @@
+@using MediChatAI_BlazorWebAssembly.Features.Emergency.Models
+@using MediChatAI_BlazorWebAssembly.Features.Emergency.Services
+@inject IEmergencyChatService EmergencyChatService
+@inject IJSRuntime JS
+
+<div class="ai-assistant-panel @(IsVisible ? "visible" : "hidden") @(IsDarkMode ? "dark" : "")">
+    <div class="fixed right-4 bottom-24 w-96 max-h-[600px] @(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg shadow-2xl border @(IsDarkMode ? "border-gray-700" : "border-gray-200") flex flex-col overflow-hidden z-40">
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 @(IsDarkMode ? "bg-gradient-to-r from-blue-600 to-purple-600" : "bg-gradient-to-r from-blue-500 to-purple-500") text-white">
+            <div class="flex items-center gap-2">
+                <div class="relative">
+                    <i class="fas fa-robot text-2xl"></i>
+                    @if (isProcessing)
+                    {
+                        <div class="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                    }
+                </div>
+                <div>
+                    <h3 class="font-semibold">AI Medical Assistant</h3>
+                    <p class="text-xs opacity-90">Powered by Advanced AI</p>
+                </div>
+            </div>
+            <button @onclick="OnClose" class="hover:bg-white/20 rounded-full p-2 transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Messages Container -->
+        <div @ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-3 @(IsDarkMode ? "bg-gray-900" : "bg-gray-50")">
+            @if (!aiMessages.Any())
+            {
+                <!-- Welcome Message -->
+                <div class="text-center py-8">
+                    <div class="w-16 h-16 @(IsDarkMode ? "bg-blue-900/30" : "bg-blue-100") rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-robot text-3xl @(IsDarkMode ? "text-blue-400" : "text-blue-600")"></i>
+                    </div>
+                    <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">Welcome to AI Assistant</h4>
+                    <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-4">Ask me about your symptoms, medications, or health concerns.</p>
+                    <div class="flex flex-wrap gap-2 justify-center">
+                        <button @onclick='() => SendQuickMessage("What are the symptoms of flu?")' class="text-xs px-3 py-2 @(IsDarkMode ? "bg-gray-800 hover:bg-gray-700" : "bg-white hover:bg-gray-50") rounded-full @(IsDarkMode ? "text-gray-300" : "text-gray-700") border @(IsDarkMode ? "border-gray-700" : "border-gray-200") transition-colors">
+                            Flu symptoms
+                        </button>
+                        <button @onclick='() => SendQuickMessage("What should I do for a headache?")' class="text-xs px-3 py-2 @(IsDarkMode ? "bg-gray-800 hover:bg-gray-700" : "bg-white hover:bg-gray-50") rounded-full @(IsDarkMode ? "text-gray-300" : "text-gray-700") border @(IsDarkMode ? "border-gray-700" : "border-gray-200") transition-colors">
+                            Headache relief
+                        </button>
+                        <button @onclick='() => SendQuickMessage("How to check blood pressure?")' class="text-xs px-3 py-2 @(IsDarkMode ? "bg-gray-800 hover:bg-gray-700" : "bg-white hover:bg-gray-50") rounded-full @(IsDarkMode ? "text-gray-300" : "text-gray-700") border @(IsDarkMode ? "border-gray-700" : "border-gray-200") transition-colors">
+                            Blood pressure
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @foreach (var message in aiMessages)
+            {
+                <div class="flex @(message.IsUserMessage ? "justify-end" : "justify-start") ai-message-animation">
+                    <div class="max-w-[85%] @(message.IsUserMessage ? (IsDarkMode ? "bg-blue-600" : "bg-blue-500") : (IsDarkMode ? "bg-gray-800" : "bg-white")) rounded-lg p-3 shadow-sm">
+                        @if (!message.IsUserMessage)
+                        {
+                            <div class="flex items-center gap-2 mb-2">
+                                <i class="fas fa-robot text-blue-400 text-sm"></i>
+                                <span class="text-xs font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700")">AI Assistant</span>
+                            </div>
+                        }
+                        <p class="text-sm @(message.IsUserMessage ? "text-white" : (IsDarkMode ? "text-gray-200" : "text-gray-800")) whitespace-pre-wrap">@message.Content</p>
+                        <span class="text-xs @(message.IsUserMessage ? "text-blue-100" : (IsDarkMode ? "text-gray-500" : "text-gray-400")) mt-1 block">
+                            @message.Timestamp.ToString("h:mm tt")
+                        </span>
+
+                        @if (!message.IsUserMessage && message.SuggestedActions != null && message.SuggestedActions.Any())
+                        {
+                            <div class="mt-3 space-y-1">
+                                <p class="text-xs font-semibold @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-2">Suggested Actions:</p>
+                                @foreach (var action in message.SuggestedActions)
+                                {
+                                    <button @onclick="() => HandleAction(action)"
+                                            class="w-full text-left px-3 py-2 text-xs rounded-lg @(IsDarkMode ? "bg-blue-900/30 hover:bg-blue-900/50 text-blue-300" : "bg-blue-50 hover:bg-blue-100 text-blue-700") transition-colors flex items-center gap-2">
+                                        <i class="fas fa-@action.Icon"></i>
+                                        <span>@action.Label</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (isProcessing)
+            {
+                <div class="flex justify-start ai-message-animation">
+                    <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg p-3 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="typing-indicator">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                            <span class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">AI is thinking...</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-3 @(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") border-t">
+            <div class="flex gap-2">
+                <input @ref="inputElement"
+                       @bind="userMessage"
+                       @bind:event="oninput"
+                       @onkeydown="HandleKeyDown"
+                       type="text"
+                       placeholder="Ask AI anything about health..."
+                       class="flex-1 px-3 py-2 text-sm rounded-lg @(IsDarkMode ? "bg-gray-900 text-white border-gray-700" : "bg-gray-50 text-gray-900 border-gray-300") border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       disabled="@isProcessing" />
+                <button @onclick="SendMessage"
+                        disabled="@(string.IsNullOrWhiteSpace(userMessage) || isProcessing)"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors">
+                    @if (isProcessing)
+                    {
+                        <i class="fas fa-spinner fa-spin"></i>
+                    }
+                    else
+                    {
+                        <i class="fas fa-paper-plane"></i>
+                    }
+                </button>
+            </div>
+            <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") mt-2">
+                <i class="fas fa-info-circle mr-1"></i>
+                AI assistance is for informational purposes only. Consult your doctor for medical advice.
+            </p>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public bool IsDarkMode { get; set; }
+
+    [Parameter]
+    public string? UserId { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnActionClick { get; set; }
+
+    private ElementReference messagesContainer;
+    private ElementReference inputElement;
+    private string userMessage = "";
+    private bool isProcessing = false;
+    private string sessionId = Guid.NewGuid().ToString();
+    private List<AiMessage> aiMessages = new();
+
+    private class AiMessage
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string Content { get; set; } = "";
+        public bool IsUserMessage { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        public List<QuickActionDto>? SuggestedActions { get; set; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsVisible && aiMessages.Any())
+        {
+            await ScrollToBottom();
+        }
+
+        if (IsVisible && firstRender)
+        {
+            try
+            {
+                await inputElement.FocusAsync();
+            }
+            catch { }
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(userMessage) || isProcessing) return;
+
+        var message = userMessage.Trim();
+        userMessage = "";
+
+        // Add user message
+        aiMessages.Add(new AiMessage
+        {
+            Content = message,
+            IsUserMessage = true,
+            Timestamp = DateTime.UtcNow
+        });
+
+        StateHasChanged();
+        await ScrollToBottom();
+
+        // Get AI response
+        await GetAiResponse(message);
+    }
+
+    private async Task SendQuickMessage(string message)
+    {
+        userMessage = message;
+        await SendMessage();
+    }
+
+    private async Task GetAiResponse(string message)
+    {
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var input = new SendChatMessageInput
+            {
+                Message = message,
+                SessionId = sessionId,
+                Context = new ChatContextDto
+                {
+                    UserRole = "Patient",
+                    UserId = UserId
+                }
+            };
+
+            var response = await EmergencyChatService.SendMessageAsync(input);
+
+            if (response != null && response.Success)
+            {
+                aiMessages.Add(new AiMessage
+                {
+                    Content = response.Content,
+                    IsUserMessage = false,
+                    Timestamp = response.Timestamp,
+                    SuggestedActions = response.SuggestedActions
+                });
+            }
+            else
+            {
+                aiMessages.Add(new AiMessage
+                {
+                    Content = "Sorry, I encountered an error processing your request. Please try again.",
+                    IsUserMessage = false,
+                    Timestamp = DateTime.UtcNow
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting AI response: {ex.Message}");
+            aiMessages.Add(new AiMessage
+            {
+                Content = "Sorry, I'm having trouble connecting right now. Please try again later.",
+                IsUserMessage = false,
+                Timestamp = DateTime.UtcNow
+            });
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task HandleAction(QuickActionDto action)
+    {
+        if (!string.IsNullOrEmpty(action.Url))
+        {
+            await JS.InvokeVoidAsync("open", action.Url, "_blank");
+        }
+        else if (!string.IsNullOrEmpty(action.PhoneNumber))
+        {
+            await JS.InvokeVoidAsync("open", $"tel:{action.PhoneNumber}");
+        }
+
+        await OnActionClick.InvokeAsync(action.Action);
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                $"document.querySelector('[_bl_{messagesContainer.Id}]')?.scrollTo(0, document.querySelector('[_bl_{messagesContainer.Id}]')?.scrollHeight)");
+        }
+        catch { }
+    }
+
+    public Task ClearHistory()
+    {
+        aiMessages.Clear();
+        sessionId = Guid.NewGuid().ToString();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+}

@@ -1,0 +1,296 @@
+@inject IJSRuntime JS
+@inject ILogger<ModernCameraCaptureComponent> Logger
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+
+<!-- Modern AI-Powered Camera Component -->
+<div class="modern-camera-container" data-theme="@(IsDarkMode ? "dark" : "light")">
+    @if (!isCameraActive && capturedMedia.Count == 0)
+    {
+        <!-- Initial State: Camera Launch Button -->
+        <div class="camera-launch-screen">
+            <div class="camera-icon-wrapper">
+                <i class="fas fa-camera camera-icon"></i>
+                <div class="camera-pulse"></div>
+            </div>
+            <h3 class="launch-title">Medical Photo & Video Capture</h3>
+            <p class="launch-subtitle">Capture clear images and videos of symptoms</p>
+
+            <button @onclick="StartCamera" class="btn-start-camera" disabled="@isStartingCamera">
+                @if (isStartingCamera)
+                {
+                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                    <span>Initializing Camera...</span>
+                }
+                else
+                {
+                    <i class="fas fa-camera mr-2"></i>
+                    <span>Open Camera</span>
+                }
+            </button>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="error-message">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    @errorMessage
+                </div>
+            }
+        </div>
+    }
+    else if (isCameraActive && !isPreviewingCapture)
+    {
+        <!-- Active Camera View -->
+        <div class="camera-active-view">
+            <!-- Video Preview with Quality Overlay -->
+            <div class="video-container">
+                <video @ref="videoElement" class="camera-video" autoplay playsinline muted></video>
+
+                <!-- Grid Overlay Options -->
+                @if (showGrid)
+                {
+                    <div class="grid-overlay @gridType"></div>
+                }
+
+                <!-- Quality Indicators -->
+                @if (qualityMetrics != null)
+                {
+                    <div class="quality-overlay">
+                        <div class="quality-indicator @GetQualityClass(qualityMetrics.QualityScore)">
+                            <i class="fas fa-circle-check"></i>
+                            <span>Quality: @qualityMetrics.QualityScore%</span>
+                        </div>
+
+                        <div class="quality-metrics">
+                            <div class="metric" title="Brightness">
+                                <i class="fas fa-sun"></i>
+                                <span>@qualityMetrics.Brightness</span>
+                            </div>
+                            <div class="metric" title="Contrast">
+                                <i class="fas fa-adjust"></i>
+                                <span>@qualityMetrics.Contrast%</span>
+                            </div>
+                            <div class="metric" title="Sharpness">
+                                <i class="fas fa-eye"></i>
+                                <span>@qualityMetrics.Sharpness%</span>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(qualityMetrics.Recommendation))
+                        {
+                            <div class="quality-recommendation">
+                                @qualityMetrics.Recommendation
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Recording Indicator -->
+                @if (isRecording)
+                {
+                    <div class="recording-indicator">
+                        <div class="rec-dot"></div>
+                        <span>REC @recordingDuration.ToString(@"mm\:ss")</span>
+                    </div>
+                }
+            </div>
+
+            <!-- Camera Controls -->
+            <div class="camera-controls">
+                <!-- Top Controls -->
+                <div class="controls-top">
+                    <button @onclick="ToggleFlash" class="control-btn" title="Flash">
+                        <i class="fas fa-bolt @(flashEnabled ? "text-yellow-400" : "")"></i>
+                    </button>
+
+                    <button @onclick="CycleGridOverlay" class="control-btn" title="Grid">
+                        <i class="fas fa-grid @(showGrid ? "text-blue-400" : "")"></i>
+                    </button>
+
+                    <button @onclick="ToggleAIEnhancement" class="control-btn" title="AI Enhancement">
+                        <i class="fas fa-wand-magic-sparkles @(aiEnhancementEnabled ? "text-purple-400" : "")"></i>
+                    </button>
+
+                    <button @onclick="StopCamera" class="control-btn control-btn-danger" title="Close Camera">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Mode Selector -->
+                <div class="mode-selector">
+                    <button @onclick="() => SetCaptureMode(CaptureMode.Photo)"
+                            class="mode-btn @(captureMode == CaptureMode.Photo ? "active" : "")">
+                        <i class="fas fa-camera"></i>
+                        <span>Photo</span>
+                    </button>
+                    <button @onclick="() => SetCaptureMode(CaptureMode.Video)"
+                            class="mode-btn @(captureMode == CaptureMode.Video ? "active" : "")">
+                        <i class="fas fa-video"></i>
+                        <span>Video</span>
+                    </button>
+                </div>
+
+                <!-- Main Capture Button -->
+                <div class="capture-button-container">
+                    @if (captureMode == CaptureMode.Photo)
+                    {
+                        <button @onclick="CapturePhoto" class="capture-button photo-mode">
+                            <div class="capture-ring"></div>
+                            <div class="capture-inner"></div>
+                        </button>
+                    }
+                    else
+                    {
+                        <button @onclick="ToggleVideoRecording" class="capture-button video-mode @(isRecording ? "recording" : "")">
+                            <div class="capture-ring"></div>
+                            <div class="capture-inner @(isRecording ? "square" : "")"></div>
+                        </button>
+                    }
+                </div>
+
+                <!-- Bottom Controls -->
+                <div class="controls-bottom">
+                    <button @onclick="SwitchCamera" class="control-btn" title="Switch Camera">
+                        <i class="fas fa-camera-rotate"></i>
+                    </button>
+
+                    @if (capturedMedia.Count > 0)
+                    {
+                        <button @onclick="ShowGallery" class="control-btn gallery-preview" title="View Gallery">
+                            <div class="gallery-thumbnail">
+                                @if (capturedMedia.Last().Type == MediaType.Photo)
+                                {
+                                    <img src="@capturedMedia.Last().DataUrl" alt="Last capture" />
+                                }
+                                else
+                                {
+                                    <i class="fas fa-video"></i>
+                                }
+                            </div>
+                            <span class="gallery-count">@capturedMedia.Count</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else if (isPreviewingCapture && currentPreviewMedia != null)
+    {
+        <!-- Preview Captured Media -->
+        <div class="preview-screen">
+            <!-- Preview Content -->
+            <div class="preview-content">
+                @if (currentPreviewMedia.Type == MediaType.Photo)
+                {
+                    <img src="@currentPreviewMedia.DataUrl" alt="Captured photo" class="preview-image" @ref="previewImageElement" />
+
+                    <!-- Annotation Tools -->
+                    @if (isAnnotating)
+                    {
+                        <canvas @ref="annotationCanvas" class="annotation-canvas"></canvas>
+
+                        <div class="annotation-toolbar">
+                            <button @onclick="() => SetAnnotationTool(AnnotationTool.Circle)"
+                                    class="annotation-btn @(currentAnnotationTool == AnnotationTool.Circle ? "active" : "")">
+                                <i class="far fa-circle"></i>
+                            </button>
+                            <button @onclick="() => SetAnnotationTool(AnnotationTool.Arrow)"
+                                    class="annotation-btn @(currentAnnotationTool == AnnotationTool.Arrow ? "active" : "")">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button @onclick="() => SetAnnotationTool(AnnotationTool.Line)"
+                                    class="annotation-btn @(currentAnnotationTool == AnnotationTool.Line ? "active" : "")">
+                                <i class="fas fa-minus"></i>
+                            </button>
+
+                            <div class="color-picker">
+                                <input type="color" @bind="annotationColor" class="color-input" />
+                            </div>
+
+                            <button @onclick="ClearAnnotations" class="annotation-btn">
+                                <i class="fas fa-eraser"></i>
+                            </button>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <video src="@currentPreviewMedia.DataUrl" controls class="preview-video"></video>
+                }
+            </div>
+
+            <!-- Preview Controls -->
+            <div class="preview-controls">
+                <div class="preview-actions">
+                    <button @onclick="DiscardPreview" class="preview-btn preview-btn-secondary">
+                        <i class="fas fa-times mr-2"></i>
+                        Retake
+                    </button>
+
+                    @if (currentPreviewMedia.Type == MediaType.Photo)
+                    {
+                        <button @onclick="ToggleAnnotation" class="preview-btn preview-btn-secondary">
+                            <i class="fas fa-pen mr-2"></i>
+                            @(isAnnotating ? "Done" : "Annotate")
+                        </button>
+
+                        <button @onclick="RotatePreview" class="preview-btn preview-btn-secondary">
+                            <i class="fas fa-rotate-right mr-2"></i>
+                            Rotate
+                        </button>
+                    }
+
+                    <button @onclick="UsePreview" class="preview-btn preview-btn-primary">
+                        <i class="fas fa-check mr-2"></i>
+                        Use @(currentPreviewMedia.Type == MediaType.Photo ? "Photo" : "Video")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (showGalleryView && capturedMedia.Count > 0)
+    {
+        <!-- Gallery View -->
+        <div class="gallery-view">
+            <div class="gallery-header">
+                <h3>Captured Media (@capturedMedia.Count)</h3>
+                <button @onclick="CloseGallery" class="control-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="gallery-grid">
+                @foreach (var (media, index) in capturedMedia.Select((m, i) => (m, i)))
+                {
+                    <div class="gallery-item" @onclick="() => PreviewGalleryItem(media)">
+                        @if (media.Type == MediaType.Photo)
+                        {
+                            <img src="@media.DataUrl" alt="Capture @(index + 1)" />
+                        }
+                        else
+                        {
+                            <div class="video-thumbnail">
+                                <i class="fas fa-video"></i>
+                                <span>@media.Duration.ToString(@"mm\:ss")</span>
+                            </div>
+                        }
+
+                        <button @onclick:stopPropagation @onclick="() => DeleteMediaItem(media)" class="delete-btn">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <div class="gallery-footer">
+                <button @onclick="CloseGallery" class="preview-btn preview-btn-primary">
+                    <i class="fas fa-camera mr-2"></i>
+                    Back to Camera
+                </button>
+            </div>
+        </div>
+    }
+
+    <!-- Hidden Canvas for Photo Capture -->
+    <canvas @ref="canvasElement" style="display: none;"></canvas>
+</div>

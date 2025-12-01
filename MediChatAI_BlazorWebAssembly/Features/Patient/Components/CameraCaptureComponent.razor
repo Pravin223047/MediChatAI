@@ -1,0 +1,527 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject IJSRuntime JS
+@inject ILogger<CameraCaptureComponent> Logger
+@inject IThemeService ThemeService
+@inject ThemeState ThemeState
+
+<div class="@ContainerClass">
+    <div class="relative @(IsDarkMode ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700" : "bg-gradient-to-br from-white to-gray-50 border-gray-200") rounded-2xl border shadow-xl overflow-hidden">
+
+        <!-- Animated Background Gradient -->
+        <div class="absolute inset-0 bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 animate-pulse pointer-events-none"></div>
+
+        <div class="relative p-8">
+        <!-- Photo Preview Modal -->
+        <PhotoPreviewModal IsOpen="@isModalOpen"
+                          PhotoUrl="@capturedImage"
+                          OnConfirm="ConfirmPhotoFromModal"
+                          OnRetake="RetakePhotoFromModal"
+                          OnCancel="CloseModal" />
+        @if (capturedImage == null && !isCameraActive && !isStartingCamera)
+        {
+            <!-- Start Camera Button -->
+            <div class="text-center py-12 space-y-6">
+                <div class="relative inline-block">
+                    <div class="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-full blur-2xl opacity-30 animate-pulse"></div>
+                    <div class="relative p-8 rounded-full bg-gradient-to-r from-primary/10 to-accent/10 border-2 @(IsDarkMode ? "border-gray-600" : "border-gray-200")">
+                        <i class="fas fa-camera text-6xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"></i>
+                    </div>
+                </div>
+                <div>
+                    <button @onclick="StartCamera"
+                            type="button"
+                            class="px-8 py-4 bg-gradient-to-r from-primary to-accent text-white rounded-xl font-medium hover:shadow-2xl hover:scale-105 transition-all transform">
+                        <i class="fas fa-video mr-2"></i>
+                        Start Camera
+                    </button>
+                    <div class="mt-4 space-y-2">
+                        <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                            <i class="fas fa-info-circle mr-1 text-blue-500"></i>
+                            Camera access required for taking photos
+                        </p>
+                        <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500")">
+                            <i class="fas fa-shield-alt mr-1 text-green-500"></i>
+                            HTTPS connection required for camera access
+                        </p>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (isStartingCamera)
+        {
+            <!-- Loading State -->
+            <div class="text-center py-12 space-y-6">
+                <div class="relative inline-block">
+                    <div class="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-full blur-2xl opacity-50 animate-pulse"></div>
+                    <div class="relative p-8 rounded-full bg-gradient-to-r from-primary/10 to-accent/10 border-2 @(IsDarkMode ? "border-gray-600" : "border-gray-200")">
+                        <i class="fas fa-circle-notch fa-spin text-6xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"></i>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-lg font-semibold @(IsDarkMode ? "text-gray-200" : "text-gray-800")">
+                        Starting Camera...
+                    </p>
+                    <p class="mt-2 text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                        <i class="fas fa-shield-check mr-1 text-green-500"></i>
+                        Please allow camera access when prompted
+                    </p>
+                </div>
+            </div>
+        }
+        else if (isCameraActive && capturedImage == null)
+        {
+            <!-- Live Camera Feed -->
+            <div class="space-y-6">
+                <div class="relative rounded-2xl overflow-hidden bg-gray-900 shadow-2xl" style="min-height: 400px;">
+                    <video @ref="videoElement"
+                           autoplay
+                           playsinline
+                           muted
+                           style="transform: scaleX(-1); width: 100%; height: 400px; object-fit: cover; display: block;">
+                    </video>
+
+                    @if (isStartingCamera)
+                    {
+                        <!-- Loading Overlay while camera initializes -->
+                        <div class="absolute inset-0 bg-gray-900/90 backdrop-blur-sm flex items-center justify-center z-50">
+                            <div class="text-center space-y-4">
+                                <div class="relative inline-block">
+                                    <div class="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-full blur-2xl opacity-50 animate-pulse"></div>
+                                    <div class="relative">
+                                        <i class="fas fa-circle-notch fa-spin text-5xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p class="text-lg font-semibold text-white">
+                                        Starting Camera...
+                                    </p>
+                                    <p class="mt-2 text-sm text-gray-300">
+                                        <i class="fas fa-shield-check mr-1 text-green-400"></i>
+                                        Please allow camera access when prompted
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Enhanced Camera Overlay with Grid Lines -->
+                    <div class="absolute inset-0 pointer-events-none">
+                        <!-- Grid Lines for Composition -->
+                        <div class="absolute inset-6">
+                            <!-- Horizontal grid lines -->
+                            <div class="absolute w-full border-t border-white/20" style="top: 33.33%"></div>
+                            <div class="absolute w-full border-t border-white/20" style="top: 66.66%"></div>
+                            <!-- Vertical grid lines -->
+                            <div class="absolute h-full border-l border-white/20" style="left: 33.33%"></div>
+                            <div class="absolute h-full border-l border-white/20" style="left: 66.66%"></div>
+                        </div>
+
+                        <!-- Corner Brackets -->
+                        <div class="absolute inset-6">
+                            <!-- Top-left corner -->
+                            <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white/60 rounded-tl-xl"></div>
+                            <!-- Top-right corner -->
+                            <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white/60 rounded-tr-xl"></div>
+                            <!-- Bottom-left corner -->
+                            <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white/60 rounded-bl-xl"></div>
+                            <!-- Bottom-right corner -->
+                            <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white/60 rounded-br-xl"></div>
+                        </div>
+
+                        <!-- Live Indicator -->
+                        <div class="absolute top-4 left-4 flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-red-500/90 to-red-600/90 backdrop-blur-sm shadow-lg">
+                            <span class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-white shadow-lg"></span>
+                            </span>
+                            <span class="text-white text-sm font-bold tracking-wider">LIVE</span>
+                        </div>
+
+                        <!-- Camera Info -->
+                        <div class="absolute top-4 right-4 px-3 py-2 rounded-lg bg-black/60 backdrop-blur-sm text-white text-xs font-medium shadow-lg flex items-center gap-2">
+                            <i class="fas fa-camera text-green-400"></i>
+                            <span>@(currentFacingMode == "user" ? "Front Camera" : "Rear Camera")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Enhanced Camera Controls -->
+                <div class="flex items-center justify-center gap-6">
+                    <button @onclick="StopCamera"
+                            type="button"
+                            class="px-6 py-3 rounded-xl font-medium @(IsDarkMode ? "bg-gray-700 text-white hover:bg-gray-600 border border-gray-600" : "bg-white text-gray-900 hover:bg-gray-50 border border-gray-300") transition-all hover:shadow-lg transform hover:-translate-y-0.5">
+                        <i class="fas fa-times mr-2"></i>
+                        Cancel
+                    </button>
+                    <div class="relative">
+                        <div class="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-full blur-xl opacity-50"></div>
+                        <button @onclick="CapturePhoto"
+                                type="button"
+                                class="relative inline-flex items-center justify-center w-20 h-20 rounded-full bg-white border-4 border-gradient-to-r from-primary to-accent shadow-2xl hover:scale-110 transition-all group">
+                            <span class="w-16 h-16 rounded-full bg-gradient-to-r from-primary to-accent group-hover:scale-95 transition-transform"></span>
+                        </button>
+                    </div>
+                    <button @onclick="SwitchCamera"
+                            type="button"
+                            disabled="@(!canSwitchCamera)"
+                            class="px-6 py-3 rounded-xl font-medium @(IsDarkMode ? "bg-gray-700 text-white hover:bg-gray-600 border border-gray-600" : "bg-white text-gray-900 hover:bg-gray-50 border border-gray-300") transition-all hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        Flip
+                    </button>
+                </div>
+
+                <canvas @ref="canvasElement" class="hidden"></canvas>
+            </div>
+        }
+        else if (capturedImage != null)
+        {
+            <!-- Enhanced Captured Photo Preview with Click-to-View Modal -->
+            <div class="space-y-6">
+                <!-- Clickable Photo Preview -->
+                <div class="relative rounded-2xl overflow-hidden shadow-2xl border-4 @(IsDarkMode ? "border-gray-700" : "border-gray-200") group cursor-pointer transform transition-all hover:scale-[1.02] hover:shadow-3xl"
+                     @onclick="OpenModal">
+                    <img src="@capturedImage" alt="Captured photo - Click to preview" class="w-full h-auto" />
+
+                    <!-- Success Badge -->
+                    <div class="absolute top-4 right-4 px-4 py-2 rounded-full bg-gradient-to-r from-green-500/90 to-emerald-600/90 backdrop-blur-sm text-white text-sm font-semibold shadow-lg flex items-center gap-2">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Photo Captured</span>
+                    </div>
+
+                    <!-- Click to Preview Overlay -->
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <div class="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                            <div class="px-6 py-3 rounded-full bg-white/90 backdrop-blur-sm text-gray-900 font-semibold shadow-2xl flex items-center gap-3">
+                                <i class="fas fa-search-plus text-xl"></i>
+                                <span>Click to Preview</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Photo Info Badge -->
+                    <div class="absolute bottom-4 left-4 px-3 py-2 rounded-lg bg-black/70 backdrop-blur-sm text-white text-xs font-medium shadow-lg flex items-center gap-2">
+                        <i class="fas fa-camera text-blue-400"></i>
+                        <span>Tap to view full size</span>
+                    </div>
+                </div>
+
+                <!-- Info Box -->
+                <div class="p-4 rounded-xl @(IsDarkMode ? "bg-blue-900/20 border-blue-700" : "bg-blue-50 border-blue-200") border-2 flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+                        <i class="fas fa-info text-white"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm @(IsDarkMode ? "text-blue-300" : "text-blue-800") font-medium">
+                            <i class="fas fa-hand-pointer mr-1"></i>
+                            Click the photo above to preview, or use the buttons below to proceed.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-4">
+                    <button @onclick="RetakePhoto"
+                            type="button"
+                            class="flex-1 px-6 py-3.5 rounded-xl font-semibold @(IsDarkMode ? "bg-gray-700 text-white hover:bg-gray-600 border-2 border-gray-600" : "bg-white text-gray-900 hover:bg-gray-50 border-2 border-gray-300") transition-all hover:shadow-lg transform hover:-translate-y-0.5 group">
+                        <i class="fas fa-redo mr-2 group-hover:rotate-180 transition-transform duration-500"></i>
+                        Retake
+                    </button>
+                    <button @onclick="UsePhoto"
+                            type="button"
+                            class="flex-1 px-6 py-3.5 rounded-xl font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all hover:shadow-xl hover:shadow-green-500/50 transform hover:-translate-y-0.5 group relative overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-r from-emerald-600 to-green-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <span class="relative z-10 flex items-center justify-center gap-2">
+                            <i class="fas fa-check-circle group-hover:scale-110 transition-transform"></i>
+                            <span>Use Photo</span>
+                        </span>
+                    </button>
+                    <button @onclick="DeletePhoto"
+                            type="button"
+                            class="px-6 py-3.5 rounded-xl font-semibold bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-all hover:shadow-xl hover:shadow-red-500/50 transform hover:-translate-y-0.5 group">
+                        <i class="fas fa-trash group-hover:scale-110 transition-transform"></i>
+                    </button>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="mt-6 p-4 rounded-xl @(IsDarkMode ? "bg-red-900/20 border-red-700" : "bg-red-50 border-red-200") border-2 backdrop-blur-sm">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white flex items-center justify-center shadow-lg">
+                        <i class="fas fa-exclamation-circle text-lg"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h5 class="font-semibold @(IsDarkMode ? "text-red-400" : "text-red-800") mb-1">Error</h5>
+                        <p class="text-sm @(IsDarkMode ? "text-red-300" : "text-red-700")">
+                            @errorMessage
+                        </p>
+                    </div>
+                </div>
+            </div>
+        }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    [Parameter] public string ContainerClass { get; set; } = "";
+    [Parameter] public EventCallback<CapturedPhotoInfo> OnPhotoCaptured { get; set; }
+
+    private ElementReference videoElement;
+    private ElementReference canvasElement;
+    private bool isCameraActive = false;
+    private bool isStartingCamera = false;
+    private bool canSwitchCamera = false;
+    private string? capturedImage = null;
+    private string errorMessage = "";
+    private string currentFacingMode = "user"; // "user" or "environment"
+    private bool isModalOpen = false;
+
+    private async Task StartCamera()
+    {
+        try
+        {
+            isStartingCamera = true;
+            isCameraActive = true; // Set camera active BEFORE calling JavaScript so video element is rendered
+            errorMessage = "";
+            StateHasChanged();
+
+            Logger.LogInformation("START CAMERA CALLED - Beginning camera initialization");
+
+            // Note: Camera permissions work on localhost even with HTTP
+            // For production, HTTPS is required
+            try
+            {
+                var protocol = await JS.InvokeAsync<string>("eval", "window.location.protocol");
+                var hostname = await JS.InvokeAsync<string>("eval", "window.location.hostname");
+
+                Logger.LogInformation("Camera check - Protocol: {Protocol}, Hostname: {Hostname}", protocol, hostname);
+
+                if (protocol != "https:" && hostname != "localhost" && hostname != "127.0.0.1")
+                {
+                    errorMessage = "Camera access requires HTTPS in production. Current URL is not secure. For testing, use localhost.";
+                    Logger.LogWarning("Camera access attempted on non-secure connection");
+                    isStartingCamera = false;
+                    isCameraActive = false; // Reset camera active state on error
+                    StateHasChanged();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Could not check protocol/hostname, proceeding anyway");
+                // If we can't check, proceed anyway
+            }
+
+            // Increased delay to ensure video element is fully rendered in DOM before JavaScript access
+            // Blazor's rendering cycle needs time to process StateHasChanged and update the DOM
+            await Task.Delay(300);
+
+            Logger.LogInformation("Calling JavaScript startCamera with facing mode: {FacingMode}", currentFacingMode);
+            Logger.LogInformation("Video element reference state - HasValue: {HasValue}", videoElement.Id != null);
+
+            var result = await JS.InvokeAsync<bool>("startCamera", videoElement, currentFacingMode);
+
+            Logger.LogInformation("JavaScript startCamera returned: {Result}", result);
+
+            if (!result)
+            {
+                Logger.LogError("Camera initialization failed. Possible causes:");
+                Logger.LogError("1. User denied camera permissions");
+                Logger.LogError("2. Camera is in use by another application");
+                Logger.LogError("3. No camera device found");
+                Logger.LogError("4. Browser security restrictions");
+                Logger.LogError("Please check browser console for detailed JavaScript errors");
+            }
+
+            if (result)
+            {
+                isStartingCamera = false;
+                // isCameraActive is already true, so no need to set again
+                Logger.LogInformation("Camera active state set to TRUE");
+
+                // Force UI update immediately
+                StateHasChanged();
+
+                // Small delay to ensure video element is rendered
+                await Task.Delay(100);
+
+                // Check if device has multiple cameras
+                try
+                {
+                    canSwitchCamera = await JS.InvokeAsync<bool>("canSwitchCamera");
+                    Logger.LogInformation("Can switch camera: {CanSwitch}", canSwitchCamera);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Could not check if can switch camera");
+                    canSwitchCamera = false;
+                }
+
+                StateHasChanged();
+                Logger.LogInformation("Camera started successfully - UI should update now");
+            }
+            else
+            {
+                isStartingCamera = false;
+                isCameraActive = false; // Reset camera active state on error
+                errorMessage = "Failed to start camera. Please check:\n• Camera permissions are granted in your browser\n• No other application is using the camera\n• Your device has a working camera\n• You're using a supported browser (Chrome, Edge, Firefox)";
+                Logger.LogError("Camera failed to start - startCamera returned false");
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            isStartingCamera = false;
+            isCameraActive = false; // Reset camera active state on error
+            Logger.LogError(ex, "Exception in StartCamera method");
+
+            var errorMsg = ex.Message.ToLower();
+
+            if (errorMsg.Contains("permission") || errorMsg.Contains("notallowed"))
+            {
+                errorMessage = "Camera permission denied. Please:\n1. Click the camera icon in your browser's address bar\n2. Allow camera access\n3. Try again";
+            }
+            else if (errorMsg.Contains("notfound") || errorMsg.Contains("no device"))
+            {
+                errorMessage = "No camera found. Please:\n• Connect a webcam if using a desktop\n• Check if camera is enabled in device settings\n• Try restarting your browser";
+            }
+            else if (errorMsg.Contains("notreadable") || errorMsg.Contains("in use"))
+            {
+                errorMessage = "Camera is already in use. Please:\n• Close other apps using the camera\n• Restart your browser\n• Try again";
+            }
+            else
+            {
+                errorMessage = $"Camera error: {ex.Message}\n\nPlease check your browser console for more details.";
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopCamera()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("stopCamera");
+            isCameraActive = false;
+            canSwitchCamera = false;
+            Logger.LogInformation("Camera stopped");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error stopping camera");
+        }
+    }
+
+    private async Task SwitchCamera()
+    {
+        try
+        {
+            currentFacingMode = currentFacingMode == "user" ? "environment" : "user";
+            await StopCamera();
+            await Task.Delay(100);
+            await StartCamera();
+            Logger.LogInformation("Switched to {FacingMode} camera", currentFacingMode);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error switching camera");
+            errorMessage = "Failed to switch camera";
+        }
+    }
+
+    private async Task CapturePhoto()
+    {
+        try
+        {
+            capturedImage = await JS.InvokeAsync<string>("capturePhoto", videoElement, canvasElement);
+
+            if (!string.IsNullOrEmpty(capturedImage))
+            {
+                Logger.LogInformation("Photo captured successfully");
+            }
+            else
+            {
+                errorMessage = "Failed to capture photo";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error capturing photo");
+            errorMessage = "Failed to capture photo";
+        }
+    }
+
+    private async Task RetakePhoto()
+    {
+        capturedImage = null;
+        await StartCamera();
+    }
+
+    private async Task UsePhoto()
+    {
+        if (capturedImage != null)
+        {
+            await StopCamera();
+
+            await OnPhotoCaptured.InvokeAsync(new CapturedPhotoInfo
+            {
+                ImageData = capturedImage,
+                Timestamp = DateTime.UtcNow,
+                CameraFacing = currentFacingMode
+            });
+
+            Logger.LogInformation("Photo confirmed for use");
+        }
+    }
+
+    private void DeletePhoto()
+    {
+        capturedImage = null;
+        isCameraActive = false;
+    }
+
+    // Modal handler methods
+    private void OpenModal()
+    {
+        isModalOpen = true;
+    }
+
+    private void CloseModal()
+    {
+        isModalOpen = false;
+    }
+
+    private async Task ConfirmPhotoFromModal()
+    {
+        // Close modal and use the photo
+        isModalOpen = false;
+        await UsePhoto();
+    }
+
+    private async Task RetakePhotoFromModal()
+    {
+        // Close modal and restart camera
+        isModalOpen = false;
+        await RetakePhoto();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (isCameraActive)
+        {
+            await StopCamera();
+        }
+    }
+
+    public class CapturedPhotoInfo
+    {
+        public string ImageData { get; set; } = "";
+        public DateTime Timestamp { get; set; }
+        public string CameraFacing { get; set; } = "user";
+    }
+}

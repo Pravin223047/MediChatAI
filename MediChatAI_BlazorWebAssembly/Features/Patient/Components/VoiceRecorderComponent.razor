@@ -1,0 +1,464 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject IJSRuntime JS
+@inject ILogger<VoiceRecorderComponent> Logger
+@inject IThemeService ThemeService
+@inject ThemeState ThemeState
+
+<div class="@ContainerClass">
+    <div class="relative @(IsDarkMode ? "bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700" : "bg-gradient-to-br from-white to-gray-50 border-gray-200") rounded-2xl border shadow-xl overflow-hidden">
+
+        <!-- Animated Background Gradient -->
+        <div class="absolute inset-0 bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 animate-pulse pointer-events-none"></div>
+
+        <div class="relative p-8">
+            <!-- Recording Controls -->
+            <div class="text-center mb-6">
+                @if (!isRecording && recordingUrl == null)
+                {
+                    <div class="space-y-6">
+                        <div class="relative inline-block">
+                            <!-- Pulsing glow effect -->
+                            <div class="absolute inset-0 bg-gradient-to-r from-red-500 to-pink-600 rounded-full blur-2xl opacity-60 animate-pulse"></div>
+                            <!-- Rotating ring -->
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="w-24 h-24 rounded-full border-4 border-red-300/30 border-t-red-500 animate-spin" style="animation-duration: 3s;"></div>
+                            </div>
+                            <button @onclick="StartRecording"
+                                    type="button"
+                                    class="relative inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-red-500 to-pink-600 text-white hover:from-red-600 hover:to-pink-700 transition-all transform hover:scale-110 shadow-2xl group">
+                                <i class="fas fa-microphone text-3xl group-hover:scale-125 group-hover:rotate-12 transition-all duration-300"></i>
+                            </button>
+                        </div>
+                        <div>
+                            <p class="text-lg font-bold @(IsDarkMode ? "text-gray-100" : "text-gray-900") mb-2">
+                                <i class="fas fa-microphone-alt mr-2 text-red-500 animate-pulse"></i>
+                                Start Voice Recording
+                            </p>
+                            <div class="mt-4 space-y-3">
+                                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full @(IsDarkMode ? "bg-gray-700/50" : "bg-gray-100") backdrop-blur-sm">
+                                    <i class="fas fa-hand-pointer text-blue-500"></i>
+                                    <p class="text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700") font-medium">
+                                        Click the microphone to begin
+                                    </p>
+                                </div>
+                                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full @(IsDarkMode ? "bg-gray-700/50" : "bg-gray-100") backdrop-blur-sm">
+                                    <i class="fas fa-shield-check text-green-500"></i>
+                                    <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                        Secure & encrypted recording
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (isRecording)
+                {
+                    <div class="space-y-6">
+                        <div class="relative inline-block">
+                            <!-- Multiple pulsing rings -->
+                            <span class="absolute -top-4 -right-4 flex h-32 w-32">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-30"></span>
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-40" style="animation-duration: 2s;"></span>
+                            </span>
+
+                            <button @onclick="StopRecording"
+                                    type="button"
+                                    class="relative inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-r from-red-500 to-pink-600 text-white hover:from-red-600 hover:to-pink-700 transition-all shadow-2xl group border-4 border-white/30">
+                                <i class="fas fa-stop text-4xl group-hover:scale-110 transition-transform"></i>
+                            </button>
+
+                            <!-- Recording indicator badge -->
+                            <span class="absolute -top-2 -right-2 flex h-8 w-8 z-10">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-8 w-8 bg-red-500 border-3 border-white shadow-xl items-center justify-center">
+                                    <i class="fas fa-circle text-white text-xs"></i>
+                                </span>
+                            </span>
+                        </div>
+
+                        <div class="space-y-3">
+                            <!-- Timer Display with enhanced styling -->
+                            <div class="inline-flex items-center gap-4 px-8 py-4 rounded-2xl @(IsDarkMode ? "bg-gradient-to-r from-gray-700/90 to-gray-800/90 backdrop-blur-sm border border-gray-600" : "bg-gradient-to-r from-white/90 to-gray-50/90 backdrop-blur-sm border border-gray-200") shadow-2xl">
+                                <div class="flex items-center gap-3">
+                                    <div class="relative">
+                                        <div class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+                                        <div class="absolute inset-0 w-3 h-3 rounded-full bg-red-400 animate-ping"></div>
+                                    </div>
+                                    <i class="fas fa-stopwatch text-red-500 text-xl"></i>
+                                </div>
+                                <p class="text-4xl font-mono font-black bg-gradient-to-r from-red-500 via-pink-500 to-red-600 bg-clip-text text-transparent tracking-wider">
+                                    @recordingDuration.ToString(@"mm\:ss")
+                                </p>
+                            </div>
+
+                            <!-- Recording status -->
+                            <div class="inline-flex items-center gap-2 px-5 py-2 rounded-full @(IsDarkMode ? "bg-red-900/30 border-red-700" : "bg-red-50 border-red-200") border-2">
+                                <i class="fas fa-microphone-alt text-red-500 animate-pulse"></i>
+                                <p class="text-sm font-bold @(IsDarkMode ? "text-red-300" : "text-red-700")">
+                                    Recording in progress...
+                                </p>
+                                <i class="fas fa-circle text-red-500 text-xs animate-pulse"></i>
+                            </div>
+                        </div>
+
+                        <!-- Enhanced Waveform Visualization with Gradient -->
+                        <div class="relative">
+                            <div class="absolute inset-0 bg-gradient-to-r from-red-500/5 via-pink-500/10 to-red-500/5 rounded-2xl"></div>
+                            <div class="relative flex items-center justify-center gap-2 h-24 px-8 py-4">
+                                @for (int i = 0; i < 32; i++)
+                                {
+                                    var height = Random.Shared.Next(30, 100);
+                                    var delay = i * 0.04;
+                                    <div class="w-2 rounded-full shadow-lg transition-all duration-300 relative"
+                                         style="height: @(height)%; background: linear-gradient(to top, #ef4444, #ec4899, #f43f5e); animation: waveform 1.2s ease-in-out infinite; animation-delay: @(delay)s;">
+                                    </div>
+                                }
+                            </div>
+                            <!-- Overlay gradients -->
+                            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-red-500/5 to-transparent pointer-events-none"></div>
+                            <div class="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-red-500/5 pointer-events-none rounded-2xl"></div>
+                        </div>
+
+                        <!-- Recording Tips -->
+                        <div class="mt-4 p-3 rounded-xl @(IsDarkMode ? "bg-blue-900/20 border-blue-700" : "bg-blue-50 border-blue-200") border flex items-center gap-3">
+                            <i class="fas fa-lightbulb text-blue-500 text-lg"></i>
+                            <p class="text-xs @(IsDarkMode ? "text-blue-300" : "text-blue-700")">
+                                Speak clearly and close to the microphone for best results
+                            </p>
+                        </div>
+                    </div>
+                }
+                else if (recordingUrl != null)
+                {
+                    <div class="space-y-6">
+                        <div class="relative inline-block">
+                            <div class="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full blur-xl opacity-50"></div>
+                            <div class="relative inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-2xl">
+                                <i class="fas fa-check-circle text-3xl"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-lg font-semibold @(IsDarkMode ? "text-gray-200" : "text-gray-800")">
+                                <i class="fas fa-check-circle mr-2 text-green-500"></i>
+                                Recording Completed
+                            </p>
+                            <div class="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-full @(IsDarkMode ? "bg-gray-700" : "bg-gray-100")">
+                                <i class="fas fa-stopwatch text-green-500"></i>
+                                <p class="text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                    Duration: @recordingDuration.ToString(@"mm\:ss")
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+        <!-- Enhanced Playback Controls with Premium Design -->
+        @if (recordingUrl != null)
+        {
+            <div class="mb-8 p-6 rounded-2xl @(IsDarkMode ? "bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-2 border-gray-700" : "bg-gradient-to-br from-white to-gray-50 backdrop-blur-sm border-2 border-gray-200") shadow-2xl">
+                <div class="flex items-center gap-5">
+                    <!-- Enhanced Play/Pause Button -->
+                    <div class="relative">
+                        <div class="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-full blur-xl opacity-50"></div>
+                        <button @onclick="TogglePlayback"
+                                type="button"
+                                class="relative flex-shrink-0 w-16 h-16 rounded-full bg-gradient-to-r from-primary to-accent text-white hover:shadow-2xl hover:scale-110 transition-all flex items-center justify-center group shadow-lg border-4 border-white/20">
+                            <i class="fas @(isPlaying ? "fa-pause" : "fa-play") text-2xl @(isPlaying ? "" : "ml-1") group-hover:scale-125 transition-all duration-300"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex-1 space-y-3">
+                        <!-- Progress Bar with Enhanced Styling -->
+                        <div class="relative w-full h-4 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") rounded-full overflow-hidden shadow-inner border-2 @(IsDarkMode ? "border-gray-600" : "border-gray-300")">
+                            <div class="absolute inset-0 bg-gradient-to-r from-primary via-accent to-primary h-full rounded-full transition-all duration-300 shadow-lg"
+                                 style="width: @playbackProgress%; background-size: 200% 100%; animation: shimmer 2s linear infinite;"></div>
+                            <!-- Playhead indicator -->
+                            <div class="absolute top-0 h-full w-1 bg-white shadow-lg transition-all duration-300"
+                                 style="left: @playbackProgress%;"></div>
+                        </div>
+
+                        <!-- Playback Status and Duration -->
+                        <div class="flex justify-between items-center">
+                            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full @(IsDarkMode ? "bg-gray-700/80" : "bg-gray-100") backdrop-blur-sm">
+                                <i class="fas @(isPlaying ? "fa-volume-up text-green-500" : "fa-pause-circle text-gray-500") text-sm"></i>
+                                <span class="text-xs @(IsDarkMode ? "text-gray-300" : "text-gray-700") font-bold">
+                                    @(isPlaying ? "Now Playing" : "Paused")
+                                </span>
+                                @if (isPlaying)
+                                {
+                                    <span class="relative flex h-2 w-2">
+                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full @(IsDarkMode ? "bg-gradient-to-r from-gray-700 to-gray-800 border border-gray-600" : "bg-gradient-to-r from-gray-100 to-white border border-gray-200") shadow-lg">
+                                <i class="fas fa-stopwatch text-primary text-sm"></i>
+                                <span class="text-sm @(IsDarkMode ? "text-gray-200" : "text-gray-800") font-mono font-black tracking-wider">
+                                    @recordingDuration.ToString(@"mm\:ss")
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Audio Waveform Preview (Static) -->
+                        <div class="flex items-center justify-center gap-0.5 h-8 @(IsDarkMode ? "bg-gray-700/30" : "bg-gray-100/50") rounded-lg px-2">
+                            @for (int i = 0; i < 40; i++)
+                            {
+                                var height = Random.Shared.Next(20, 100);
+                                <div class="w-1 rounded-full @(IsDarkMode ? "bg-gradient-to-t from-primary/60 to-accent/60" : "bg-gradient-to-t from-primary/50 to-accent/50")"
+                                     style="height: @(height)%;"></div>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <audio @ref="audioElement" class="hidden" @onended="OnPlaybackEnded">
+                    <source src="@recordingUrl" type="audio/webm" />
+                </audio>
+            </div>
+
+            <!-- Action Buttons with Icons -->
+            <div class="flex gap-4">
+                <button @onclick="StartRecording"
+                        type="button"
+                        class="flex-1 px-6 py-3.5 rounded-xl font-semibold @(IsDarkMode ? "bg-gray-700 text-white hover:bg-gray-600 border-2 border-gray-600" : "bg-white text-gray-900 hover:bg-gray-50 border-2 border-gray-300") transition-all hover:shadow-xl transform hover:-translate-y-0.5 group">
+                    <i class="fas fa-redo-alt mr-2 group-hover:rotate-180 transition-transform duration-500"></i>
+                    Re-record
+                </button>
+                <button @onclick="DeleteRecording"
+                        type="button"
+                        class="px-6 py-3.5 rounded-xl font-semibold bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-all hover:shadow-xl hover:shadow-red-500/50 transform hover:-translate-y-0.5 group">
+                    <i class="fas fa-trash-alt mr-2 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300"></i>
+                    Delete
+                </button>
+            </div>
+        }
+
+        <!-- Enhanced Transcription Section -->
+        @if (EnableTranscription && !string.IsNullOrEmpty(transcription))
+        {
+            <div class="mt-8 pt-8 border-t-2 @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 rounded-lg bg-gradient-to-r from-primary/10 to-accent/10">
+                            <i class="fas fa-file-alt text-lg @(IsDarkMode ? "text-primary-400" : "text-primary-600")"></i>
+                        </div>
+                        <h4 class="text-base font-semibold @(IsDarkMode ? "text-gray-200" : "text-gray-800")">
+                            Transcription
+                        </h4>
+                    </div>
+                    @if (isTranscribing)
+                    {
+                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium @(IsDarkMode ? "bg-blue-900/30 text-blue-400 border border-blue-700" : "bg-blue-50 text-blue-600 border border-blue-200")">
+                            <i class="fas fa-circle-notch fa-spin"></i>
+                            Transcribing...
+                        </span>
+                    }
+                </div>
+                <div class="relative p-5 rounded-xl @(IsDarkMode ? "bg-gray-800/50 backdrop-blur-sm border border-gray-700" : "bg-gradient-to-br from-gray-50 to-white border border-gray-200") shadow-lg">
+                    <div class="absolute top-4 left-4 text-6xl @(IsDarkMode ? "text-gray-700" : "text-gray-200") opacity-50 select-none">
+                        <i class="fas fa-quote-left"></i>
+                    </div>
+                    <p class="relative text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700") leading-relaxed whitespace-pre-wrap pl-8">
+                        @transcription
+                    </p>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="mt-6 p-4 rounded-xl @(IsDarkMode ? "bg-red-900/20 border-red-700" : "bg-red-50 border-red-200") border-2 backdrop-blur-sm">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white flex items-center justify-center shadow-lg">
+                        <i class="fas fa-exclamation-circle text-lg"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h5 class="font-semibold @(IsDarkMode ? "text-red-400" : "text-red-800") mb-1">Error</h5>
+                        <p class="text-sm @(IsDarkMode ? "text-red-300" : "text-red-700")">
+                            @errorMessage
+                        </p>
+                    </div>
+                </div>
+            </div>
+        }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    [Parameter] public bool EnableTranscription { get; set; } = true;
+    [Parameter] public string ContainerClass { get; set; } = "";
+    [Parameter] public EventCallback<RecordingInfo> OnRecordingCompleted { get; set; }
+
+    private bool isRecording = false;
+    private bool isPlaying = false;
+    private bool isTranscribing = false;
+    private string? recordingUrl = null;
+    private TimeSpan recordingDuration = TimeSpan.Zero;
+    private System.Timers.Timer? recordingTimer;
+    private ElementReference audioElement;
+    private int playbackProgress = 0;
+    private string transcription = "";
+    private string errorMessage = "";
+    private DotNetObjectReference<VoiceRecorderComponent>? dotNetRef;
+
+    protected override void OnInitialized()
+    {
+        dotNetRef = DotNetObjectReference.Create(this);
+    }
+
+    private async Task StartRecording()
+    {
+        try
+        {
+            errorMessage = "";
+            recordingUrl = null;
+            transcription = "";
+            recordingDuration = TimeSpan.Zero;
+            isRecording = true;
+
+            // Start JavaScript media recorder
+            await JS.InvokeVoidAsync("startVoiceRecording", dotNetRef);
+
+            // Start timer
+            recordingTimer = new System.Timers.Timer(1000);
+            recordingTimer.Elapsed += (s, e) =>
+            {
+                recordingDuration = recordingDuration.Add(TimeSpan.FromSeconds(1));
+                InvokeAsync(StateHasChanged);
+            };
+            recordingTimer.Start();
+
+            Logger.LogInformation("Voice recording started");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error starting voice recording");
+            errorMessage = "Failed to start recording. Please check microphone permissions.";
+            isRecording = false;
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnRecordingDataAvailable(string base64Audio)
+    {
+        try
+        {
+            recordingUrl = base64Audio;
+            Logger.LogInformation("Recording data received, duration: {Duration}", recordingDuration);
+
+            if (EnableTranscription)
+            {
+                await TranscribeAudio();
+            }
+
+            // Notify parent component
+            await OnRecordingCompleted.InvokeAsync(new RecordingInfo
+            {
+                AudioData = recordingUrl,
+                Duration = recordingDuration,
+                Transcription = transcription
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error processing recording data");
+            errorMessage = "Error processing recording";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StopRecording()
+    {
+        try
+        {
+            recordingTimer?.Stop();
+            recordingTimer?.Dispose();
+            isRecording = false;
+
+            await JS.InvokeVoidAsync("stopVoiceRecording");
+            Logger.LogInformation("Voice recording stopped");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error stopping voice recording");
+            errorMessage = "Error stopping recording";
+        }
+    }
+
+    private async Task TranscribeAudio()
+    {
+        try
+        {
+            isTranscribing = true;
+            StateHasChanged();
+
+            // TODO: Implement actual Web Speech API or external transcription service
+            // For now, simulate transcription
+            await Task.Delay(1500);
+            transcription = "This is a simulated transcription of the voice recording. In production, this would use the Web Speech API or a transcription service to convert speech to text.";
+
+            isTranscribing = false;
+            Logger.LogInformation("Transcription completed");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error transcribing audio");
+            isTranscribing = false;
+        }
+    }
+
+    private async Task TogglePlayback()
+    {
+        try
+        {
+            if (isPlaying)
+            {
+                await JS.InvokeVoidAsync("pauseAudio", audioElement);
+                isPlaying = false;
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("playAudio", audioElement);
+                isPlaying = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error toggling playback");
+        }
+    }
+
+    private void OnPlaybackEnded()
+    {
+        isPlaying = false;
+        playbackProgress = 0;
+    }
+
+    private void DeleteRecording()
+    {
+        recordingUrl = null;
+        transcription = "";
+        recordingDuration = TimeSpan.Zero;
+        playbackProgress = 0;
+        isPlaying = false;
+    }
+
+    public void Dispose()
+    {
+        recordingTimer?.Dispose();
+        dotNetRef?.Dispose();
+    }
+
+    public class RecordingInfo
+    {
+        public string AudioData { get; set; } = "";
+        public TimeSpan Duration { get; set; }
+        public string Transcription { get; set; } = "";
+    }
+}

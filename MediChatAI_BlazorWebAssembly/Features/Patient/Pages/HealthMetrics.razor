@@ -1,0 +1,775 @@
+@page "/patient/health-metrics"
+@using Microsoft.AspNetCore.Authorization
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Services
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using System.Security.Claims
+@inject NavigationManager Navigation
+@inject ThemeState ThemeState
+@inject IJSRuntime JS
+@inject IHealthMetricsService HealthMetricsService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ILogger<HealthMetrics> Logger
+@attribute [Authorize(Roles = "Patient")]
+
+<PageTitle>Health Metrics - MediChat AI</PageTitle>
+
+<div class="min-h-screen transition-colors duration-300 @(IsDarkMode ? "bg-gray-900" : "bg-gradient-to-br from-gray-50 to-gray-100") py-8 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <button @onclick='() => Navigation.NavigateTo("/patient/dashboard")'
+                            class="inline-flex items-center gap-2 @(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900") mb-4 transition-colors">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Back to Dashboard</span>
+                    </button>
+                    <h1 class="text-4xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                        <i class="fas fa-heartbeat text-primary mr-3"></i>Health Metrics
+                    </h1>
+                    <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-lg">
+                        Track your vital signs and health measurements
+                    </p>
+                </div>
+                <button @onclick="OpenAddMetricModal"
+                        class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center gap-2">
+                    <i class="fas fa-plus"></i>
+                    <span>Add Measurement</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Date Range Filter -->
+        <div class="mb-6 flex flex-wrap items-center gap-3">
+            <span class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") font-medium">Time Range:</span>
+            @foreach (var range in timeRanges)
+            {
+                <button @onclick="() => SelectTimeRange(range.Value)"
+                        class='px-4 py-2 rounded-lg transition-all duration-200 @(selectedTimeRange == range.Value ? "bg-primary text-white shadow-lg" : IsDarkMode ? "bg-gray-800 text-gray-300 hover:bg-gray-700" : "bg-white text-gray-700 hover:bg-gray-50") border @(IsDarkMode ? "border-gray-700" : "border-gray-200")'>
+                    @range.Key
+                </button>
+            }
+        </div>
+
+        <!-- Metrics Overview Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+            @foreach (var metric in metricsOverview)
+            {
+                <div class="@(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") rounded-xl shadow-lg border p-6 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 cursor-pointer"
+                     @onclick="() => SelectMetricType(metric.Type)">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="p-3 rounded-lg" style="background: linear-gradient(135deg, @metric.GradientFrom, @metric.GradientTo);">
+                            <i class="fas fa-@metric.Icon text-2xl text-white"></i>
+                        </div>
+                        @if (metric.Trend != 0)
+                        {
+                            <div class='flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold @(metric.Trend > 0 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600")'>
+                                <i class='fas fa-arrow-@(metric.Trend > 0 ? "up" : "down")'></i>
+                                <span>@Math.Abs(metric.Trend)%</span>
+                            </div>
+                        }
+                    </div>
+                    <h3 class="@(IsDarkMode ? "text-gray-300" : "text-gray-600") text-sm font-medium mb-1">
+                        @metric.Name
+                    </h3>
+                    <p class="@(IsDarkMode ? "text-white" : "text-gray-900") text-2xl font-bold mb-1">
+                        @metric.CurrentValue @metric.Unit
+                    </p>
+                    <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-500") text-xs">
+                        Target: @metric.Target @metric.Unit
+                    </p>
+                </div>
+            }
+        </div>
+
+        <!-- Chart Section -->
+        <div class="@(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") rounded-xl shadow-lg border p-6 mb-8">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                    @GetMetricName(selectedMetricType) Trend
+                </h2>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">Chart Type:</span>
+                    <select @bind="chartType"
+                            class="px-3 py-1.5 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary">
+                        <option value="line">Line</option>
+                        <option value="bar">Bar</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Simple Line Chart -->
+            @if (filteredData.Any())
+            {
+                <div class="w-full overflow-x-auto">
+                    <svg viewBox="0 0 800 300" class="w-full h-64">
+                        <!-- Grid lines -->
+                        @for (int i = 0; i <= 5; i++)
+                        {
+                            var y = 250 - (i * 50);
+                            var yText = y + 5;
+                            var label = GetYAxisLabel(i, selectedMetricType);
+                            <line x1="50" y1="@y" x2="750" y2="@y"
+                                  stroke="@(IsDarkMode ? "#374151" : "#E5E7EB")"
+                                  stroke-width="1"
+                                  stroke-dasharray="5,5" />
+                            <g>
+                                <text x="30" y="@yText"
+                                      fill="@(IsDarkMode ? "#9CA3AF" : "#6B7280")"
+                                      font-size="12"
+                                      text-anchor="end">@label</text>
+                            </g>
+                        }
+
+                        <!-- Data points and line -->
+                        @if (chartType == "line")
+                        {
+                            <polyline points="@GetChartPoints()"
+                                      fill="none"
+                                      stroke="url(#gradient)"
+                                      stroke-width="3"
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round" />
+
+                            <!-- Points -->
+                            @foreach (var point in GetDataPoints())
+                            {
+                                <circle cx="@point.X" cy="@point.Y" r="5"
+                                        fill="@GetMetricColor(selectedMetricType)"
+                                        stroke="white"
+                                        stroke-width="2"
+                                        class="cursor-pointer hover:r-7 transition-all" />
+                            }
+                        }
+                        else
+                        {
+                            <!-- Bars -->
+                            var barWidth = 700.0 / Math.Max(filteredData.Count, 1) * 0.6;
+                            var spacing = 700.0 / Math.Max(filteredData.Count, 1);
+
+                            @for (int i = 0; i < filteredData.Count; i++)
+                            {
+                                var x = 50 + (i * spacing) + (spacing - barWidth) / 2;
+                                var height = GetBarHeight(filteredData[i].Value, selectedMetricType);
+                                var y = 250 - height;
+                                <rect x="@x" y="@y" width="@barWidth" height="@height"
+                                      fill="@GetMetricColor(selectedMetricType)"
+                                      opacity="0.8"
+                                      rx="4" />
+                            }
+                        }
+
+                        <!-- X-axis labels -->
+                        @for (int i = 0; i < Math.Min(filteredData.Count, 7); i++)
+                        {
+                            var index = (int)(i * (filteredData.Count - 1) / 6.0);
+                            var x = 50 + (index * 700.0 / Math.Max(filteredData.Count - 1, 1));
+                            var dateLabel = filteredData[index].Date.ToString("MMM dd");
+                            <g>
+                                <text x="@x" y="275"
+                                      fill="@(IsDarkMode ? "#9CA3AF" : "#6B7280")"
+                                      font-size="12"
+                                      text-anchor="middle">@dateLabel</text>
+                            </g>
+                        }
+
+                        <!-- Gradient definition -->
+                        <defs>
+                            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" style="stop-color:@GetMetricColor(selectedMetricType);stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:@GetMetricColor(selectedMetricType);stop-opacity:0.6" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-12">
+                    <i class="fas fa-chart-line text-5xl @(IsDarkMode ? "text-gray-600" : "text-gray-300") mb-4"></i>
+                    <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-500") text-lg">
+                        No data available for the selected time range
+                    </p>
+                </div>
+            }
+        </div>
+
+        <!-- Recent Measurements Table -->
+        <div class="@(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") rounded-xl shadow-lg border overflow-hidden">
+            <div class="p-6 border-b @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                <h2 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                    Recent Measurements
+                </h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50")">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-500") uppercase tracking-wider">
+                                Date & Time
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-500") uppercase tracking-wider">
+                                Metric
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-500") uppercase tracking-wider">
+                                Value
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-500") uppercase tracking-wider">
+                                Status
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-500") uppercase tracking-wider">
+                                Notes
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="@(IsDarkMode ? "bg-gray-800" : "bg-white") divide-y @(IsDarkMode ? "divide-gray-700" : "divide-gray-200")">
+                        @foreach (var measurement in recentMeasurements.Take(10))
+                        {
+                            <tr class="@(IsDarkMode ? "hover:bg-gray-700" : "hover:bg-gray-50") transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="@(IsDarkMode ? "text-white" : "text-gray-900") font-medium">
+                                        @measurement.Date.ToString("MMM dd, yyyy")
+                                    </div>
+                                    <div class="@(IsDarkMode ? "text-gray-400" : "text-gray-500") text-sm">
+                                        @measurement.Date.ToString("h:mm tt")
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center gap-2">
+                                        <div class="p-2 rounded-lg" style="background: @GetMetricColor(measurement.Type); opacity: 0.2;">
+                                            <i class="fas fa-@GetMetricIcon(measurement.Type)" style="color: @GetMetricColor(measurement.Type);"></i>
+                                        </div>
+                                        <span class="@(IsDarkMode ? "text-white" : "text-gray-900") font-medium">
+                                            @GetMetricName(measurement.Type)
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="@(IsDarkMode ? "text-white" : "text-gray-900") text-lg font-semibold">
+                                        @measurement.Value @GetMetricUnit(measurement.Type)
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @{
+                                        var status = GetMeasurementStatus(measurement.Type, measurement.Value);
+                                    }
+                                    <span class='px-3 py-1 rounded-full text-xs font-semibold @GetStatusColor(status)'>
+                                        @status
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-sm">
+                                        @(string.IsNullOrEmpty(measurement.Notes) ? "-" : measurement.Notes)
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Measurement Modal -->
+@if (showAddModal)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto" @onclick="CloseAddMetricModal">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <!-- Background overlay -->
+            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75"></div>
+
+            <!-- Modal panel -->
+            <div class="relative inline-block w-full max-w-lg p-6 my-8 overflow-hidden text-left align-middle transition-all transform @(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-2xl shadow-xl"
+                 @onclick:stopPropagation="true">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                        Add New Measurement
+                    </h3>
+                    <button @onclick="CloseAddMetricModal"
+                            class="@(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700") transition-colors">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Metric Type -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Metric Type
+                        </label>
+                        <select @bind="newMeasurement.Type"
+                                class="w-full px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary">
+                            <option value="BloodPressure">Blood Pressure</option>
+                            <option value="HeartRate">Heart Rate</option>
+                            <option value="Temperature">Temperature</option>
+                            <option value="Weight">Weight</option>
+                            <option value="BloodGlucose">Blood Glucose</option>
+                            <option value="OxygenSaturation">Oxygen Saturation</option>
+                        </select>
+                    </div>
+
+                    <!-- Value -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Value (@GetMetricUnit(newMeasurement.Type))
+                        </label>
+                        <input type="number"
+                               @bind="newMeasurement.Value"
+                               step="0.1"
+                               class="w-full px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary"
+                               placeholder="Enter value" />
+                    </div>
+
+                    <!-- Date & Time -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Date & Time
+                        </label>
+                        <input type="datetime-local"
+                               @bind="newMeasurement.Date"
+                               class="w-full px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary" />
+                    </div>
+
+                    <!-- Notes -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Notes (Optional)
+                        </label>
+                        <textarea @bind="newMeasurement.Notes"
+                                  rows="3"
+                                  class="w-full px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary resize-none"
+                                  placeholder="Add any additional notes..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center justify-end gap-3 mt-6">
+                    <button @onclick="CloseAddMetricModal"
+                            class="px-6 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700") rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button @onclick="SaveMeasurement"
+                            disabled="@isSaving"
+                            class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                        @if (isSaving)
+                        {
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-save"></i>
+                            <span>Save Measurement</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    private string selectedMetricType = "HeartRate";
+    private int selectedTimeRange = 7;
+    private string chartType = "line";
+    private bool showAddModal = false;
+    private bool isSaving = false;
+    private string? patientId;
+
+    private Dictionary<string, int> timeRanges = new()
+    {
+        { "7 Days", 7 },
+        { "30 Days", 30 },
+        { "3 Months", 90 },
+        { "6 Months", 180 },
+        { "1 Year", 365 }
+    };
+
+    private class MetricOverview
+    {
+        public string Type { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Icon { get; set; } = "";
+        public double CurrentValue { get; set; }
+        public string Unit { get; set; } = "";
+        public double Target { get; set; }
+        public int Trend { get; set; }
+        public string GradientFrom { get; set; } = "";
+        public string GradientTo { get; set; } = "";
+    }
+
+    private List<MetricOverview> metricsOverview = new();
+
+    private class Measurement
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string Type { get; set; } = "HeartRate";
+        public double Value { get; set; }
+        public DateTime Date { get; set; } = DateTime.Now;
+        public string Notes { get; set; } = "";
+    }
+
+    private List<Measurement> allMeasurements = new();
+    private List<Measurement> recentMeasurements = new();
+    private List<(DateTime Date, double Value)> filteredData = new();
+
+    private Measurement newMeasurement = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            patientId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(patientId))
+            {
+                await LoadHealthMetricsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing health metrics page");
+        }
+    }
+
+    private async Task LoadHealthMetricsAsync()
+    {
+        try
+        {
+            var input = new GetHealthMetricsInput
+            {
+                StartDate = DateTime.UtcNow.AddDays(-90),
+                EndDate = DateTime.UtcNow,
+                Limit = 1000
+            };
+
+            var metrics = await HealthMetricsService.GetHealthMetricsAsync(input);
+
+            // Convert HealthMetricDto to Measurement for compatibility with existing UI
+            allMeasurements = metrics.Select(m => new Measurement
+            {
+                Id = m.Id.ToString(),
+                Type = m.MetricType,
+                Value = m.Value,
+                Date = m.RecordedDate,
+                Notes = m.Notes ?? ""
+            }).ToList();
+
+            recentMeasurements = allMeasurements.OrderByDescending(m => m.Date).ToList();
+
+            // Calculate overview from real data
+            CalculateMetricsOverview();
+            FilterData();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading health metrics");
+        }
+    }
+
+    private void CalculateMetricsOverview()
+    {
+        var metricTypes = new[] { "HeartRate", "BloodPressure", "Temperature", "Weight", "BloodGlucose", "OxygenSaturation" };
+
+        metricsOverview = new List<MetricOverview>();
+
+        foreach (var type in metricTypes)
+        {
+            var typeMetrics = allMeasurements.Where(m => m.Type == type).OrderByDescending(m => m.Date).ToList();
+
+            if (typeMetrics.Any())
+            {
+                var currentValue = typeMetrics.First().Value;
+                var previousValue = typeMetrics.Count > 1 ? typeMetrics.Skip(1).First().Value : currentValue;
+                var trend = currentValue > previousValue ? 1 : currentValue < previousValue ? -1 : 0;
+                var trendPercent = previousValue != 0 ? (int)Math.Abs((currentValue - previousValue) / previousValue * 100) : 0;
+
+                metricsOverview.Add(new MetricOverview
+                {
+                    Type = type,
+                    Name = GetMetricName(type),
+                    Icon = GetMetricIcon(type),
+                    CurrentValue = Math.Round(currentValue, 1),
+                    Unit = GetMetricUnit(type),
+                    Target = GetTargetValue(type),
+                    Trend = trend * trendPercent,
+                    GradientFrom = GetMetricGradientFrom(type),
+                    GradientTo = GetMetricGradientTo(type)
+                });
+            }
+            else
+            {
+                // Add placeholder for types with no data
+                metricsOverview.Add(new MetricOverview
+                {
+                    Type = type,
+                    Name = GetMetricName(type),
+                    Icon = GetMetricIcon(type),
+                    CurrentValue = 0,
+                    Unit = GetMetricUnit(type),
+                    Target = GetTargetValue(type),
+                    Trend = 0,
+                    GradientFrom = GetMetricGradientFrom(type),
+                    GradientTo = GetMetricGradientTo(type)
+                });
+            }
+        }
+    }
+
+    private double GetTargetValue(string type) => type switch
+    {
+        "HeartRate" => 70,
+        "BloodPressure" => 120,
+        "Temperature" => 37.0,
+        "Weight" => 70.0,
+        "BloodGlucose" => 100,
+        "OxygenSaturation" => 98,
+        _ => 0
+    };
+
+    private string GetMetricGradientFrom(string type) => type switch
+    {
+        "HeartRate" => "#EF4444",
+        "BloodPressure" => "#3B82F6",
+        "Temperature" => "#F59E0B",
+        "Weight" => "#8B5CF6",
+        "BloodGlucose" => "#10B981",
+        "OxygenSaturation" => "#06B6D4",
+        _ => "#6366F1"
+    };
+
+    private string GetMetricGradientTo(string type) => type switch
+    {
+        "HeartRate" => "#DC2626",
+        "BloodPressure" => "#2563EB",
+        "Temperature" => "#D97706",
+        "Weight" => "#7C3AED",
+        "BloodGlucose" => "#059669",
+        "OxygenSaturation" => "#0891B2",
+        _ => "#4F46E5"
+    };
+
+    private void FilterData()
+    {
+        var cutoffDate = DateTime.Now.AddDays(-selectedTimeRange);
+        var measurements = allMeasurements
+            .Where(m => m.Type == selectedMetricType && m.Date >= cutoffDate)
+            .OrderBy(m => m.Date)
+            .ToList();
+
+        filteredData = measurements.Select(m => (m.Date, m.Value)).ToList();
+    }
+
+    private void SelectTimeRange(int days)
+    {
+        selectedTimeRange = days;
+        FilterData();
+    }
+
+    private void SelectMetricType(string type)
+    {
+        selectedMetricType = type;
+        FilterData();
+    }
+
+    private string GetChartPoints()
+    {
+        if (!filteredData.Any()) return "";
+
+        var maxValue = GetMaxValue(selectedMetricType);
+        var minValue = GetMinValue(selectedMetricType);
+        var range = maxValue - minValue;
+
+        var points = new List<string>();
+        for (int i = 0; i < filteredData.Count; i++)
+        {
+            var x = 50 + (i * 700.0 / Math.Max(filteredData.Count - 1, 1));
+            var normalizedValue = (filteredData[i].Value - minValue) / range;
+            var y = 250 - (normalizedValue * 200);
+            points.Add($"{x},{y}");
+        }
+
+        return string.Join(" ", points);
+    }
+
+    private List<(double X, double Y)> GetDataPoints()
+    {
+        if (!filteredData.Any()) return new();
+
+        var maxValue = GetMaxValue(selectedMetricType);
+        var minValue = GetMinValue(selectedMetricType);
+        var range = maxValue - minValue;
+
+        var points = new List<(double, double)>();
+        for (int i = 0; i < filteredData.Count; i++)
+        {
+            var x = 50 + (i * 700.0 / Math.Max(filteredData.Count - 1, 1));
+            var normalizedValue = (filteredData[i].Value - minValue) / range;
+            var y = 250 - (normalizedValue * 200);
+            points.Add((x, y));
+        }
+
+        return points;
+    }
+
+    private double GetBarHeight(double value, string type)
+    {
+        var maxValue = GetMaxValue(type);
+        var minValue = GetMinValue(type);
+        var range = maxValue - minValue;
+        var normalizedValue = (value - minValue) / range;
+        return normalizedValue * 200;
+    }
+
+    private string GetYAxisLabel(int index, string type)
+    {
+        var maxValue = GetMaxValue(type);
+        var minValue = GetMinValue(type);
+        var value = minValue + ((maxValue - minValue) * index / 5.0);
+        return value.ToString("F0");
+    }
+
+    private double GetMaxValue(string type) => type switch
+    {
+        "HeartRate" => 100,
+        "BloodPressure" => 140,
+        "Temperature" => 38,
+        "Weight" => 80,
+        "BloodGlucose" => 120,
+        "OxygenSaturation" => 100,
+        _ => 100
+    };
+
+    private double GetMinValue(string type) => type switch
+    {
+        "HeartRate" => 50,
+        "BloodPressure" => 100,
+        "Temperature" => 36,
+        "Weight" => 60,
+        "BloodGlucose" => 70,
+        "OxygenSaturation" => 90,
+        _ => 0
+    };
+
+    private string GetMetricName(string type) => type switch
+    {
+        "HeartRate" => "Heart Rate",
+        "BloodPressure" => "Blood Pressure",
+        "Temperature" => "Temperature",
+        "Weight" => "Weight",
+        "BloodGlucose" => "Blood Glucose",
+        "OxygenSaturation" => "Oxygen Saturation",
+        _ => type
+    };
+
+    private string GetMetricUnit(string type) => type switch
+    {
+        "HeartRate" => "bpm",
+        "BloodPressure" => "mmHg",
+        "Temperature" => "°C",
+        "Weight" => "kg",
+        "BloodGlucose" => "mg/dL",
+        "OxygenSaturation" => "%",
+        _ => ""
+    };
+
+    private string GetMetricIcon(string type) => type switch
+    {
+        "HeartRate" => "heartbeat",
+        "BloodPressure" => "stethoscope",
+        "Temperature" => "thermometer-half",
+        "Weight" => "weight",
+        "BloodGlucose" => "tint",
+        "OxygenSaturation" => "lungs",
+        _ => "chart-line"
+    };
+
+    private string GetMetricColor(string type) => type switch
+    {
+        "HeartRate" => "#EF4444",
+        "BloodPressure" => "#3B82F6",
+        "Temperature" => "#F59E0B",
+        "Weight" => "#8B5CF6",
+        "BloodGlucose" => "#10B981",
+        "OxygenSaturation" => "#06B6D4",
+        _ => "#6366F1"
+    };
+
+    private string GetMeasurementStatus(string type, double value)
+    {
+        return type switch
+        {
+            "HeartRate" => value < 60 ? "Low" : value > 100 ? "High" : "Normal",
+            "BloodPressure" => value < 90 ? "Low" : value > 140 ? "High" : "Normal",
+            "Temperature" => value < 36.1 ? "Low" : value > 37.5 ? "High" : "Normal",
+            "Weight" => "Normal",
+            "BloodGlucose" => value < 70 ? "Low" : value > 100 ? "High" : "Normal",
+            "OxygenSaturation" => value < 95 ? "Low" : "Normal",
+            _ => "Normal"
+        };
+    }
+
+    private string GetStatusColor(string status) => status switch
+    {
+        "Low" => "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400",
+        "High" => "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
+        "Normal" => "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400",
+        _ => "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+    };
+
+    private void OpenAddMetricModal()
+    {
+        newMeasurement = new Measurement();
+        showAddModal = true;
+    }
+
+    private void CloseAddMetricModal()
+    {
+        showAddModal = false;
+        newMeasurement = new();
+    }
+
+    private async Task SaveMeasurement()
+    {
+        isSaving = true;
+        try
+        {
+            var input = new RecordHealthMetricInput
+            {
+                MetricType = newMeasurement.Type,
+                Value = newMeasurement.Value,
+                Unit = GetMetricUnit(newMeasurement.Type),
+                RecordedDate = newMeasurement.Date,
+                Notes = newMeasurement.Notes
+            };
+
+            var savedMetric = await HealthMetricsService.RecordHealthMetricAsync(input);
+
+            if (savedMetric != null)
+            {
+                // Reload all metrics to ensure we have the latest data
+                await LoadHealthMetricsAsync();
+                CloseAddMetricModal();
+                await JS.InvokeVoidAsync("alert", "Health metric saved successfully!");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to save health metric");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error saving measurement");
+            await JS.InvokeVoidAsync("alert", $"Error saving measurement: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

@@ -1,0 +1,81 @@
+@if (IsVisible)
+{
+    <div class="absolute @Position bg-white dark:bg-gray-800 rounded-lg shadow-xl border @BorderColor p-3 z-50"
+         style="min-width: 280px;"
+         @onclick:stopPropagation="true">
+
+        <div class="flex items-center justify-between mb-2 pb-2 border-b @BorderColor">
+            <span class="text-sm font-medium @TextColor">React to message</span>
+            <button @onclick="Close" class="@TextMutedColor hover:@TextColor transition-colors">
+                <i class="fas fa-times text-sm"></i>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-6 gap-2">
+            @foreach (var emoji in Emojis)
+            {
+                <button
+                    @onclick="() => SelectEmoji(emoji)"
+                    class="@ButtonClasses hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                    title="@GetEmojiName(emoji)">
+                    <span class="text-2xl">@emoji</span>
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Position { get; set; } = "bottom-0 left-0 mt-2";
+    [Parameter] public bool IsDarkMode { get; set; }
+    [Parameter] public EventCallback<string> OnEmojiSelected { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string[] Emojis = new[]
+    {
+        "❤️", "👍", "👎", "😊", "😂", "😮",
+        "😢", "😡", "🙏", "👏", "🎉", "🔥",
+        "💯", "✅", "❌", "🤔", "😍", "🤗"
+    };
+
+    private string TextColor => IsDarkMode ? "text-white" : "text-gray-900";
+    private string TextMutedColor => IsDarkMode ? "text-gray-400" : "text-gray-500";
+    private string BorderColor => IsDarkMode ? "border-gray-700" : "border-gray-200";
+    private string ButtonClasses => IsDarkMode
+        ? "p-2 rounded-lg hover:bg-gray-700 transition-colors"
+        : "p-2 rounded-lg hover:bg-gray-100 transition-colors";
+
+    private async Task SelectEmoji(string emoji)
+    {
+        await OnEmojiSelected.InvokeAsync(emoji);
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private string GetEmojiName(string emoji) => emoji switch
+    {
+        "❤️" => "Love",
+        "👍" => "Thumbs up",
+        "👎" => "Thumbs down",
+        "😊" => "Smile",
+        "😂" => "Laugh",
+        "😮" => "Surprised",
+        "😢" => "Sad",
+        "😡" => "Angry",
+        "🙏" => "Prayer",
+        "👏" => "Clap",
+        "🎉" => "Celebrate",
+        "🔥" => "Fire",
+        "💯" => "100",
+        "✅" => "Check",
+        "❌" => "Cross",
+        "🤔" => "Thinking",
+        "😍" => "Heart eyes",
+        "🤗" => "Hug",
+        _ => "Emoji"
+    };
+}

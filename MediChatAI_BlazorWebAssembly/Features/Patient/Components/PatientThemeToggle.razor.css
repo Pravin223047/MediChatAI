@@ -1,0 +1,30 @@
+.patient-theme-toggle {
+    @apply flex items-center gap-2;
+}
+
+.theme-toggle-btn {
+    @apply flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold text-sm shadow-lg hover:shadow-xl transition-all duration-300 border-0 cursor-pointer;
+}
+
+.theme-toggle-btn:hover {
+    @apply -translate-y-0.5 scale-105;
+}
+
+.theme-toggle-btn i {
+    @apply text-lg;
+}
+
+.theme-label {
+    @apply text-sm font-semibold;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+    .theme-label {
+        @apply hidden;
+    }
+
+    .theme-toggle-btn {
+        @apply px-3 py-2;
+    }
+}

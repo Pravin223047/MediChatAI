@@ -1,0 +1,383 @@
+@page "/patient/consultations"
+@using Microsoft.AspNetCore.Components.Authorization
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@inject ThemeState ThemeState
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IToastService ToastService
+@inject ILogger<Consultations> Logger
+@inject AppSettingsState AppSettings
+@inject MediChatAI_BlazorWebAssembly.Features.Patient.Services.IConsultationService ConsultationService
+
+<PageTitle>Consultation History - @AppSettings.Settings.SiteName</PageTitle>
+
+<AuthorizeRouteGuard RequiredRole="Patient">
+
+<div class="min-h-screen transition-colors duration-300 @(IsDarkMode ? "bg-gray-900" : "bg-gradient-to-br from-gray-50 to-gray-100") py-8">
+    <div class="w-full mx-auto px-4 sm:px-6 lg:px-8">
+
+        <!-- Header -->
+        <div class="mb-8">
+            <button @onclick='() => Navigation.NavigateTo("/patient/dashboard")'
+                    class="inline-flex items-center gap-2 @(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900") mb-4 transition-colors">
+                <i class="fas fa-arrow-left"></i>
+                <span>Back to Dashboard</span>
+            </button>
+            <h1 class="text-4xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                <i class="fas fa-notes-medical text-blue-500 mr-3"></i>
+                Consultation History
+            </h1>
+            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-lg">
+                View past consultation notes, diagnosis, and treatment plans
+            </p>
+        </div>
+
+        <!-- Filter & Search -->
+        <div class="@GetCardClasses() p-4 mb-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div class="relative flex-1 w-full">
+                    <input @bind="searchQuery" @bind:event="oninput" @onkeyup="HandleSearch"
+                           type="text"
+                           placeholder="Search by doctor or condition..."
+                           class="w-full pl-10 pr-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary" />
+                    <i class="fas fa-search absolute left-3 top-3 @(IsDarkMode ? "text-gray-400" : "text-gray-500")"></i>
+                </div>
+                <select @bind="filterDoctor" @bind:after="HandleFilter"
+                        class="px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary">
+                    <option value="">All Doctors</option>
+                    @foreach (var doctor in GetUniqueDoctors())
+                    {
+                        <option value="@doctor">Dr. @doctor</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <!-- Loading State -->
+            <div class="@GetCardClasses() p-16 text-center">
+                <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent mb-4"></div>
+                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-lg">Loading consultations...</p>
+            </div>
+        }
+        else if (filteredConsultations.Count == 0)
+        {
+            <!-- Empty State -->
+            <div class="@GetCardClasses() p-16 text-center">
+                <div class="mx-auto w-24 h-24 bg-gradient-to-br @(IsDarkMode ? "from-gray-700 to-gray-600" : "from-gray-100 to-gray-200") rounded-full flex items-center justify-center mb-6">
+                    <i class="fas fa-stethoscope text-5xl @(IsDarkMode ? "text-gray-500" : "text-gray-400")"></i>
+                </div>
+                <h3 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                    No Consultations Found
+                </h3>
+                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                    @(string.IsNullOrEmpty(searchQuery) && string.IsNullOrEmpty(filterDoctor)
+                        ? "You haven't had any consultations yet."
+                        : "No consultations match your search criteria.")
+                </p>
+            </div>
+        }
+        else
+        {
+            <!-- Timeline View -->
+            <div class="relative">
+                <!-- Timeline Line -->
+                <div class="absolute left-8 top-0 bottom-0 w-0.5 @(IsDarkMode ? "bg-gray-700" : "bg-gray-300") hidden md:block"></div>
+
+                <!-- Consultations -->
+                <div class="space-y-6">
+                    @foreach (var consultation in filteredConsultations)
+                    {
+                        <div class="relative">
+                            <!-- Timeline Dot -->
+                            <div class="absolute left-8 -translate-x-1/2 w-4 h-4 rounded-full bg-primary border-4 @(IsDarkMode ? "border-gray-900" : "border-gray-50") hidden md:block z-10"></div>
+
+                            <!-- Consultation Card -->
+                            <div class="md:ml-20 @GetCardClasses()">
+                                <!-- Header - Always Visible -->
+                                <div class="p-6 cursor-pointer" @onclick="() => ToggleConsultation(consultation.Id)">
+                                    <div class="flex items-start justify-between mb-4">
+                                        <div class="flex items-center gap-4 flex-1">
+                                            <!-- Doctor Avatar -->
+                                            @if (!string.IsNullOrEmpty(consultation.DoctorProfileImage))
+                                            {
+                                                <img src="@consultation.DoctorProfileImage" alt="Dr. @consultation.DoctorName"
+                                                     class="w-14 h-14 rounded-full object-cover border-2 @(IsDarkMode ? "border-gray-700" : "border-gray-200")" />
+                                            }
+                                            else
+                                            {
+                                                <div class="w-14 h-14 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-white text-xl font-bold">
+                                                    @GetDoctorInitials(consultation.DoctorName)
+                                                </div>
+                                            }
+
+                                            <div class="flex-1">
+                                                <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                                    Dr. @consultation.DoctorName
+                                                </h3>
+                                                <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                                    <i class="fas fa-stethoscope mr-1"></i>
+                                                    @consultation.Specialization
+                                                </p>
+                                                <p class="text-sm @(IsDarkMode ? "text-gray-500" : "text-gray-500") mt-1">
+                                                    <i class="fas fa-calendar mr-1"></i>
+                                                    @consultation.ConsultationDate.ToString("MMMM dd, yyyy 'at' hh:mm tt")
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                                Completed
+                                            </span>
+                                            <i class="fas @(expandedConsultations.Contains(consultation.Id) ? "fa-chevron-up" : "fa-chevron-down") text-gray-400"></i>
+                                        </div>
+                                    </div>
+
+                                    <!-- Chief Complaint (Always Visible) -->
+                                    <div class="flex items-start gap-2 text-sm">
+                                        <i class="fas fa-heartbeat text-red-500 mt-0.5"></i>
+                                        <div>
+                                            <span class="font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700")">Chief Complaint:</span>
+                                            <span class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") ml-1">@consultation.ChiefComplaint</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Expandable Details -->
+                                @if (expandedConsultations.Contains(consultation.Id))
+                                {
+                                    <div class="px-6 pb-6 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200") pt-6 space-y-6">
+
+                                        <!-- Diagnosis -->
+                                        <div class="@(IsDarkMode ? "bg-gray-700/30" : "bg-blue-50") p-4 rounded-lg">
+                                            <h4 class="font-semibold @(IsDarkMode ? "text-blue-400" : "text-blue-800") mb-2 flex items-center gap-2">
+                                                <i class="fas fa-diagnoses"></i>
+                                                Diagnosis
+                                            </h4>
+                                            <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                                @consultation.Diagnosis
+                                            </p>
+                                        </div>
+
+                                        <!-- Doctor's Observations -->
+                                        <div>
+                                            <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2 flex items-center gap-2">
+                                                <i class="fas fa-notes-medical text-primary"></i>
+                                                Doctor's Observations
+                                            </h4>
+                                            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-sm">
+                                                @consultation.Observations
+                                            </p>
+                                        </div>
+
+                                        <!-- Treatment Plan -->
+                                        <div>
+                                            <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-3 flex items-center gap-2">
+                                                <i class="fas fa-clipboard-list text-green-500"></i>
+                                                Treatment Plan
+                                            </h4>
+                                            <ul class="space-y-2">
+                                                @foreach (var treatment in consultation.TreatmentPlan)
+                                                {
+                                                    <li class="flex items-start gap-2 text-sm">
+                                                        <i class="fas fa-check-circle text-green-500 mt-0.5"></i>
+                                                        <span class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">@treatment</span>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+
+                                        <!-- Prescriptions -->
+                                        @if (consultation.Prescriptions.Count > 0)
+                                        {
+                                            <div>
+                                                <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-3 flex items-center gap-2">
+                                                    <i class="fas fa-prescription text-orange-500"></i>
+                                                    Prescriptions Issued
+                                                </h4>
+                                                <div class="grid gap-2">
+                                                    @foreach (var prescription in consultation.Prescriptions)
+                                                    {
+                                                        <div class="flex items-center justify-between p-3 rounded-lg @(IsDarkMode ? "bg-gray-700/50" : "bg-gray-100")">
+                                                            <div class="flex items-center gap-3">
+                                                                <i class="fas fa-pills text-orange-500"></i>
+                                                                <div>
+                                                                    <p class="font-medium @(IsDarkMode ? "text-white" : "text-gray-900")">@prescription.MedicationName</p>
+                                                                    <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">@prescription.Dosage - @prescription.Frequency</p>
+                                                                </div>
+                                                            </div>
+                                                            <button @onclick='() => Navigation.NavigateTo("/patient/prescriptions")'
+                                                                    class="text-sm text-primary hover:underline">
+                                                                View
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
+                                        <!-- Follow-up Instructions -->
+                                        @if (!string.IsNullOrEmpty(consultation.FollowUpInstructions))
+                                        {
+                                            <div class="@(IsDarkMode ? "bg-yellow-900/20 border-yellow-700" : "bg-yellow-50 border-yellow-200") p-4 rounded-lg border">
+                                                <h4 class="font-semibold @(IsDarkMode ? "text-yellow-400" : "text-yellow-800") mb-2 flex items-center gap-2">
+                                                    <i class="fas fa-info-circle"></i>
+                                                    Follow-up Instructions
+                                                </h4>
+                                                <p class="text-sm @(IsDarkMode ? "text-yellow-300" : "text-yellow-700")">
+                                                    @consultation.FollowUpInstructions
+                                                </p>
+                                            </div>
+                                        }
+
+                                        <!-- Actions -->
+                                        <div class="flex gap-3 pt-4 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                                            <button @onclick="() => DownloadSummary(consultation.Id)"
+                                                    class="flex-1 px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-all font-semibold">
+                                                <i class="fas fa-download mr-2"></i>
+                                                Download Summary
+                                            </button>
+                                            @if (!consultation.IsRated)
+                                            {
+                                                <button @onclick="() => RateConsultation(consultation.Id)"
+                                                        class="flex-1 px-4 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-lg hover:opacity-90 transition-opacity font-semibold">
+                                                    <i class="fas fa-star mr-2"></i>
+                                                    Rate Consultation
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <div class="flex-1 flex items-center justify-center gap-1">
+                                                    @for (int i = 1; i <= 5; i++)
+                                                    {
+                                                        <i class="fas fa-star @(i <= (consultation.Rating ?? 0) ? "text-yellow-500" : "text-gray-400")"></i>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+</AuthorizeRouteGuard>
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    // State
+    private bool isLoading = true;
+    private string searchQuery = "";
+    private string filterDoctor = "";
+    private HashSet<int> expandedConsultations = new();
+
+    // Data
+    private List<ConsultationHistoryDto> allConsultations = new();
+    private List<ConsultationHistoryDto> filteredConsultations = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadConsultations();
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading consultations");
+            ToastService.ShowError("Failed to load consultations");
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadConsultations()
+    {
+        allConsultations = await ConsultationService.GetPatientConsultationsAsync();
+        FilterConsultations();
+    }
+
+    private void ToggleConsultation(int consultationId)
+    {
+        if (expandedConsultations.Contains(consultationId))
+            expandedConsultations.Remove(consultationId);
+        else
+            expandedConsultations.Add(consultationId);
+    }
+
+    private List<string> GetUniqueDoctors()
+    {
+        return allConsultations.Select(c => c.DoctorName).Distinct().ToList();
+    }
+
+    private void HandleSearch() => FilterConsultations();
+    private void HandleFilter() => FilterConsultations();
+
+    private void FilterConsultations()
+    {
+        var filtered = allConsultations.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(filterDoctor))
+            filtered = filtered.Where(c => c.DoctorName == filterDoctor);
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filtered = filtered.Where(c =>
+                c.DoctorName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                c.ChiefComplaint.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                c.Diagnosis.Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
+        }
+
+        filteredConsultations = filtered.OrderByDescending(c => c.ConsultationDate).ToList();
+    }
+
+    private string GetDoctorInitials(string name)
+    {
+        var parts = name.Split(' ');
+        return parts.Length >= 2 ? $"{parts[0][0]}{parts[1][0]}" : name.Substring(0, Math.Min(2, name.Length));
+    }
+
+    private void DownloadSummary(int consultationId)
+    {
+        ToastService.ShowInfo("Download feature coming soon!");
+    }
+
+    private async Task RateConsultation(int consultationId)
+    {
+        try
+        {
+            // For now, default to 5 stars - in a real app this would open a modal
+            var success = await ConsultationService.RateConsultationAsync(consultationId, 5);
+
+            if (success)
+            {
+                ToastService.ShowSuccess("Consultation rated successfully!");
+                await LoadConsultations();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to rate consultation");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error rating consultation");
+            ToastService.ShowError("Failed to rate consultation");
+        }
+    }
+
+    private string GetCardClasses()
+    {
+        return IsDarkMode
+            ? "bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-lg"
+            : "bg-white/80 backdrop-blur-sm rounded-xl shadow-lg";
+    }
+}

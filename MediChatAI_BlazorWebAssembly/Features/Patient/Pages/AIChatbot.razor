@@ -1,0 +1,820 @@
+@page "/patient/ai-chatbot"
+@using MediChatAI_BlazorWebAssembly.Core.Components.Guards
+@using MediChatAI_BlazorWebAssembly.Core.Components.UI
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@using MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.Components
+@using MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.Models
+@using MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.DTOs
+@using MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.Services
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Services
+@using Blazored.LocalStorage
+@using Microsoft.AspNetCore.Components
+@inject ThemeState ThemeState
+@inject MediChatAI_BlazorWebAssembly.Features.Patient.Services.IAIChatbotService ChatbotService
+@inject IConversationStorageService StorageService
+@inject ILocalStorageService LocalStorage
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<AIChatbot> Logger
+@inject IVoiceToTextService VoiceToTextService
+@implements IDisposable
+
+<PageTitle>AI Health Assistant - MediChat AI</PageTitle>
+
+<AuthorizeRouteGuard RequiredRole="Patient">
+
+<div class="min-h-screen @(IsDarkMode ? "bg-gray-900" : "bg-gradient-to-br from-gray-50 to-gray-100")">
+    <!-- Disclaimer Modal -->
+    <DisclaimerModal IsOpen="@showDisclaimer"
+                     OnAcceptDisclaimer="@HandleAcceptDisclaimer"
+                     OnDeclineDisclaimer="@HandleDeclineDisclaimer" />
+
+    <!-- Save Conversation Modal -->
+    <SaveConversationModal IsOpen="@showSaveModal"
+                           SessionId="@currentSession.Id"
+                           OnSave="@HandleSaveConversation"
+                           OnCancel="@(() => showSaveModal = false)" />
+
+    <!-- Confirmation Dialogs -->
+    <ConfirmationDialog IsOpen="@showClearChatDialog"
+                        Title="Clear Chat?"
+                        Message="Are you sure you want to clear this conversation? This action cannot be undone."
+                        Icon="fas fa-trash-alt"
+                        Type="ConfirmationDialogType.Danger"
+                        ConfirmText="Clear Chat"
+                        CancelText="Cancel"
+                        OnConfirm="@HandleClearChatConfirm"
+                        OnCancel="@(() => showClearChatDialog = false)" />
+
+    <ConfirmationDialog IsOpen="@showNewChatDialog"
+                        Title="Start New Chat?"
+                        Message="You have unsaved messages in this conversation. Starting a new chat will lose these messages. Do you want to continue?"
+                        Icon="fas fa-exclamation-triangle"
+                        Type="ConfirmationDialogType.Warning"
+                        ConfirmText="Start New Chat"
+                        CancelText="Cancel"
+                        OnConfirm="@HandleNewChatConfirm"
+                        OnCancel="@(() => showNewChatDialog = false)" />
+
+    <ConfirmationDialog IsOpen="@showDeleteConversationDialog"
+                        Title="Delete Conversation?"
+                        Message="Are you sure you want to delete this conversation? This action cannot be undone."
+                        Icon="fas fa-trash-alt"
+                        Type="ConfirmationDialogType.Danger"
+                        ConfirmText="Delete"
+                        CancelText="Cancel"
+                        OnConfirm="@HandleDeleteConversationConfirm"
+                        OnCancel="@(() => showDeleteConversationDialog = false)" />
+
+    <!-- Image Viewer Modal -->
+    <ImageViewerModal IsOpen="@showImageViewer"
+                      ImageUrl="@selectedImageUrl"
+                      AltText="@selectedImageAlt"
+                      OnClose="@(() => showImageViewer = false)" />
+
+    <!-- Main Layout -->
+    <div class="h-screen flex">
+        <!-- Conversation History Sidebar (collapsible on mobile) -->
+        <div class="@(showSidebar ? "w-80" : "w-0") transition-all duration-300 overflow-hidden">
+            <ConversationHistorySidebar Conversations="@savedConversations"
+                                        IsLoading="@isLoadingConversations"
+                                        OnLoadConversation="@LoadConversation"
+                                        OnDeleteConversation="@DeleteConversation"
+                                        OnNewChat="@StartNewChat" />
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="flex-1 flex flex-col">
+            <!-- Header -->
+            <header class="@(IsDarkMode ? "bg-gray-800/90 border-gray-700" : "bg-white/80 border-gray-200") backdrop-blur-md border-b px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <button @onclick="@(() => showSidebar = !showSidebar)"
+                                class="lg:hidden w-10 h-10 rounded-lg @(IsDarkMode ? "hover:bg-gray-700" : "hover:bg-gray-100") flex items-center justify-center transition-colors">
+                            <i class="fas fa-bars @(IsDarkMode ? "text-gray-300" : "text-gray-700")"></i>
+                        </button>
+
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg">
+                                <i class="fas fa-robot text-white text-xl"></i>
+                            </div>
+                            <div>
+                                <h1 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                    AI Health Assistant
+                                </h1>
+                                <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                    Your personal medical knowledge companion
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <!-- Save Conversation Button -->
+                        @if (currentSession.Messages.Any() && !currentSession.IsSaved)
+                        {
+                            <button @onclick="@ShowSaveConversationDialog"
+                                    class="px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900") font-semibold text-sm transition-colors flex items-center gap-2">
+                                <i class="fas fa-save"></i>
+                                <span class="hidden sm:inline">Save</span>
+                            </button>
+                        }
+
+                        <!-- Clear Chat Button -->
+                        @if (currentSession.Messages.Any())
+                        {
+                            <button @onclick="@ConfirmClearChat"
+                                    class="px-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-900") font-semibold text-sm transition-colors flex items-center gap-2">
+                                <i class="fas fa-trash-alt"></i>
+                                <span class="hidden sm:inline">Clear</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            </header>
+
+            <!-- Chat Messages Area -->
+            <div class="flex-1 overflow-y-auto px-6 py-8" @ref="chatContainer">
+                <div class="max-w-5xl mx-auto">
+                    @if (!currentSession.Messages.Any())
+                    {
+                        <!-- Welcome Screen -->
+                        <div class="text-center py-12">
+                            <div class="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center mx-auto mb-6 shadow-2xl">
+                                <i class="fas fa-robot text-white text-4xl"></i>
+                            </div>
+                            <h2 class="text-3xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
+                                Welcome to AI Health Assistant
+                            </h2>
+                            <p class="text-lg @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-8 max-w-2xl mx-auto">
+                                I'm here to help answer your health questions, analyze symptoms, and provide educational insights. How can I assist you today?
+                            </p>
+
+                            <!-- Quick Action Buttons -->
+                            <QuickActionButtons Actions="@quickActions" OnActionClick="@HandleQuickAction" />
+
+                            <!-- Suggested Questions -->
+                            <div class="mt-8">
+                                <h3 class="text-sm font-semibold @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-4 uppercase tracking-wide">
+                                    Suggested Questions
+                                </h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl mx-auto">
+                                    @foreach (var question in suggestedQuestions.Take(4))
+                                    {
+                                        <button @onclick="@(() => SendMessage(question))"
+                                                class="p-4 rounded-xl @(IsDarkMode ? "bg-gray-800 hover:bg-gray-700 border border-gray-700" : "bg-white hover:bg-gray-50 border border-gray-200") transition-all hover:shadow-lg text-left group">
+                                            <i class="fas fa-lightbulb text-primary group-hover:scale-110 transition-transform inline-block mr-2"></i>
+                                            <span class="text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700")">@question</span>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Chat Messages -->
+                        @foreach (var message in currentSession.Messages)
+                        {
+                            <ChatMessageBubble Message="@message"
+                                               OnSuggestedAction="@HandleSuggestedAction"
+                                               OnViewImage="@ViewImage" />
+                        }
+                    }
+                </div>
+            </div>
+
+            <!-- Feature Panels (Symptom Checker / Image Analysis) -->
+            @if (showSymptomChecker)
+            {
+                <div class="absolute bottom-24 right-6 w-full max-w-md z-10 animate-slide-up">
+                    <SymptomCheckerPanel OnAnalyze="@HandleSymptomAnalysis" OnClose="@(() => showSymptomChecker = false)" />
+                </div>
+            }
+
+            @if (showImageAnalysis)
+            {
+                <div class="absolute bottom-24 right-6 w-full max-w-md z-10 animate-slide-up">
+                    <ImageAnalysisPanel OnAnalyze="@HandleImageAnalysis" OnClose="@(() => showImageAnalysis = false)" />
+                </div>
+            }
+
+            <!-- Input Area -->
+            <div class="@(IsDarkMode ? "bg-gray-800/90 border-gray-700" : "bg-white/80 border-gray-200") backdrop-blur-md border-t px-6 py-4">
+                <div class="max-w-5xl mx-auto">
+                    <div class="flex items-end gap-3">
+                        <!-- Message Input -->
+                        <div class="flex-1 relative">
+                            <textarea @bind="userInput"
+                                      @bind:event="oninput"
+                                      @onkeydown="@HandleKeyPress"
+                                      @onkeydown:preventDefault="@preventDefaultEnter"
+                                      rows="1"
+                                      placeholder="Ask me anything about your health..."
+                                      class="w-full px-4 py-3 pr-12 rounded-xl @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-gray-50 text-gray-900 border-gray-300") border focus:ring-2 focus:ring-primary resize-none max-h-32 overflow-y-auto"
+                                      style="min-height: 52px;"></textarea>
+
+                            <!-- Character Count (optional) -->
+                            @if (userInput.Length > 200)
+                            {
+                                <div class="absolute bottom-2 right-2 text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")">
+                                    @userInput.Length / 1000
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-2">
+                            <!-- Voice Input -->
+                            <div class="relative">
+                                <VoiceInputButton OnVoiceRecorded="@HandleVoiceInput" />
+                            </div>
+
+                            <!-- Symptom Checker Button -->
+                            <button @onclick="@(() => showSymptomChecker = !showSymptomChecker)"
+                                    class="w-12 h-12 rounded-full @(showSymptomChecker ? "bg-gradient-to-br from-red-500 to-pink-600" : $"{(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300")}") flex items-center justify-center transition-all hover:scale-110 shadow-lg">
+                                <i class="fas fa-heartbeat @(showSymptomChecker ? "text-white" : $"{(IsDarkMode ? "text-gray-200" : "text-gray-700")}")"></i>
+                            </button>
+
+                            <!-- Image Analysis Button -->
+                            <button @onclick="@(() => showImageAnalysis = !showImageAnalysis)"
+                                    class="w-12 h-12 rounded-full @(showImageAnalysis ? "bg-gradient-to-br from-purple-500 to-pink-600" : $"{(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300")}") flex items-center justify-center transition-all hover:scale-110 shadow-lg">
+                                <i class="fas fa-image @(showImageAnalysis ? "text-white" : $"{(IsDarkMode ? "text-gray-200" : "text-gray-700")}")"></i>
+                            </button>
+
+                            <!-- Send Button -->
+                            <button @onclick="@(() => SendMessage(userInput))"
+                                    disabled="@(string.IsNullOrWhiteSpace(userInput) || isSending)"
+                                    class="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent text-white flex items-center justify-center transition-all hover:scale-110 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+                                @if (isSending)
+                                {
+                                    <i class="fas fa-circle-notch fa-spin"></i>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-paper-plane"></i>
+                                }
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Disclaimer Text -->
+                    <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") mt-3 text-center">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        AI responses are for educational purposes only. Always consult a healthcare professional for medical advice.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</AuthorizeRouteGuard>
+
+@code {
+    private ElementReference chatContainer;
+    private ChatSession currentSession = new();
+    private List<SavedConversationDto> savedConversations = new();
+    private List<string> quickActions = new();
+    private List<string> suggestedQuestions = new();
+
+    private string userInput = string.Empty;
+    private bool showDisclaimer = false;
+    private bool showSidebar = true;
+    private bool showSymptomChecker = false;
+    private bool showImageAnalysis = false;
+    private bool isSending = false;
+    private bool isLoadingConversations = false;
+
+    // Modal states
+    private bool showSaveModal = false;
+    private bool showClearChatDialog = false;
+    private bool showNewChatDialog = false;
+    private bool showDeleteConversationDialog = false;
+    private string conversationToDelete = string.Empty;
+
+    // Image viewer states
+    private bool showImageViewer = false;
+    private string selectedImageUrl = string.Empty;
+    private string selectedImageAlt = string.Empty;
+
+    // Key handling
+    private bool preventDefaultEnter = false;
+
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThemeState.OnChange += OnThemeChanged;
+
+        // Check if user has accepted disclaimer
+        var hasAcceptedDisclaimer = await LocalStorage.GetItemAsync<bool>("ai_chatbot_disclaimer_accepted");
+        if (!hasAcceptedDisclaimer)
+        {
+            showDisclaimer = true;
+        }
+
+        // Load quick actions and suggested questions
+        quickActions = await ChatbotService.GetQuickActionsAsync();
+        suggestedQuestions = await ChatbotService.GetSuggestedQuestionsAsync();
+
+        // Load current session from storage
+        var savedSession = await StorageService.GetCurrentSessionAsync();
+        if (savedSession != null)
+        {
+            currentSession = savedSession;
+        }
+
+        // Load conversation history
+        await LoadConversationHistory();
+    }
+
+    private void OnThemeChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleAcceptDisclaimer()
+    {
+        await LocalStorage.SetItemAsync("ai_chatbot_disclaimer_accepted", true);
+        showDisclaimer = false;
+    }
+
+    private async Task HandleDeclineDisclaimer()
+    {
+        showDisclaimer = false;
+        // Redirect to patient dashboard
+        Navigation.NavigateTo("/patient/dashboard");
+        await Task.CompletedTask;
+    }
+
+    private async Task LoadConversationHistory()
+    {
+        isLoadingConversations = true;
+        savedConversations = await ChatbotService.GetConversationHistoryAsync();
+        isLoadingConversations = false;
+    }
+
+    private async Task SendMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        isSending = true;
+
+        // Add user message
+        var userMessage = new ChatMessage
+        {
+            Content = message,
+            Role = "user",
+            Timestamp = DateTime.UtcNow
+        };
+        currentSession.Messages.Add(userMessage);
+        userInput = string.Empty;
+
+        // Add loading message
+        var loadingMessage = new ChatMessage
+        {
+            Role = "assistant",
+            IsLoading = true
+        };
+        currentSession.Messages.Add(loadingMessage);
+
+        StateHasChanged();
+        await ScrollToBottom();
+
+        // Send to AI
+        var response = await ChatbotService.SendMessageAsync(message, currentSession.Id);
+
+        // Remove loading message
+        currentSession.Messages.Remove(loadingMessage);
+
+        if (response != null)
+        {
+            currentSession.Messages.Add(response);
+            currentSession.LastMessageAt = DateTime.UtcNow;
+        }
+
+        await StorageService.SaveCurrentSessionAsync(currentSession);
+
+        isSending = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    private async Task HandleSymptomAnalysis(SymptomInput input)
+    {
+        showSymptomChecker = false;
+        isSending = true;
+
+        // Add user message
+        var userMessage = new ChatMessage
+        {
+            Content = $"I'm experiencing these symptoms: {string.Join(", ", input.Symptoms)}. Duration: {input.Duration}, Severity: {input.Severity}",
+            Role = "user",
+            Timestamp = DateTime.UtcNow,
+            Type = MessageType.SymptomAnalysis
+        };
+        currentSession.Messages.Add(userMessage);
+
+        var loadingMessage = new ChatMessage { Role = "assistant", IsLoading = true };
+        currentSession.Messages.Add(loadingMessage);
+        StateHasChanged();
+
+        var result = await ChatbotService.AnalyzeSymptomsAsync(input);
+
+        currentSession.Messages.Remove(loadingMessage);
+
+        if (result != null)
+        {
+            var aiMessage = new ChatMessage
+            {
+                Content = "I've analyzed your symptoms. Here's what I found:",
+                Role = "assistant",
+                Timestamp = DateTime.UtcNow,
+                Type = MessageType.SymptomAnalysis,
+                Metadata = new ChatMessageMetadata
+                {
+                    SymptomAnalysis = result
+                }
+            };
+            currentSession.Messages.Add(aiMessage);
+        }
+
+        await StorageService.SaveCurrentSessionAsync(currentSession);
+        isSending = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    private async Task HandleImageAnalysis(ImageAnalysisRequest request)
+    {
+        showImageAnalysis = false;
+        isSending = true;
+
+        var userMessage = new ChatMessage
+        {
+            Content = $"Please analyze this {request.ImageType} image. {request.Context}",
+            Role = "user",
+            Timestamp = DateTime.UtcNow,
+            Type = MessageType.ImageAnalysis,
+            Attachments = new List<ChatAttachment>
+            {
+                new ChatAttachment { Url = request.ImageUrl, FileType = "image/*" }
+            }
+        };
+        currentSession.Messages.Add(userMessage);
+
+        var loadingMessage = new ChatMessage { Role = "assistant", IsLoading = true };
+        currentSession.Messages.Add(loadingMessage);
+        StateHasChanged();
+
+        var result = await ChatbotService.AnalyzeImageAsync(request);
+
+        currentSession.Messages.Remove(loadingMessage);
+
+        if (result != null)
+        {
+            var aiMessage = new ChatMessage
+            {
+                Content = result.Analysis,
+                Role = "assistant",
+                Timestamp = DateTime.UtcNow,
+                Type = MessageType.ImageAnalysis,
+                Metadata = new ChatMessageMetadata
+                {
+                    ImageAnalysis = result
+                }
+            };
+            currentSession.Messages.Add(aiMessage);
+        }
+
+        await StorageService.SaveCurrentSessionAsync(currentSession);
+        isSending = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    private async Task HandleVoiceInput(string audioDataUrl)
+    {
+        try
+        {
+            Logger.LogInformation("Voice input received, converting to text...");
+
+            // Convert audio to text using the voice-to-text service
+            var text = await VoiceToTextService.ConvertToTextAsync(audioDataUrl);
+
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                // Set the converted text as user input
+                userInput = text;
+                StateHasChanged();
+
+                // Optionally, auto-send the message
+                // await SendMessage(text);
+
+                Logger.LogInformation("Voice converted to text: {Text}", text);
+                ToastService.ShowSuccess("Voice converted to text successfully!");
+            }
+            else
+            {
+                Logger.LogWarning("Voice-to-text conversion returned empty result");
+                ToastService.ShowWarning("Could not convert voice to text. Please try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error handling voice input");
+            ToastService.ShowError("Error processing voice input");
+        }
+    }
+
+    private async Task HandleQuickAction(string action)
+    {
+        if (action == "Check Symptoms")
+        {
+            showSymptomChecker = true;
+        }
+        else if (action == "Analyze Image")
+        {
+            showImageAnalysis = true;
+        }
+        else
+        {
+            await SendMessage($"I'd like help with: {action}");
+        }
+    }
+
+    private async Task HandleSuggestedAction(string action)
+    {
+        await SendMessage(action);
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        preventDefaultEnter = (e.Key == "Enter" && !e.ShiftKey);
+
+        if (preventDefaultEnter)
+        {
+            await SendMessage(userInput);
+        }
+    }
+
+    private async Task StartNewChat()
+    {
+        // Check if there are unsaved messages
+        if (currentSession.Messages.Any() && !currentSession.IsSaved)
+        {
+            showNewChatDialog = true;
+            return;
+        }
+
+        await HandleNewChatConfirm();
+    }
+
+    private async Task HandleNewChatConfirm()
+    {
+        currentSession = new ChatSession();
+        await StorageService.ClearCurrentSessionAsync();
+        showSidebar = false;
+        showNewChatDialog = false;
+    }
+
+    private async Task LoadConversation(string conversationId)
+    {
+        try
+        {
+            var messageDtos = await ChatbotService.LoadConversationAsync(conversationId);
+
+            if (messageDtos != null && messageDtos.Any())
+            {
+                // Map DTOs to ChatSession
+                currentSession = new ChatSession
+                {
+                    Id = conversationId,
+                    IsSaved = true,
+                    LastMessageAt = messageDtos.LastOrDefault()?.Timestamp ?? DateTime.UtcNow,
+                    Messages = messageDtos.Select(MapDtoToChatMessage).ToList()
+                };
+
+                // Get conversation title from saved conversations
+                var savedConv = savedConversations.FirstOrDefault(c => c.Id == conversationId);
+                if (savedConv != null)
+                {
+                    currentSession.Title = savedConv.Title;
+                }
+
+                await StorageService.SaveCurrentSessionAsync(currentSession);
+                showSidebar = false;
+                StateHasChanged();
+                await ScrollToBottom();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading conversation");
+            ToastService.ShowError("Failed to load conversation");
+        }
+    }
+
+    private ChatMessage MapDtoToChatMessage(MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.DTOs.ChatMessageDto dto)
+    {
+        return new ChatMessage
+        {
+            Id = dto.Id,
+            Content = dto.Content,
+            Role = dto.Role,
+            Timestamp = dto.Timestamp,
+            Type = ParseMessageType(dto.MessageType),
+            Attachments = dto.Attachments?.Select(a => new ChatAttachment
+            {
+                Id = a.Id,
+                FileName = a.FileName,
+                FileType = a.FileType,
+                Url = a.Url
+            }).ToList(),
+            Metadata = dto.Metadata != null ? new ChatMessageMetadata
+            {
+                SuggestedActions = dto.Metadata.SuggestedActions,
+                UrgencyLevel = dto.Metadata.UrgencyLevel,
+                SymptomAnalysis = dto.Metadata.SymptomAnalysis != null ? MapSymptomAnalysisDtoToModel(dto.Metadata.SymptomAnalysis) : null,
+                ImageAnalysis = dto.Metadata.ImageAnalysis != null ? MapImageAnalysisDtoToModel(dto.Metadata.ImageAnalysis) : null
+            } : null
+        };
+    }
+
+    private SymptomAnalysisResult MapSymptomAnalysisDtoToModel(SymptomAnalysisDto dto)
+    {
+        return new SymptomAnalysisResult
+        {
+            Id = dto.Id,
+            Symptoms = dto.Symptoms,
+            UrgencyLevel = dto.UrgencyLevel,
+            UrgencyMessage = dto.UrgencyMessage,
+            RecommendedActions = dto.RecommendedActions,
+            PossibleConditions = dto.PossibleConditions.Select(c => new PossibleCondition
+            {
+                Name = c.Name,
+                Description = c.Description,
+                Probability = c.Probability,
+                Severity = c.Severity
+            }).ToList()
+        };
+    }
+
+    private ImageAnalysisResult MapImageAnalysisDtoToModel(ImageAnalysisDto dto)
+    {
+        return new ImageAnalysisResult
+        {
+            Id = dto.Id,
+            ImageUrl = dto.ImageUrl,
+            Analysis = dto.Analysis,
+            Confidence = dto.Confidence,
+            Recommendations = dto.Recommendations,
+            Findings = dto.Findings.Select(f => new Finding
+            {
+                Category = f.Category,
+                Description = f.Description,
+                Severity = f.Severity,
+                Confidence = f.Confidence
+            }).ToList()
+        };
+    }
+
+    private MessageType ParseMessageType(string? type)
+    {
+        return type?.ToLower() switch
+        {
+            "text" => MessageType.Text,
+            "image" => MessageType.Image,
+            "voice" => MessageType.Voice,
+            "symptomanalysis" => MessageType.SymptomAnalysis,
+            "imageanalysis" => MessageType.ImageAnalysis,
+            "system" => MessageType.System,
+            _ => MessageType.Text
+        };
+    }
+
+    private async Task DeleteConversation(string conversationId)
+    {
+        conversationToDelete = conversationId;
+        showDeleteConversationDialog = true;
+        await Task.CompletedTask;
+    }
+
+    private async Task HandleDeleteConversationConfirm()
+    {
+        try
+        {
+            var success = await ChatbotService.DeleteConversationAsync(conversationToDelete);
+            if (success)
+            {
+                ToastService.ShowSuccess("Conversation deleted successfully");
+                await LoadConversationHistory();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to delete conversation");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error deleting conversation");
+            ToastService.ShowError("An error occurred while deleting the conversation");
+        }
+        finally
+        {
+            showDeleteConversationDialog = false;
+            conversationToDelete = string.Empty;
+        }
+    }
+
+    private void ShowSaveConversationDialog()
+    {
+        showSaveModal = true;
+    }
+
+    private async Task HandleSaveConversation((string title, string summary) data)
+    {
+        try
+        {
+            var success = await ChatbotService.SaveConversationAsync(currentSession.Id, data.title, data.summary);
+
+            if (success)
+            {
+                currentSession.IsSaved = true;
+                currentSession.Title = data.title;
+                await StorageService.SaveCurrentSessionAsync(currentSession);
+                await LoadConversationHistory();
+
+                ToastService.ShowSuccess("Conversation saved successfully!");
+                showSaveModal = false;
+            }
+            else
+            {
+                ToastService.ShowError("Failed to save conversation");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error saving conversation");
+            ToastService.ShowError("An error occurred while saving the conversation");
+        }
+    }
+
+    private void ConfirmClearChat()
+    {
+        showClearChatDialog = true;
+    }
+
+    private async Task HandleClearChatConfirm()
+    {
+        currentSession = new ChatSession();
+        await StorageService.ClearCurrentSessionAsync();
+        showClearChatDialog = false;
+        ToastService.ShowInfo("Chat cleared");
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await Task.Delay(100);
+            await JS.InvokeVoidAsync("scrollHelper.scrollToBottom", chatContainer);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not scroll to bottom");
+        }
+    }
+
+    private void ViewImage(string imageUrl, string altText = "")
+    {
+        selectedImageUrl = imageUrl;
+        selectedImageAlt = altText;
+        showImageViewer = true;
+    }
+
+    public void Dispose()
+    {
+        ThemeState.OnChange -= OnThemeChanged;
+    }
+}
+
+<style>
+    @@keyframes slide-up {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-slide-up {
+        animation: slide-up 0.3s ease-out;
+    }
+</style>

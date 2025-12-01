@@ -1,0 +1,698 @@
+/* Modern Camera Component Styles */
+
+.modern-camera-container {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+.modern-camera-container[data-theme="dark"] {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #ffffff;
+}
+
+.modern-camera-container[data-theme="light"] {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    color: #1a1a2e;
+}
+
+/* Camera Launch Screen */
+.camera-launch-screen {
+    padding: 60px 30px;
+    text-align: center;
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.camera-icon-wrapper {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+.camera-icon {
+    font-size: 80px;
+    color: #667eea;
+    position: relative;
+    z-index: 2;
+}
+
+.camera-pulse {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(102, 126, 234, 0.3), transparent);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 0.5;
+    }
+}
+
+.launch-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.launch-subtitle {
+    font-size: 16px;
+    opacity: 0.7;
+    margin-bottom: 40px;
+}
+
+.btn-start-camera {
+    padding: 16px 48px;
+    font-size: 18px;
+    font-weight: 600;
+    border: none;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-start-camera:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.btn-start-camera:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.error-message {
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: rgba(220, 38, 38, 0.1);
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    border-radius: 8px;
+    color: #dc2626;
+    font-size: 14px;
+}
+
+/* Camera Active View */
+.camera-active-view {
+    position: relative;
+    background: #000;
+}
+
+.video-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    overflow: hidden;
+}
+
+.camera-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Grid Overlays */
+.grid-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.grid-overlay.rule-of-thirds {
+    background-image:
+        linear-gradient(to bottom, transparent 33.33%, rgba(255, 255, 255, 0.3) 33.33%, rgba(255, 255, 255, 0.3) 33.43%, transparent 33.43%, transparent 66.66%, rgba(255, 255, 255, 0.3) 66.66%, rgba(255, 255, 255, 0.3) 66.76%, transparent 66.76%),
+        linear-gradient(to right, transparent 33.33%, rgba(255, 255, 255, 0.3) 33.33%, rgba(255, 255, 255, 0.3) 33.43%, transparent 33.43%, transparent 66.66%, rgba(255, 255, 255, 0.3) 66.66%, rgba(255, 255, 255, 0.3) 66.76%, transparent 66.76%);
+}
+
+.grid-overlay.medical-grid {
+    background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 9.9%, rgba(255, 255, 255, 0.2) 10%),
+        repeating-linear-gradient(90deg, transparent, transparent 9.9%, rgba(255, 255, 255, 0.2) 10%);
+}
+
+/* Quality Overlay */
+.quality-overlay {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.quality-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    align-self: flex-start;
+}
+
+.quality-excellent {
+    background: rgba(34, 197, 94, 0.7);
+}
+
+.quality-good {
+    background: rgba(59, 130, 246, 0.7);
+}
+
+.quality-fair {
+    background: rgba(251, 191, 36, 0.7);
+}
+
+.quality-poor {
+    background: rgba(239, 68, 68, 0.7);
+}
+
+.quality-metrics {
+    display: flex;
+    gap: 12px;
+}
+
+.metric {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    font-size: 12px;
+}
+
+.quality-recommendation {
+    padding: 8px 16px;
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    font-size: 13px;
+    max-width: 100%;
+}
+
+/* Recording Indicator */
+.recording-indicator {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    background: rgba(220, 38, 38, 0.9);
+    color: white;
+    font-weight: 600;
+    z-index: 2;
+}
+
+.rec-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: white;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 50%, 100% {
+        opacity: 1;
+    }
+    25%, 75% {
+        opacity: 0.3;
+    }
+}
+
+/* Camera Controls */
+.camera-controls {
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+}
+
+.controls-top,
+.controls-bottom {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    gap: 12px;
+}
+
+.controls-top {
+    margin-bottom: 20px;
+}
+
+.control-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.control-btn-danger {
+    background: rgba(220, 38, 38, 0.3);
+}
+
+.control-btn-danger:hover {
+    background: rgba(220, 38, 38, 0.5);
+}
+
+/* Mode Selector */
+.mode-selector {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.mode-btn.active {
+    background: rgba(102, 126, 234, 0.3);
+    border-color: #667eea;
+    color: white;
+}
+
+.mode-btn i {
+    font-size: 20px;
+}
+
+/* Capture Button */
+.capture-button-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.capture-button {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.capture-button:active {
+    transform: scale(0.95);
+}
+
+.capture-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 4px solid white;
+    box-sizing: border-box;
+}
+
+.capture-inner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.video-mode .capture-inner {
+    background: #dc2626;
+}
+
+.video-mode.recording .capture-inner.square {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+}
+
+/* Gallery Preview */
+.gallery-preview {
+    position: relative;
+}
+
+.gallery-thumbnail {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+.gallery-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gallery-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #667eea;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Preview Screen */
+.preview-screen {
+    background: #000;
+    min-height: 600px;
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-content {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+}
+
+.preview-image,
+.preview-video {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+.annotation-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+
+.annotation-toolbar {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 50px;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+}
+
+.annotation-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.annotation-btn.active {
+    background: #667eea;
+}
+
+.annotation-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.color-picker .color-input {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid white;
+    cursor: pointer;
+}
+
+/* Preview Controls */
+.preview-controls {
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.preview-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.preview-btn {
+    padding: 12px 24px;
+    border-radius: 50px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preview-btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.preview-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.preview-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.preview-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Gallery View */
+.gallery-view {
+    background: rgba(0, 0, 0, 0.95);
+    min-height: 600px;
+    display: flex;
+    flex-direction: column;
+}
+
+.gallery-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.gallery-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 16px;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.gallery-item {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.gallery-item:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.video-thumbnail {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.video-thumbnail i {
+    font-size: 40px;
+    margin-bottom: 8px;
+}
+
+.delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(220, 38, 38, 0.9);
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.gallery-item:hover .delete-btn {
+    opacity: 1;
+}
+
+.delete-btn:hover {
+    background: #dc2626;
+    transform: scale(1.1);
+}
+
+.gallery-footer {
+    padding: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: center;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+    .modern-camera-container {
+        border-radius: 0;
+    }
+
+    .launch-title {
+        font-size: 24px;
+    }
+
+    .launch-subtitle {
+        font-size: 14px;
+    }
+
+    .btn-start-camera {
+        padding: 14px 36px;
+        font-size: 16px;
+    }
+
+    .quality-metrics {
+        flex-wrap: wrap;
+    }
+
+    .control-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+
+    .capture-button {
+        width: 70px;
+        height: 70px;
+    }
+
+    .capture-inner {
+        width: 52px;
+        height: 52px;
+    }
+
+    .gallery-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+
+    .preview-actions {
+        flex-direction: column;
+    }
+
+    .preview-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}

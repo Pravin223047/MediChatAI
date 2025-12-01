@@ -1,0 +1,1729 @@
+@page "/patient/book-appointment"
+@using Microsoft.AspNetCore.Components.Authorization
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Components
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@using MediChatAI_BlazorWebAssembly.Core.Services.GraphQL
+@using Blazored.LocalStorage
+@using System.Security.Claims
+@inject AppSettingsState AppSettings
+@inject IThemeService ThemeService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService LocalStorage
+@inject ILogger<AppointmentBooking> Logger
+@inject ThemeState ThemeState
+@inject IGraphQLService GraphQLService
+@inject MediChatAI_BlazorWebAssembly.Core.Services.UI.IToastService ToastService
+
+<PageTitle>Book Appointment - @AppSettings.Settings.SiteName</PageTitle>
+
+<AuthorizeRouteGuard RequiredRole="Patient">
+
+<!-- Appointment Booking Wizard -->
+<div class="min-h-screen transition-colors duration-300 @(IsDarkMode ? "bg-gray-900" : "bg-gradient-to-br from-blue-50 to-indigo-50") py-8">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <!-- Header -->
+        <div class="mb-6 sm:mb-8">
+            <button @onclick="GoBack" class="mb-3 sm:mb-4 inline-flex items-center text-xs sm:text-sm @(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900")">
+                <i class="fas fa-arrow-left mr-2"></i>
+                Back to Dashboard
+            </button>
+            <h1 class="text-2xl sm:text-3xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                Book an Appointment
+            </h1>
+            <p class="mt-2 text-xs sm:text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                Complete the steps below to schedule your appointment
+            </p>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="mb-8">
+            <!-- Mobile: Vertical Steps -->
+            <div class="md:hidden space-y-3">
+                @for (int i = 1; i <= 5; i++)
+                {
+                    var stepNum = i;
+                    var isActive = currentStep == stepNum;
+                    var isCompleted = currentStep > stepNum;
+
+                    <div class="flex items-center gap-3">
+                        <div class="@(isCompleted ? "bg-gradient-to-r from-green-500 to-green-600 shadow-lg shadow-green-500/50" :
+                                      isActive ? "bg-gradient-to-r from-primary to-purple-600 shadow-lg shadow-primary/50" :
+                                      IsDarkMode ? "bg-gray-700" : "bg-gray-300")
+                                    w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center text-white text-sm font-semibold transition-all transform @(isActive ? "scale-110" : "")">
+                            @if (isCompleted)
+                            {
+                                <i class="fas fa-check text-sm"></i>
+                            }
+                            else
+                            {
+                                <i class="fas @GetStepIcon(stepNum) text-sm"></i>
+                            }
+                        </div>
+                        <div class="flex-1">
+                            <span class="text-sm @(isActive ? IsDarkMode ? "text-white font-semibold" : "text-gray-900 font-semibold" : IsDarkMode ? "text-gray-500" : "text-gray-600")">
+                                @GetStepName(stepNum)
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Desktop/Tablet: Horizontal Steps -->
+            <div class="hidden md:flex items-center justify-between">
+                @for (int i = 1; i <= 5; i++)
+                {
+                    var stepNum = i;
+                    var isActive = currentStep == stepNum;
+                    var isCompleted = currentStep > stepNum;
+
+                    <div class="flex items-center @(i < 5 ? "flex-1" : "")">
+                        <div class="relative flex flex-col items-center">
+                            <div class="@(isCompleted ? "bg-gradient-to-r from-green-500 to-green-600 shadow-lg shadow-green-500/50" :
+                                          isActive ? "bg-gradient-to-r from-primary to-purple-600 shadow-lg shadow-primary/50" :
+                                          IsDarkMode ? "bg-gray-700" : "bg-gray-300")
+                                        w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold transition-all transform @(isActive ? "scale-110" : "")">
+                                @if (isCompleted)
+                                {
+                                    <i class="fas fa-check text-lg"></i>
+                                }
+                                else
+                                {
+                                    <i class="fas @GetStepIcon(stepNum) text-lg"></i>
+                                }
+                            </div>
+                            <span class="absolute top-14 text-xs @(isActive ? IsDarkMode ? "text-white font-bold" : "text-gray-900 font-bold" : IsDarkMode ? "text-gray-500" : "text-gray-600") whitespace-nowrap font-medium">
+                                @GetStepName(stepNum)
+                            </span>
+                        </div>
+                        @if (i < 5)
+                        {
+                            <div class="flex-1 h-1 mx-2 @(isCompleted ? "bg-gradient-to-r from-green-500 to-green-600" : IsDarkMode ? "bg-gray-700" : "bg-gray-300") transition-all duration-500"></div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Wizard Content Card -->
+        <div class="@(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white") rounded-2xl shadow-2xl border p-4 sm:p-6 md:p-8 mt-8 md:mt-16 transition-all duration-500 hover:shadow-3xl">
+
+            @if (currentStep == 1)
+            {
+                <!-- Step 1: Doctor Selection -->
+                <div class="space-y-6">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-r from-primary to-purple-600 flex items-center justify-center">
+                            <i class="fas fa-user-md text-white text-xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h2 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                                Select a Doctor
+                            </h2>
+                            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                Choose your preferred doctor and view their availability
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Specialty Filter -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Filter by Specialty
+                        </label>
+                        <select @bind="selectedSpecialty"
+                                class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900") focus:ring-2 focus:ring-primary">
+                            <option value="">All Specialties</option>
+                            <option value="Cardiology">Cardiology</option>
+                            <option value="Dermatology">Dermatology</option>
+                            <option value="Neurology">Neurology</option>
+                            <option value="Orthopedics">Orthopedics</option>
+                            <option value="Pediatrics">Pediatrics</option>
+                            <option value="General Practice">General Practice</option>
+                        </select>
+                    </div>
+
+                    <!-- Doctors List -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        @if (isLoadingDoctors)
+                        {
+                            @for (int i = 0; i < 4; i++)
+                            {
+                                <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-100") rounded-lg p-4 animate-pulse">
+                                    <div class="flex items-start gap-4">
+                                        <div class="w-16 h-16 bg-gray-400 rounded-full"></div>
+                                        <div class="flex-1 space-y-2">
+                                            <div class="h-4 bg-gray-400 rounded w-3/4"></div>
+                                            <div class="h-3 bg-gray-400 rounded w-1/2"></div>
+                                            <div class="h-3 bg-gray-400 rounded w-2/3"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else if (availableDoctors.Count == 0)
+                        {
+                            <div class="col-span-2 text-center py-12">
+                                <i class="fas fa-user-md text-4xl @(IsDarkMode ? "text-gray-600" : "text-gray-400") mb-3"></i>
+                                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                    No doctors available. Please try again later.
+                                </p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var doctor in availableDoctors)
+                            {
+                                <div @onclick="() => SelectDoctor(doctor.Id)"
+                                     class="@(selectedDoctorId == doctor.Id ? "ring-2 ring-primary" : "")
+                                            @(IsDarkMode ? "bg-gray-700 hover:bg-gray-650" : "bg-gray-50 hover:bg-gray-100")
+                                            rounded-lg p-4 cursor-pointer transition-all">
+                                    <div class="flex items-start gap-4">
+                                        <div class="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+                                            @if (!string.IsNullOrEmpty(doctor.ProfilePictureUrl))
+                                            {
+                                                <img src="@doctor.ProfilePictureUrl"
+                                                     alt="@doctor.FullName"
+                                                     class="profile-image w-full h-full object-cover"
+                                                     data-initials="@GetDoctorInitials(doctor.FullName)"
+                                                     onerror="window.handleImageError(this, '@GetDoctorInitials(doctor.FullName)')" />
+                                            }
+                                            else
+                                            {
+                                                @GetDoctorInitials(doctor.FullName)
+                                            }
+                                        </div>
+                                        <div class="flex-1">
+                                            <h3 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                                Dr. @doctor.FullName
+                                            </h3>
+                                            <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                                @doctor.Specialization
+                                            </p>
+                                            <div class="flex items-center gap-2 mt-2">
+                                                <div class="flex items-center">
+                                                    <i class="fas fa-star text-yellow-400 text-xs"></i>
+                                                    <span class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") ml-1">
+                                                        @doctor.Rating.ToString("F1")
+                                                    </span>
+                                                </div>
+                                                <span class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")">•</span>
+                                                <span class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                                    @doctor.YearsOfExperience years exp
+                                                </span>
+                                            </div>
+                                        </div>
+                                        @if (selectedDoctorId == doctor.Id)
+                                        {
+                                            <div class="flex-shrink-0">
+                                                <i class="fas fa-check-circle text-primary text-xl"></i>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <!-- Date and Time Selection (shown after doctor selection) -->
+                    @if (!string.IsNullOrEmpty(selectedDoctorId))
+                    {
+                        <div class="mt-8 pt-8 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                            <h3 class="text-xl font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
+                                Select Date & Time
+                            </h3>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <!-- Date Picker -->
+                                <div>
+                                    <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                        Preferred Date
+                                    </label>
+                                    <input type="date"
+                                           @bind="selectedDate"
+                                           min="@DateTime.Today.ToString("yyyy-MM-dd")"
+                                           max="@DateTime.Today.AddDays(30).ToString("yyyy-MM-dd")"
+                                           class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900") focus:ring-2 focus:ring-primary" />
+                                </div>
+
+                                <!-- Appointment Type -->
+                                <div>
+                                    <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                        Appointment Type
+                                    </label>
+                                    <select @bind="appointmentType"
+                                            class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900") focus:ring-2 focus:ring-primary">
+                                        <option value="General">General Consultation</option>
+                                        <option value="FollowUp">Follow-up Visit</option>
+                                        <option value="Emergency">Emergency</option>
+                                        <option value="Checkup">Regular Checkup</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Available Time Slots -->
+                            @if (selectedDate.HasValue)
+                            {
+                                <div class="mt-6">
+                                    <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">
+                                        Available Time Slots
+                                    </label>
+
+                                    @if (isLoadingTimeSlots)
+                                    {
+                                        <div class="grid grid-cols-4 md:grid-cols-6 gap-3">
+                                            @for (int i = 0; i < 12; i++)
+                                            {
+                                                <div class="h-10 bg-gray-400 rounded-lg animate-pulse"></div>
+                                            }
+                                        </div>
+                                    }
+                                    else if (availableTimeSlots.Count == 0)
+                                    {
+                                        <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                            No available time slots for this date. Please select another date.
+                                        </p>
+                                    }
+                                    else
+                                    {
+                                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                            @foreach (var slot in availableTimeSlots)
+                                            {
+                                                <button @onclick="() => SelectTimeSlot(slot)"
+                                                        disabled="@(!slot.IsAvailable)"
+                                                        class="@(selectedTimeSlot?.StartTime == slot.StartTime ? "bg-primary text-white" :
+                                                                !slot.IsAvailable ? IsDarkMode ? "bg-gray-700 text-gray-500 cursor-not-allowed" : "bg-gray-200 text-gray-400 cursor-not-allowed" :
+                                                                IsDarkMode ? "bg-gray-700 text-white hover:bg-gray-600" : "bg-white text-gray-900 hover:bg-gray-100")
+                                                               px-3 py-2 rounded-lg text-sm font-medium border @(IsDarkMode ? "border-gray-600" : "border-gray-300") transition-colors">
+                                                    @slot.StartTime.ToString("hh:mm tt")
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else if (currentStep == 2)
+            {
+                <!-- Step 2: Basic Information -->
+                <div class="space-y-6">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-r from-primary to-purple-600 flex items-center justify-center">
+                            <i class="fas fa-user-circle text-white text-xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h2 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                                Basic Information
+                            </h2>
+                            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                Please provide your personal and contact information
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Personal Information -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Full Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text"
+                                   @bind="basicInfo.FullName"
+                                   @onblur="ValidateFullName"
+                                   placeholder="Enter your full name"
+                                   class="@GetInputClass("FullName")" />
+                            @if (fieldErrors.GetValueOrDefault("FullName"))
+                            {
+                                <p class="mt-1 text-sm text-red-500">
+                                    <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["FullName"]
+                                </p>
+                            }
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Age <span class="text-red-500">*</span>
+                            </label>
+                            <input type="number"
+                                   @bind="basicInfo.Age"
+                                   @onblur="ValidateAge"
+                                   min="1"
+                                   max="120"
+                                   placeholder="Enter your age"
+                                   class="@GetInputClass("Age")" />
+                            @if (fieldErrors.GetValueOrDefault("Age"))
+                            {
+                                <p class="mt-1 text-sm text-red-500">
+                                    <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["Age"]
+                                </p>
+                            }
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Gender <span class="text-red-500">*</span>
+                            </label>
+                            <select @bind="basicInfo.Gender"
+                                    @onblur="ValidateGender"
+                                    class="@GetInputClass("Gender")">
+                                <option value="">Select gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                                <option value="PreferNotToSay">Prefer not to say</option>
+                            </select>
+                            @if (fieldErrors.GetValueOrDefault("Gender"))
+                            {
+                                <p class="mt-1 text-sm text-red-500">
+                                    <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["Gender"]
+                                </p>
+                            }
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Date of Birth <span class="text-red-500">*</span>
+                            </label>
+                            <input type="date"
+                                   @bind="basicInfo.DateOfBirth"
+                                   @onblur="ValidateDateOfBirth"
+                                   max="@DateTime.Today.ToString("yyyy-MM-dd")"
+                                   class="@GetInputClass("DateOfBirth")" />
+                            @if (fieldErrors.GetValueOrDefault("DateOfBirth"))
+                            {
+                                <p class="mt-1 text-sm text-red-500">
+                                    <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["DateOfBirth"]
+                                </p>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Contact Information -->
+                    <div class="pt-6 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                        <h3 class="text-lg font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
+                            Contact Information
+                        </h3>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Phone Number <span class="text-red-500">*</span>
+                                </label>
+                                <input type="tel"
+                                       @bind="basicInfo.PhoneNumber"
+                                       @onblur="ValidatePhoneNumber"
+                                       placeholder="+1 (555) 123-4567"
+                                       class="@GetInputClass("PhoneNumber")" />
+                                @if (fieldErrors.GetValueOrDefault("PhoneNumber"))
+                                {
+                                    <p class="mt-1 text-sm text-red-500">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["PhoneNumber"]
+                                    </p>
+                                }
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Email Address <span class="text-red-500">*</span>
+                                </label>
+                                <input type="email"
+                                       @bind="basicInfo.Email"
+                                       @onblur="ValidateEmail"
+                                       placeholder="your.email@example.com"
+                                       class="@GetInputClass("Email")" />
+                                @if (fieldErrors.GetValueOrDefault("Email"))
+                                {
+                                    <p class="mt-1 text-sm text-red-500">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["Email"]
+                                    </p>
+                                }
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Address
+                                </label>
+                                <input type="text"
+                                       @bind="basicInfo.Address"
+                                       placeholder="Street address"
+                                       class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    City
+                                </label>
+                                <input type="text"
+                                       @bind="basicInfo.City"
+                                       placeholder="City"
+                                       class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    State / Province
+                                </label>
+                                <input type="text"
+                                       @bind="basicInfo.State"
+                                       placeholder="State"
+                                       class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    ZIP / Postal Code
+                                </label>
+                                <input type="text"
+                                       @bind="basicInfo.ZipCode"
+                                       placeholder="12345"
+                                       class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Country
+                                </label>
+                                <input type="text"
+                                       @bind="basicInfo.Country"
+                                       placeholder="Country"
+                                       class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Emergency Contact -->
+                    <div class="pt-6 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                        <h3 class="text-lg font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
+                            Emergency Contact
+                        </h3>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Contact Name <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text"
+                                       @bind="basicInfo.EmergencyContactName"
+                                       @onblur="ValidateEmergencyContactName"
+                                       placeholder="Emergency contact full name"
+                                       class="@GetInputClass("EmergencyContactName")" />
+                                @if (fieldErrors.GetValueOrDefault("EmergencyContactName"))
+                                {
+                                    <p class="mt-1 text-sm text-red-500">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["EmergencyContactName"]
+                                    </p>
+                                }
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Relationship <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text"
+                                       @bind="basicInfo.EmergencyContactRelationship"
+                                       @onblur="ValidateEmergencyContactRelationship"
+                                       placeholder="e.g., Spouse, Parent, Sibling"
+                                       class="@GetInputClass("EmergencyContactRelationship")" />
+                                @if (fieldErrors.GetValueOrDefault("EmergencyContactRelationship"))
+                                {
+                                    <p class="mt-1 text-sm text-red-500">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["EmergencyContactRelationship"]
+                                    </p>
+                                }
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Contact Phone <span class="text-red-500">*</span>
+                                </label>
+                                <input type="tel"
+                                       @bind="basicInfo.EmergencyContactPhone"
+                                       @onblur="ValidateEmergencyContactPhone"
+                                       placeholder="+1 (555) 123-4567"
+                                       class="@GetInputClass("EmergencyContactPhone")" />
+                                @if (fieldErrors.GetValueOrDefault("EmergencyContactPhone"))
+                                {
+                                    <p class="mt-1 text-sm text-red-500">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["EmergencyContactPhone"]
+                                    </p>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (currentStep == 3)
+            {
+                <!-- Step 3: Medical History -->
+                <div class="space-y-6">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-r from-primary to-purple-600 flex items-center justify-center">
+                            <i class="fas fa-heartbeat text-white text-xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h2 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                                Medical History
+                            </h2>
+                            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                Help us understand your medical background for better care
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Blood Type -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Blood Type
+                            </label>
+                            <select @bind="medicalHistory.BloodType"
+                                    class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900") focus:ring-2 focus:ring-primary">
+                                <option value="">Select blood type</option>
+                                <option value="A+">A+</option>
+                                <option value="A-">A-</option>
+                                <option value="B+">B+</option>
+                                <option value="B-">B-</option>
+                                <option value="AB+">AB+</option>
+                                <option value="AB-">AB-</option>
+                                <option value="O+">O+</option>
+                                <option value="O-">O-</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Height (cm)
+                            </label>
+                            <input type="number"
+                                   @bind="medicalHistory.Height"
+                                   placeholder="e.g., 170"
+                                   class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Weight (kg)
+                            </label>
+                            <input type="number"
+                                   @bind="medicalHistory.Weight"
+                                   placeholder="e.g., 70"
+                                   class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                        </div>
+                    </div>
+
+                    <!-- Allergies -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Allergies
+                        </label>
+                        <textarea @bind="medicalHistory.Allergies"
+                                  rows="3"
+                                  placeholder="List any known allergies (medications, food, environmental, etc.)"
+                                  class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary"></textarea>
+                        <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") mt-1">
+                            Separate multiple allergies with commas
+                        </p>
+                    </div>
+
+                    <!-- Current Medications -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Current Medications
+                        </label>
+                        <textarea @bind="medicalHistory.CurrentMedications"
+                                  rows="3"
+                                  placeholder="List all medications you are currently taking (include dosage if known)"
+                                  class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary"></textarea>
+                    </div>
+
+                    <!-- Past Medical Conditions -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Past Medical Conditions
+                        </label>
+                        <textarea @bind="medicalHistory.PastConditions"
+                                  rows="3"
+                                  placeholder="Describe any past medical conditions, illnesses, or diagnoses"
+                                  class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary"></textarea>
+                    </div>
+
+                    <!-- Chronic Diseases Checklist -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">
+                            Chronic Conditions (Select all that apply)
+                        </label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            @foreach (var condition in chronicConditions)
+                            {
+                                <label class="flex items-center p-3 rounded-lg cursor-pointer @(IsDarkMode ? "bg-gray-700 hover:bg-gray-650" : "bg-gray-50 hover:bg-gray-100") transition-colors">
+                                    <input type="checkbox"
+                                           checked="@medicalHistory.ChronicConditions.Contains(condition)"
+                                           @onchange="e => ToggleChronicCondition(condition, (bool)e.Value!)"
+                                           class="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded" />
+                                    <span class="ml-2 text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                        @condition
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Previous Surgeries -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Previous Surgeries
+                        </label>
+                        <textarea @bind="medicalHistory.PreviousSurgeries"
+                                  rows="3"
+                                  placeholder="List any previous surgeries and approximate dates"
+                                  class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary"></textarea>
+                    </div>
+
+                    <!-- Family History -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Family Medical History
+                        </label>
+                        <textarea @bind="medicalHistory.FamilyHistory"
+                                  rows="3"
+                                  placeholder="Any hereditary conditions or diseases in your family (cancer, diabetes, heart disease, etc.)"
+                                  class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary"></textarea>
+                    </div>
+                </div>
+            }
+            else if (currentStep == 4)
+            {
+                <!-- Step 4: Symptoms & Reason -->
+                <div class="space-y-6">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-r from-primary to-purple-600 flex items-center justify-center">
+                            <i class="fas fa-clipboard-list text-white text-xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h2 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                                Symptoms & Reason for Visit
+                            </h2>
+                            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                Describe your symptoms using text, voice, images, or all three
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Text Description -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Symptom Description <span class="text-red-500">*</span>
+                        </label>
+                        <textarea @bind="symptomsInfo.Description"
+                                  @onblur="ValidateSymptomDescription"
+                                  rows="5"
+                                  placeholder="Please describe your symptoms in detail: when they started, how severe they are, any triggers or patterns you've noticed..."
+                                  class="@GetInputClass("SymptomDescription")"></textarea>
+                        @if (fieldErrors.GetValueOrDefault("SymptomDescription"))
+                        {
+                            <p class="mt-1 text-sm text-red-500">
+                                <i class="fas fa-exclamation-circle mr-1"></i>@errorMessages["SymptomDescription"]
+                            </p>
+                        }
+                        <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") mt-1">
+                            Provide as much detail as possible for accurate diagnosis
+                        </p>
+                    </div>
+
+                    <!-- Voice Recording -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">
+                            Voice Recording (Optional)
+                        </label>
+                        <VoiceRecorderComponent OnRecordingCompleted="HandleVoiceRecording" />
+                    </div>
+
+                    <!-- Photo/Camera/Video - UPGRADED: Modern AI-Powered Camera -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">
+                            Photos & Videos (Optional)
+                        </label>
+                        <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") mb-3">
+                            Capture clear photos and videos of symptoms with AI-powered quality guidance
+                        </p>
+                        <ModernCameraCaptureComponent OnMediaCaptured="HandleMediaCaptured" IsDarkMode="@IsDarkMode" />
+                    </div>
+
+                    <!-- File Upload for Medical Documents -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">
+                            Upload Medical Reports or Lab Results (Optional)
+                        </label>
+                        <FileUploadComponent
+                            AcceptedFileTypes="image/*,.pdf"
+                            FileTypeMessage="Images and PDF files up to 10MB"
+                            OnFilesUploaded="HandleFilesUploaded" />
+                    </div>
+                </div>
+            }
+            else if (currentStep == 5)
+            {
+                <!-- Step 5: Insurance & Payment -->
+                <div class="space-y-6">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-r from-primary to-purple-600 flex items-center justify-center">
+                            <i class="fas fa-credit-card text-white text-xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h2 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
+                                Insurance & Payment Information
+                            </h2>
+                            <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                Provide your insurance details for faster processing
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Insurance Information -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Insurance Provider
+                            </label>
+                            <input type="text"
+                                   @bind="insuranceInfo.Provider"
+                                   placeholder="e.g., Blue Cross, Aetna, UnitedHealthcare"
+                                   class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Policy Number
+                            </label>
+                            <input type="text"
+                                   @bind="insuranceInfo.PolicyNumber"
+                                   placeholder="Your policy/member ID"
+                                   class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Group Number
+                            </label>
+                            <input type="text"
+                                   @bind="insuranceInfo.GroupNumber"
+                                   placeholder="Group number (if applicable)"
+                                   class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900 placeholder-gray-500") focus:ring-2 focus:ring-primary" />
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                Policy Expiry Date
+                            </label>
+                            <input type="date"
+                                   @bind="insuranceInfo.ExpiryDate"
+                                   class="w-full px-4 py-2 rounded-lg border @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900") focus:ring-2 focus:ring-primary" />
+                        </div>
+                    </div>
+
+                    <!-- Insurance Card Upload -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">
+                            Insurance Card (Front and Back)
+                        </label>
+                        <FileUploadComponent
+                            AllowMultiple="true"
+                            AcceptedFileTypes="image/*"
+                            FileTypeMessage="Upload photos of both sides of your insurance card"
+                            OnFilesUploaded="HandleInsuranceCardUploaded" />
+                    </div>
+
+                    <!-- Consultation Fee -->
+                    <div class="p-4 rounded-lg @(IsDarkMode ? "bg-gray-800" : "bg-blue-50")">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                    Estimated Consultation Fee
+                                </p>
+                                <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") mt-1">
+                                    Final amount may vary based on services provided
+                                </p>
+                            </div>
+                            <p class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                $150
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Terms and Conditions -->
+                    <div class="p-4 rounded-lg border @(IsDarkMode ? "border-gray-700 bg-gray-800" : "border-gray-300 bg-white")">
+                        <label class="flex items-start cursor-pointer">
+                            <input type="checkbox"
+                                   @bind="agreedToTerms"
+                                   class="mt-1 w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded" />
+                            <span class="ml-3 text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                I agree to the <a href="/terms" class="text-primary hover:underline">Terms & Conditions</a> and
+                                <a href="/privacy" class="text-primary hover:underline">Privacy Policy</a>. I understand that this appointment
+                                request will be reviewed by the doctor and I will be notified of the approval status.
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            }
+
+            <!-- Error Message Display -->
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="mt-6 p-4 rounded-lg border-2 border-red-500 @(IsDarkMode ? "bg-red-900 bg-opacity-20" : "bg-red-50")">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-xl mt-0.5 mr-3"></i>
+                        <div>
+                            <h4 class="font-semibold text-red-700 @(IsDarkMode ? "text-red-400" : "")">Error</h4>
+                            <p class="text-sm text-red-600 @(IsDarkMode ? "text-red-300" : "") mt-1">@errorMessage</p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Navigation Buttons -->
+            <div class="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-8 pt-6 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                <button @onclick="PreviousStep"
+                        disabled="@(currentStep == 1)"
+                        class="group relative overflow-hidden w-full sm:w-auto px-8 py-3.5 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 hover:shadow-lg
+                               @(currentStep == 1 ? "opacity-40 cursor-not-allowed scale-100 hover:scale-100 hover:shadow-none" : "")
+                               @(IsDarkMode ? "bg-gray-700 text-white hover:bg-gray-600" : "bg-gray-200 text-gray-800 hover:bg-gray-300")">
+                    <span class="relative z-10 flex items-center justify-center gap-2">
+                        <i class="fas fa-arrow-left"></i>
+                        <span>Previous</span>
+                    </span>
+                </button>
+
+                @if (currentStep < 5)
+                {
+                    <button @onclick="() => { if (CanProceedToNextStep()) NextStep(); }"
+                            disabled="@(!CanProceedToNextStep())"
+                            class="group relative overflow-hidden w-full sm:w-auto px-8 py-3.5 rounded-lg font-semibold bg-gradient-to-r from-primary to-purple-600 text-white transition-all duration-300 transform hover:shadow-xl hover:shadow-primary/50
+                                   @(!CanProceedToNextStep() ? "opacity-40 cursor-not-allowed" : "hover:scale-105")">
+                        <span class="relative z-10 flex items-center justify-center gap-2">
+                            <span>Next Step</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </span>
+                        @if (CanProceedToNextStep())
+                        {
+                            <div class="absolute inset-0 bg-gradient-to-r from-purple-600 to-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        }
+                    </button>
+                }
+                else
+                {
+                    <button @onclick="SubmitAppointmentRequest"
+                            disabled="@(isSubmitting || !agreedToTerms)"
+                            class="group relative overflow-hidden w-full sm:w-auto px-8 py-3.5 rounded-lg font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white transition-all duration-300 transform hover:scale-105 hover:shadow-xl hover:shadow-green-500/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100 disabled:hover:shadow-none">
+                        <span class="relative z-10 flex items-center justify-center gap-2">
+                            @if (isSubmitting)
+                            {
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Submitting...</span>
+                            }
+                            else
+                            {
+                                <i class="fas fa-check-circle"></i>
+                                <span>Submit Appointment Request</span>
+                            }
+                        </span>
+                        @if (!isSubmitting && agreedToTerms)
+                        {
+                            <div class="absolute inset-0 bg-gradient-to-r from-emerald-600 to-green-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        }
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+</AuthorizeRouteGuard>
+
+@code {
+    // Helper property for dark mode
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    // Wizard state
+    private int currentStep = 1;
+    private bool isSubmitting = false;
+    private string errorMessage = "";
+
+    // Validation state
+    private Dictionary<string, bool> fieldErrors = new();
+    private Dictionary<string, string> errorMessages = new();
+
+    // Step 1: Doctor Selection
+    private bool isLoadingDoctors = false;
+    private bool isLoadingTimeSlots = false;
+    private string selectedSpecialty = "";
+    private string selectedDoctorId = "";
+    private DateTime? selectedDate = null;
+    private string appointmentType = "General";
+    private TimeSlotDto? selectedTimeSlot = null;
+    private List<DoctorDto> availableDoctors = new();
+    private List<TimeSlotDto> availableTimeSlots = new();
+
+    // Step 2: Basic Information
+    private BasicInfoModel basicInfo = new();
+
+    // Step 3: Medical History
+    private MedicalHistoryModel medicalHistory = new();
+    private List<string> chronicConditions = new()
+    {
+        "Diabetes", "Hypertension", "Asthma", "Heart Disease",
+        "Kidney Disease", "Liver Disease", "Cancer", "Arthritis",
+        "Thyroid Disorder", "COPD", "Epilepsy", "Depression/Anxiety"
+    };
+
+    // Step 4: Symptoms
+    private SymptomsInfoModel symptomsInfo = new();
+
+    // Step 5: Insurance
+    private InsuranceInfoModel insuranceInfo = new();
+    private bool agreedToTerms = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDoctors();
+    }
+
+    private async Task LoadDoctors()
+    {
+        isLoadingDoctors = true;
+        try
+        {
+            // Load doctors from GraphQL
+            var query = @"
+                query GetAvailableDoctors($specialization: String) {
+                    availableDoctors(specialization: $specialization) {
+                        id
+                        fullName
+                        specialization
+                        profileImage
+                        yearsOfExperience
+                        department
+                        rating
+                        isAvailable
+                    }
+                }";
+
+            var variables = new
+            {
+                specialization = string.IsNullOrWhiteSpace(selectedSpecialty) ? null : selectedSpecialty
+            };
+
+            var response = await GraphQLService.SendQueryAsync<dynamic>(query, variables);
+
+            // GraphQL service returns the data portion already unwrapped
+            // Access availableDoctors property from the JsonElement
+            System.Text.Json.JsonElement responseElement = response;
+
+            if (!responseElement.TryGetProperty("availableDoctors", out var doctorsElement))
+            {
+                Logger.LogWarning("availableDoctors property not found in GraphQL response");
+                availableDoctors = new List<DoctorDto>();
+                return;
+            }
+
+            availableDoctors = new List<DoctorDto>();
+
+            foreach (var doctor in doctorsElement.EnumerateArray())
+            {
+                // Safely extract values from JsonElement using GetProperty
+                string id = doctor.GetProperty("id").GetString() ?? "";
+                string fullName = doctor.GetProperty("fullName").GetString() ?? "";
+
+                var specializationProp = doctor.GetProperty("specialization");
+                string specialization = specializationProp.ValueKind == System.Text.Json.JsonValueKind.Null
+                    ? "General Practice"
+                    : specializationProp.GetString() ?? "General Practice";
+
+                var ratingProp = doctor.GetProperty("rating");
+                decimal rating = ratingProp.ValueKind == System.Text.Json.JsonValueKind.Null
+                    ? 0m
+                    : (decimal)ratingProp.GetDouble();
+
+                var yearsExpProp = doctor.GetProperty("yearsOfExperience");
+                int yearsOfExperience = yearsExpProp.ValueKind == System.Text.Json.JsonValueKind.Null
+                    ? 0
+                    : yearsExpProp.GetInt32();
+
+                var profileImageProp = doctor.GetProperty("profileImage");
+                string? profileImage = profileImageProp.ValueKind == System.Text.Json.JsonValueKind.Null
+                    ? null
+                    : profileImageProp.GetString();
+
+                availableDoctors.Add(new DoctorDto(
+                    id,
+                    fullName,
+                    specialization,
+                    rating,
+                    yearsOfExperience,
+                    profileImage
+                ));
+            }
+
+            Logger.LogInformation("Loaded {Count} doctors from database", availableDoctors.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading doctors from GraphQL");
+            errorMessage = "Failed to load doctors. Please try again.";
+            ToastService.ShowError("Failed to load doctors. Please try again.");
+            availableDoctors = new List<DoctorDto>();
+        }
+        finally
+        {
+            isLoadingDoctors = false;
+        }
+    }
+
+    private void SelectDoctor(string doctorId)
+    {
+        selectedDoctorId = doctorId;
+        selectedDate = null;
+        selectedTimeSlot = null;
+        availableTimeSlots.Clear();
+        StateHasChanged();
+    }
+
+    private async Task LoadTimeSlots()
+    {
+        if (!selectedDate.HasValue || string.IsNullOrEmpty(selectedDoctorId))
+            return;
+
+        isLoadingTimeSlots = true;
+        availableTimeSlots.Clear();
+        selectedTimeSlot = null;
+
+        try
+        {
+            // TODO: Load time slots from GraphQL
+            await Task.Delay(300); // Simulate API call
+
+            // Generate sample time slots
+            var startTime = selectedDate.Value.Date.AddHours(9); // 9 AM
+            for (int i = 0; i < 16; i++) // 8 hours of slots (9 AM - 5 PM)
+            {
+                var slotStart = startTime.AddMinutes(i * 30);
+                var slotEnd = slotStart.AddMinutes(30);
+                var isAvailable = Random.Shared.Next(0, 100) > 30; // 70% available
+
+                availableTimeSlots.Add(new TimeSlotDto(slotStart, slotEnd, isAvailable));
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading time slots");
+        }
+        finally
+        {
+            isLoadingTimeSlots = false;
+        }
+    }
+
+    private void SelectTimeSlot(TimeSlotDto slot)
+    {
+        if (slot.IsAvailable)
+        {
+            selectedTimeSlot = slot;
+        }
+    }
+
+    private string GetStepName(int step)
+    {
+        return step switch
+        {
+            1 => "Select Doctor",
+            2 => "Basic Info",
+            3 => "Medical History",
+            4 => "Symptoms",
+            5 => "Insurance",
+            _ => ""
+        };
+    }
+
+    private string GetStepIcon(int step)
+    {
+        return step switch
+        {
+            1 => "fa-user-md",
+            2 => "fa-user-circle",
+            3 => "fa-heartbeat",
+            4 => "fa-clipboard-list",
+            5 => "fa-credit-card",
+            _ => ""
+        };
+    }
+
+    private string MapAppointmentTypeToGraphQL(string appointmentType)
+    {
+        return appointmentType switch
+        {
+            "General" => "GENERAL",
+            "FollowUp" => "FOLLOW_UP",
+            "Emergency" => "EMERGENCY",
+            "Consultation" => "CONSULTATION",
+            "Checkup" => "CHECKUP",
+            "Surgery" => "SURGERY",
+            "Vaccination" => "VACCINATION",
+            "LabTest" => "LAB_TEST",
+            _ => "GENERAL"  // Default to GENERAL
+        };
+    }
+
+    private bool CanProceedToNextStep()
+    {
+        return currentStep switch
+        {
+            1 => !string.IsNullOrEmpty(selectedDoctorId) &&
+                 selectedDate.HasValue &&
+                 selectedTimeSlot != null,
+            2 => !string.IsNullOrWhiteSpace(basicInfo.FullName) &&
+                 basicInfo.Age > 0 &&
+                 !string.IsNullOrWhiteSpace(basicInfo.Gender) &&
+                 basicInfo.DateOfBirth.HasValue &&
+                 !string.IsNullOrWhiteSpace(basicInfo.PhoneNumber) &&
+                 !string.IsNullOrWhiteSpace(basicInfo.Email) &&
+                 !string.IsNullOrWhiteSpace(basicInfo.EmergencyContactName) &&
+                 !string.IsNullOrWhiteSpace(basicInfo.EmergencyContactRelationship) &&
+                 !string.IsNullOrWhiteSpace(basicInfo.EmergencyContactPhone),
+            3 => true, // Optional fields, always allow proceed
+            4 => !string.IsNullOrWhiteSpace(symptomsInfo.Description),
+            5 => agreedToTerms,
+            _ => false
+        };
+    }
+
+    private void NextStep()
+    {
+        if (!CanProceedToNextStep())
+        {
+            // Show validation error based on current step
+            switch (currentStep)
+            {
+                case 1:
+                    if (string.IsNullOrEmpty(selectedDoctorId))
+                        ToastService.ShowError("Please select a doctor to continue");
+                    else if (!selectedDate.HasValue)
+                        ToastService.ShowError("Please select a preferred date");
+                    else if (selectedTimeSlot == null)
+                        ToastService.ShowError("Please select a time slot");
+                    break;
+                case 2:
+                    ToastService.ShowError("Please fill in all required fields in Basic Information");
+                    break;
+                case 4:
+                    ToastService.ShowError("Please describe your symptoms");
+                    break;
+            }
+            return;
+        }
+
+        if (currentStep < 5)
+        {
+            // Show toast with current step number BEFORE incrementing
+            ToastService.ShowSuccess($"Step {currentStep} completed!");
+            currentStep++;
+        }
+    }
+
+    private void PreviousStep()
+    {
+        if (currentStep > 1)
+        {
+            currentStep--;
+        }
+    }
+
+    private async Task SubmitAppointmentRequest()
+    {
+        if (!agreedToTerms)
+        {
+            ToastService.ShowError("Please agree to the Terms & Conditions to continue");
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = "";
+        try
+        {
+            // Get authenticated user ID
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                errorMessage = "User not authenticated. Please login again.";
+                ToastService.ShowError("You are not authenticated. Please login again.");
+                Logger.LogError("User ID not found in authentication state");
+                return;
+            }
+
+            ToastService.ShowInfo("Submitting your appointment request...");
+
+            // Build GraphQL mutation
+            var mutation = @"
+                mutation CreateAppointmentRequest($input: CreateAppointmentRequestDtoInput!) {
+                    createAppointmentRequest(input: $input) {
+                        id
+                        patientId
+                        fullName
+                        status
+                        requestedAt
+                        preferredDate
+                    }
+                }";
+
+            // Map all form data to the input object
+            var variables = new
+            {
+                input = new
+                {
+                    // Basic Info
+                    patientId = userId,
+                    preferredDoctorId = selectedDoctorId,
+                    fullName = basicInfo.FullName,
+                    age = basicInfo.Age,
+                    gender = basicInfo.Gender,
+                    email = basicInfo.Email,
+                    phoneNumber = basicInfo.PhoneNumber,
+                    alternatePhoneNumber = basicInfo.AlternatePhoneNumber,
+                    address = basicInfo.Address,
+                    city = basicInfo.City,
+                    state = basicInfo.State,
+                    zipCode = basicInfo.ZipCode,
+
+                    // Emergency Contact
+                    emergencyContactName = basicInfo.EmergencyContactName,
+                    emergencyContactPhone = basicInfo.EmergencyContactPhone,
+                    emergencyContactRelation = basicInfo.EmergencyContactRelationship,
+
+                    // Medical History
+                    bloodType = medicalHistory.BloodType,
+                    allergies = medicalHistory.Allergies,
+                    currentMedications = medicalHistory.CurrentMedications,
+                    pastMedicalConditions = medicalHistory.PastConditions,
+                    chronicDiseases = string.Join(", ", medicalHistory.ChronicConditions),
+                    previousSurgeries = medicalHistory.PreviousSurgeries,
+                    familyMedicalHistory = medicalHistory.FamilyHistory,
+
+                    // Symptoms & Reason
+                    symptomDescription = symptomsInfo.Description,
+                    symptomDuration = symptomsInfo.Duration,
+                    symptomSeverity = symptomsInfo.Severity,
+                    reasonForVisit = symptomsInfo.ReasonForVisit,
+                    preferredAppointmentType = MapAppointmentTypeToGraphQL(appointmentType),
+
+                    // Multi-modal data - FIXED: Now including photo, video, and document URLs
+                    voiceRecordingUrl = symptomsInfo.VoiceRecordingUrl,
+                    voiceRecordingTranscript = symptomsInfo.VoiceTranscription,
+                    photoUrls = symptomsInfo.PhotoUrls,  // FIX: Added photo URLs array
+                    videoUrls = symptomsInfo.VideoUrls,  // FIX: Added video URLs array
+                    medicalDocumentUrls = symptomsInfo.MedicalDocumentUrls,  // FIX: Added document URLs array
+
+                    // Insurance
+                    insuranceProvider = insuranceInfo.Provider,
+                    insurancePolicyNumber = insuranceInfo.PolicyNumber,
+                    insuranceGroupNumber = insuranceInfo.GroupNumber,
+                    insuranceCardFrontUrl = insuranceInfo.CardFrontUrl,
+                    insuranceCardBackUrl = insuranceInfo.CardBackUrl,
+                    insuranceCardUrls = insuranceInfo.CardImageUrls,  // FIX: Added insurance card URLs array
+                    insuranceExpiryDate = insuranceInfo.ExpiryDate,
+                    paymentMethod = insuranceInfo.PaymentMethod,
+
+                    // Preferences - FIXED: Combine date and time into single DateTime
+                    preferredDate = selectedDate.HasValue && selectedTimeSlot != null
+                        ? selectedDate.Value.Date.Add(selectedTimeSlot.StartTime.TimeOfDay)
+                        : selectedDate,
+                    preferredTimeSlot = selectedTimeSlot?.StartTime.ToString("hh:mm tt"),
+                    isUrgent = symptomsInfo.IsUrgent,
+                    patientAdditionalNotes = symptomsInfo.AdditionalNotes
+                }
+            };
+
+            // Submit via GraphQL - FIXED: Use strongly-typed response
+            var response = await GraphQLService.SendQueryAsync<CreateAppointmentRequestResponse>(mutation, variables);
+
+            if (response?.CreateAppointmentRequest?.Id > 0)
+            {
+                Logger.LogInformation("Appointment request submitted successfully with ID {RequestId}, {PhotoCount} photos, {DocCount} documents, and {InsCardCount} insurance cards",
+                    response.CreateAppointmentRequest.Id,
+                    symptomsInfo.PhotoUrls.Count,
+                    symptomsInfo.MedicalDocumentUrls.Count,
+                    insuranceInfo.CardImageUrls.Count);
+
+                // Show success message with toast notification
+                ToastService.ShowSuccess("Appointment request submitted successfully! Redirecting...");
+                await LocalStorage.SetItemAsync("appointmentSubmitSuccess", true);
+
+                // Wait a moment before redirecting
+                await Task.Delay(1500);
+
+                // Navigate to dashboard
+                Navigation.NavigateTo("/patient/dashboard");
+            }
+            else
+            {
+                errorMessage = "Failed to submit appointment request. Please try again.";
+                ToastService.ShowError("Failed to submit your request. Please try again.");
+                Logger.LogError("GraphQL mutation returned invalid or null response");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error submitting appointment request");
+            errorMessage = $"An error occurred: {ex.Message}";
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/patient/dashboard");
+    }
+
+    private void ToggleChronicCondition(string condition, bool isChecked)
+    {
+        if (isChecked && !medicalHistory.ChronicConditions.Contains(condition))
+        {
+            medicalHistory.ChronicConditions.Add(condition);
+        }
+        else if (!isChecked && medicalHistory.ChronicConditions.Contains(condition))
+        {
+            medicalHistory.ChronicConditions.Remove(condition);
+        }
+    }
+
+    private void HandleVoiceRecording(VoiceRecorderComponent.RecordingInfo recording)
+    {
+        symptomsInfo.VoiceRecordingUrl = recording.AudioData;
+        symptomsInfo.VoiceTranscription = recording.Transcription;
+        Logger.LogInformation("Voice recording captured");
+    }
+
+    private void HandleMediaCaptured(List<CapturedMediaInfo> mediaList)
+    {
+        // Clear existing media from symptoms info
+        symptomsInfo.PhotoUrls.Clear();
+        symptomsInfo.VideoUrls.Clear();
+
+        // Process captured media
+        foreach (var media in mediaList)
+        {
+            if (media.Type == MediaType.Photo)
+            {
+                symptomsInfo.PhotoUrls.Add(media.DataUrl);
+            }
+            else if (media.Type == MediaType.Video)
+            {
+                symptomsInfo.VideoUrls.Add(media.DataUrl);
+            }
+        }
+
+        Logger.LogInformation("Media captured: {PhotoCount} photos, {VideoCount} videos",
+            symptomsInfo.PhotoUrls.Count, symptomsInfo.VideoUrls.Count);
+        StateHasChanged();
+    }
+
+    private void HandleFilesUploaded(List<FileUploadComponent.UploadedFileInfo> files)
+    {
+        foreach (var file in files)
+        {
+            symptomsInfo.MedicalDocumentUrls.Add(file.CloudinaryUrl);
+        }
+        Logger.LogInformation("{Count} files uploaded", files.Count);
+    }
+
+    private void HandleInsuranceCardUploaded(List<FileUploadComponent.UploadedFileInfo> files)
+    {
+        foreach (var file in files)
+        {
+            insuranceInfo.CardImageUrls.Add(file.CloudinaryUrl);
+        }
+        Logger.LogInformation("{Count} insurance card images uploaded", files.Count);
+    }
+
+    // Validation Methods
+    private void ValidateFullName()
+    {
+        if (string.IsNullOrWhiteSpace(basicInfo.FullName))
+        {
+            fieldErrors["FullName"] = true;
+            errorMessages["FullName"] = "Full name is required";
+        }
+        else
+        {
+            fieldErrors["FullName"] = false;
+            errorMessages.Remove("FullName");
+        }
+    }
+
+    private void ValidateAge()
+    {
+        if (basicInfo.Age <= 0 || basicInfo.Age > 120)
+        {
+            fieldErrors["Age"] = true;
+            errorMessages["Age"] = "Please enter a valid age (1-120)";
+        }
+        else
+        {
+            fieldErrors["Age"] = false;
+            errorMessages.Remove("Age");
+        }
+    }
+
+    private void ValidateGender()
+    {
+        if (string.IsNullOrWhiteSpace(basicInfo.Gender))
+        {
+            fieldErrors["Gender"] = true;
+            errorMessages["Gender"] = "Please select a gender";
+        }
+        else
+        {
+            fieldErrors["Gender"] = false;
+            errorMessages.Remove("Gender");
+        }
+    }
+
+    private void ValidateDateOfBirth()
+    {
+        if (!basicInfo.DateOfBirth.HasValue)
+        {
+            fieldErrors["DateOfBirth"] = true;
+            errorMessages["DateOfBirth"] = "Date of birth is required";
+        }
+        else if (basicInfo.DateOfBirth.Value > DateTime.Today)
+        {
+            fieldErrors["DateOfBirth"] = true;
+            errorMessages["DateOfBirth"] = "Date of birth cannot be in the future";
+        }
+        else
+        {
+            fieldErrors["DateOfBirth"] = false;
+            errorMessages.Remove("DateOfBirth");
+        }
+    }
+
+    private void ValidatePhoneNumber()
+    {
+        if (string.IsNullOrWhiteSpace(basicInfo.PhoneNumber))
+        {
+            fieldErrors["PhoneNumber"] = true;
+            errorMessages["PhoneNumber"] = "Phone number is required";
+        }
+        else
+        {
+            fieldErrors["PhoneNumber"] = false;
+            errorMessages.Remove("PhoneNumber");
+        }
+    }
+
+    private void ValidateEmail()
+    {
+        if (string.IsNullOrWhiteSpace(basicInfo.Email))
+        {
+            fieldErrors["Email"] = true;
+            errorMessages["Email"] = "Email address is required";
+        }
+        else if (!basicInfo.Email.Contains("@") || !basicInfo.Email.Contains("."))
+        {
+            fieldErrors["Email"] = true;
+            errorMessages["Email"] = "Please enter a valid email address";
+        }
+        else
+        {
+            fieldErrors["Email"] = false;
+            errorMessages.Remove("Email");
+        }
+    }
+
+    private void ValidateEmergencyContactName()
+    {
+        if (string.IsNullOrWhiteSpace(basicInfo.EmergencyContactName))
+        {
+            fieldErrors["EmergencyContactName"] = true;
+            errorMessages["EmergencyContactName"] = "Emergency contact name is required";
+        }
+        else
+        {
+            fieldErrors["EmergencyContactName"] = false;
+            errorMessages.Remove("EmergencyContactName");
+        }
+    }
+
+    private void ValidateEmergencyContactRelationship()
+    {
+        if (string.IsNullOrWhiteSpace(basicInfo.EmergencyContactRelationship))
+        {
+            fieldErrors["EmergencyContactRelationship"] = true;
+            errorMessages["EmergencyContactRelationship"] = "Relationship is required";
+        }
+        else
+        {
+            fieldErrors["EmergencyContactRelationship"] = false;
+            errorMessages.Remove("EmergencyContactRelationship");
+        }
+    }
+
+    private void ValidateEmergencyContactPhone()
+    {
+        if (string.IsNullOrWhiteSpace(basicInfo.EmergencyContactPhone))
+        {
+            fieldErrors["EmergencyContactPhone"] = true;
+            errorMessages["EmergencyContactPhone"] = "Emergency contact phone is required";
+        }
+        else
+        {
+            fieldErrors["EmergencyContactPhone"] = false;
+            errorMessages.Remove("EmergencyContactPhone");
+        }
+    }
+
+    private void ValidateSymptomDescription()
+    {
+        if (string.IsNullOrWhiteSpace(symptomsInfo.Description))
+        {
+            fieldErrors["SymptomDescription"] = true;
+            errorMessages["SymptomDescription"] = "Please describe your symptoms";
+        }
+        else if (symptomsInfo.Description.Length < 10)
+        {
+            fieldErrors["SymptomDescription"] = true;
+            errorMessages["SymptomDescription"] = "Please provide more details (at least 10 characters)";
+        }
+        else
+        {
+            fieldErrors["SymptomDescription"] = false;
+            errorMessages.Remove("SymptomDescription");
+        }
+    }
+
+    private string GetInputClass(string fieldName, string baseClass = "")
+    {
+        var defaultClass = $"w-full px-4 py-2 rounded-lg border {(IsDarkMode ? "bg-gray-700 text-white placeholder-gray-400" : "bg-white text-gray-900 placeholder-gray-500")} focus:ring-2 focus:ring-primary";
+
+        if (!string.IsNullOrEmpty(baseClass))
+        {
+            defaultClass = baseClass;
+        }
+
+        if (fieldErrors.ContainsKey(fieldName) && fieldErrors[fieldName])
+        {
+            return $"{defaultClass} border-red-500 ring-2 ring-red-200";
+        }
+
+        return $"{defaultClass} {(IsDarkMode ? "border-gray-600" : "border-gray-300")}";
+    }
+
+    // Watch for date and specialty changes
+    private DateTime? _previousDate;
+    private string _previousSpecialty = "";
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Reload doctors if specialty filter changes
+        if (selectedSpecialty != _previousSpecialty)
+        {
+            _previousSpecialty = selectedSpecialty;
+            await LoadDoctors();
+            StateHasChanged();
+        }
+
+        // Reload time slots if date changes
+        if (selectedDate != _previousDate && selectedDate.HasValue)
+        {
+            _previousDate = selectedDate;
+            await LoadTimeSlots();
+            StateHasChanged();
+        }
+    }
+
+    // Placeholder DTOs (will be replaced with StrawberryShake generated types)
+    private record DoctorDto(string Id, string FullName, string Specialization, decimal Rating, int YearsOfExperience, string? ProfilePictureUrl);
+    private record TimeSlotDto(DateTime StartTime, DateTime EndTime, bool IsAvailable);
+
+    // Data models for wizard steps
+    private class BasicInfoModel
+    {
+        public string FullName { get; set; } = "";
+        public int Age { get; set; }
+        public string Gender { get; set; } = "";
+        public DateTime? DateOfBirth { get; set; }
+        public string PhoneNumber { get; set; } = "";
+        public string AlternatePhoneNumber { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string City { get; set; } = "";
+        public string State { get; set; } = "";
+        public string ZipCode { get; set; } = "";
+        public string Country { get; set; } = "";
+        public string EmergencyContactName { get; set; } = "";
+        public string EmergencyContactRelationship { get; set; } = "";
+        public string EmergencyContactPhone { get; set; } = "";
+    }
+
+    private class MedicalHistoryModel
+    {
+        public string BloodType { get; set; } = "";
+        public decimal? Height { get; set; }
+        public decimal? Weight { get; set; }
+        public string Allergies { get; set; } = "";
+        public string CurrentMedications { get; set; } = "";
+        public string PastConditions { get; set; } = "";
+        public List<string> ChronicConditions { get; set; } = new();
+        public string PreviousSurgeries { get; set; } = "";
+        public string FamilyHistory { get; set; } = "";
+    }
+
+    private class SymptomsInfoModel
+    {
+        public string Description { get; set; } = "";
+        public string Duration { get; set; } = "";
+        public string Severity { get; set; } = "";
+        public string ReasonForVisit { get; set; } = "";
+        public bool IsUrgent { get; set; } = false;
+        public string AdditionalNotes { get; set; } = "";
+        public string VoiceRecordingUrl { get; set; } = "";
+        public string VoiceTranscription { get; set; } = "";
+        public List<string> PhotoUrls { get; set; } = new();
+        public List<string> VideoUrls { get; set; } = new(); // ADDED: Video support
+        public List<string> MedicalDocumentUrls { get; set; } = new();
+    }
+
+    private class InsuranceInfoModel
+    {
+        public string Provider { get; set; } = "";
+        public string PolicyNumber { get; set; } = "";
+        public string GroupNumber { get; set; } = "";
+        public DateTime? ExpiryDate { get; set; }
+        public string CardFrontUrl { get; set; } = "";
+        public string CardBackUrl { get; set; } = "";
+        public string PaymentMethod { get; set; } = "";
+        public List<string> CardImageUrls { get; set; } = new();
+    }
+
+    private string GetDoctorInitials(string? doctorName)
+    {
+        if (string.IsNullOrWhiteSpace(doctorName))
+            return "Dr";
+
+        var parts = doctorName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        if (parts.Length == 1 && parts[0].Length > 0)
+            return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+
+        return "Dr";
+    }
+}

@@ -1,0 +1,2663 @@
+@page "/patient/messages"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Services
+@using MediChatAI_BlazorWebAssembly.Features.Patient.Components
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@using MediChatAI_BlazorWebAssembly.Core.Services.UI
+@using System.Security.Claims
+@using ServiceDtos = MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ThemeState ThemeState
+@inject IMessagingService MessagingService
+@inject ISmartReplyService SmartReplyService
+@inject IMedicalTermService MedicalTermService
+@inject IToastService ToastService
+@inject ILogger<Messages> Logger
+@attribute [Authorize(Roles = "Patient")]
+
+<PageTitle>Messages - MediChat AI</PageTitle>
+
+<div class="min-h-screen @(IsDarkMode ? "bg-gray-900" : "bg-gray-50") py-6 px-4 sm:px-6 lg:px-8">
+    <div class="w-full">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                        <i class="fas fa-comments text-primary mr-3"></i>Messages
+                    </h1>
+                    <p class="mt-2 @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                        Chat with your healthcare providers
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <!-- Search Button -->
+                    <button @onclick="OpenSearchModal"
+                            class="flex items-center gap-2 px-4 py-2 @(IsDarkMode ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-500 hover:bg-blue-600") text-white rounded-lg transition-colors">
+                        <i class="fas fa-search"></i>
+                        <span class="hidden sm:inline">Search</span>
+                    </button>
+
+                    <!-- Summarize Button -->
+                    <button @onclick="GenerateConversationSummary"
+                            disabled="@(!currentMessages.Any())"
+                            class="flex items-center gap-2 px-4 py-2 @(IsDarkMode ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-500 hover:bg-purple-600") text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-magic"></i>
+                        <span class="hidden sm:inline">Summarize</span>
+                    </button>
+
+                    @if (hubConnection?.State == HubConnectionState.Connected)
+                    {
+                        <div class="flex items-center gap-2 px-3 py-2 rounded-lg @(IsDarkMode ? "bg-green-900/30" : "bg-green-50")">
+                            <span class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                            </span>
+                            <span class="text-sm font-medium text-green-600 dark:text-green-400">Connected</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="flex items-center gap-2 px-3 py-2 rounded-lg @(IsDarkMode ? "bg-gray-800" : "bg-gray-100")">
+                            <span class="relative flex h-3 w-3">
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-gray-400"></span>
+                            </span>
+                            <span class="text-sm font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-600")">Connecting...</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-xl shadow-lg overflow-hidden" style="height: calc(100vh - 240px);">
+            <div class="grid grid-cols-12 h-full">
+                <!-- Conversations Sidebar -->
+                <div class="col-span-12 md:col-span-4 lg:col-span-3 @(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") border-r flex flex-col">
+                    <!-- Search Bar -->
+                    <div class="p-4 @(IsDarkMode ? "border-gray-700" : "border-gray-200") border-b">
+                        <div class="relative">
+                            <input type="text"
+                                   @bind="searchQuery"
+                                   @bind:event="oninput"
+                                   @bind:after="FilterConversations"
+                                   placeholder="Search conversations..."
+                                   class="w-full pl-10 pr-4 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600 placeholder-gray-400" : "bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-500") border focus:ring-2 focus:ring-primary focus:border-transparent transition-all" />
+                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 @(IsDarkMode ? "text-gray-400" : "text-gray-400")"></i>
+                        </div>
+                    </div>
+
+                    <!-- Conversations List -->
+                    <div class="flex-1 overflow-y-auto">
+                        @if (filteredConversations.Any())
+                        {
+                            @foreach (var conversation in filteredConversations)
+                            {
+                                <button @onclick="() => SelectConversation(conversation)"
+                                        class="w-full p-4 flex items-start gap-3 transition-all duration-200 @(selectedConversation?.Id == conversation.Id ? (IsDarkMode ? "bg-primary/20 border-l-4 border-primary" : "bg-primary/10 border-l-4 border-primary") : (IsDarkMode ? "hover:bg-gray-700 border-l-4 border-transparent" : "hover:bg-gray-50 border-l-4 border-transparent"))">
+                                    <div class="relative flex-shrink-0">
+                                        <img src="@conversation.DoctorImage"
+                                             alt="@conversation.DoctorName"
+                                             class="profile-image w-12 h-12 rounded-full object-cover border-2 @(conversation.IsOnline ? "border-green-500" : (IsDarkMode ? "border-gray-600" : "border-gray-300"))"
+                                             data-initials="@GetDoctorInitials(conversation.DoctorName)"
+                                             onerror="window.handleImageError(this, '@GetDoctorInitials(conversation.DoctorName)')" />
+                                        @if (conversation.IsOnline)
+                                        {
+                                            <span class="absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full bg-green-500 ring-2 @(IsDarkMode ? "ring-gray-800" : "ring-white")"></span>
+                                        }
+                                    </div>
+                                    <div class="flex-1 min-w-0 text-left">
+                                        <div class="flex items-start justify-between mb-1">
+                                            <h3 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") truncate">
+                                                @conversation.DoctorName
+                                            </h3>
+                                            <span class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-500") ml-2 flex-shrink-0">
+                                                @FormatMessageTime(conversation.LastMessageTime)
+                                            </span>
+                                        </div>
+                                        <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-1">
+                                            @conversation.Specialty
+                                        </p>
+                                        <div class="flex items-center justify-between">
+                                            <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") truncate flex-1">
+                                                @if (conversation.IsTyping)
+                                                {
+                                                    <span class="text-primary italic">
+                                                        <i class="fas fa-ellipsis-h animate-pulse"></i> typing...
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    @conversation.LastMessage
+                                                }
+                                            </p>
+                                            @if (conversation.UnreadCount > 0)
+                                            {
+                                                <span class="ml-2 flex-shrink-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-primary rounded-full">
+                                                    @conversation.UnreadCount
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-8 text-center">
+                                <i class="fas fa-inbox text-4xl @(IsDarkMode ? "text-gray-600" : "text-gray-300") mb-3"></i>
+                                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-500")">No conversations found</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Chat Area -->
+                <div class="col-span-12 md:col-span-8 lg:col-span-9 flex flex-col">
+                    @if (selectedConversation != null)
+                    {
+                        <!-- Chat Header -->
+                        <div class="p-4 @(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") border-b flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="relative">
+                                    <img src="@selectedConversation.DoctorImage"
+                                         alt="@selectedConversation.DoctorName"
+                                         class="profile-image w-10 h-10 rounded-full object-cover"
+                                         data-initials="@GetDoctorInitials(selectedConversation.DoctorName)"
+                                         onerror="window.handleImageError(this, '@GetDoctorInitials(selectedConversation.DoctorName)')" />
+                                    @if (selectedConversation.IsOnline)
+                                    {
+                                        <span class="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-green-500 ring-2 @(IsDarkMode ? "ring-gray-800" : "ring-white")"></span>
+                                    }
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                        @selectedConversation.DoctorName
+                                    </h3>
+                                    <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                                        @selectedConversation.Specialty
+                                        @if (selectedConversation.IsOnline)
+                                        {
+                                            <span class="text-green-500 ml-2">• Online</span>
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button @onclick="ToggleAiAssistant"
+                                        class="p-2 rounded-lg @(showAiAssistant ? "bg-blue-600 text-white" : (IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600")) transition-colors relative"
+                                        title="AI Medical Assistant">
+                                    <i class="fas fa-robot"></i>
+                                    @if (showAiAssistant)
+                                    {
+                                        <span class="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                                    }
+                                </button>
+                                <button @onclick="OpenAppointmentScheduler"
+                                        class="p-2 rounded-lg @(IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600") transition-colors"
+                                        title="Schedule Appointment">
+                                    <i class="fas fa-calendar-plus"></i>
+                                </button>
+                                <button @onclick="StartVideoCall"
+                                        class="p-2 rounded-lg @(IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600") transition-colors"
+                                        title="Start Video Call">
+                                    <i class="fas fa-video"></i>
+                                </button>
+                                <button @onclick="StartVoiceCall"
+                                        class="p-2 rounded-lg @(IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600") transition-colors"
+                                        title="Start Voice Call">
+                                    <i class="fas fa-phone"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Messages Area -->
+                        <div @ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4 @(IsDarkMode ? "bg-gray-900" : "bg-gray-50")">
+                            @foreach (var message in currentMessages)
+                            {
+                                <div class="flex @(message.IsSentByMe ? "justify-end" : "justify-start")">
+                                    <div class="flex items-end gap-2 max-w-md @(message.IsSentByMe ? "flex-row-reverse" : "flex-row")">
+                                        @if (!message.IsSentByMe)
+                                        {
+                                            <img src="@selectedConversation.DoctorImage"
+                                                 alt="Doctor"
+                                                 class="profile-image w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                                 data-initials="@GetDoctorInitials(selectedConversation.DoctorName)"
+                                                 onerror="window.handleImageError(this, '@GetDoctorInitials(selectedConversation.DoctorName)')" />
+                                        }
+                                        <div class="flex flex-col @(message.IsSentByMe ? "items-end" : "items-start")">
+                                            <div class="relative group @(message.IsSentByMe ? "bg-primary text-white" : (IsDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900")) rounded-2xl px-4 py-2 shadow-sm">
+                                                @if (!string.IsNullOrEmpty(message.Content))
+                                                {
+                                                    @if (editingMessageId == message.Id)
+                                                    {
+                                                        <!-- Edit Mode -->
+                                                        <div class="flex flex-col gap-2">
+                                                            <textarea @bind="editingContent"
+                                                                      class="w-full min-w-[250px] px-2 py-1 text-sm @(IsDarkMode ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                      rows="2"></textarea>
+                                                            <div class="flex gap-2">
+                                                                <button @onclick="() => SaveEdit(message.Id)"
+                                                                        class="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
+                                                                    <i class="fas fa-check mr-1"></i>Save
+                                                                </button>
+                                                                <button @onclick="CancelEdit"
+                                                                        class="px-3 py-1 text-xs @(IsDarkMode ? "bg-gray-600 hover:bg-gray-700" : "bg-gray-300 hover:bg-gray-400") rounded transition-colors">
+                                                                    <i class="fas fa-times mr-1"></i>Cancel
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <p class="text-sm break-words">@message.Content</p>
+                                                    }
+                                                }
+
+                                                @* Audio Message Player *@
+                                                @if (message.MessageType == "Audio" && !string.IsNullOrEmpty(message.AttachmentUrl))
+                                                {
+                                                    <div class="mt-2 flex items-center gap-3 p-3 rounded-lg @(message.IsSentByMe ? "bg-primary-dark" : (IsDarkMode ? "bg-gray-700" : "bg-gray-50"))">
+                                                        <i class="fas fa-microphone text-lg"></i>
+                                                        <audio controls class="flex-1" style="height: 32px; max-width: 250px;">
+                                                            <source src="@message.AttachmentUrl" type="audio/webm">
+                                                            <source src="@message.AttachmentUrl" type="audio/ogg">
+                                                            <source src="@message.AttachmentUrl" type="audio/mp4">
+                                                            Your browser does not support audio playback.
+                                                        </audio>
+                                                    </div>
+                                                }
+
+                                                @* Edit/Delete Actions for sender's messages *@
+                                                @if (message.IsSentByMe && editingMessageId != message.Id && !message.Content.Contains("This message was deleted"))
+                                                {
+                                                    <div class="absolute -top-8 @(message.IsSentByMe ? "right-0" : "left-0") hidden group-hover:flex gap-1 bg-gray-800 rounded-lg px-2 py-1 shadow-lg">
+                                                        <button @onclick="() => StartEdit(message.Id, message.Content)"
+                                                                class="text-white hover:text-blue-400 transition-colors p-1"
+                                                                title="Edit message">
+                                                            <i class="fas fa-edit text-xs"></i>
+                                                        </button>
+                                                        <button @onclick="() => ShowDeleteConfirmation(message.Id)"
+                                                                class="text-white hover:text-red-400 transition-colors p-1"
+                                                                title="Delete message">
+                                                            <i class="fas fa-trash text-xs"></i>
+                                                        </button>
+                                                    </div>
+                                                }
+                                                @if (message.Attachments.Any())
+                                                {
+                                                    <div class="mt-2 space-y-2">
+                                                        @foreach (var attachment in message.Attachments)
+                                                        {
+                                                            <div class="flex items-center gap-2 p-2 rounded-lg @(message.IsSentByMe ? "bg-primary-dark" : (IsDarkMode ? "bg-gray-700" : "bg-gray-50"))">
+                                                                <i class="fas fa-file-@(GetFileIcon(attachment.Type)) text-lg"></i>
+                                                                <div class="flex-1 min-w-0">
+                                                                    <p class="text-xs font-medium truncate">@attachment.Name</p>
+                                                                    <p class="text-xs opacity-75">@attachment.Size</p>
+                                                                </div>
+                                                                <button @onclick="() => DownloadAttachment(attachment)"
+                                                                        class="p-1 hover:opacity-75 transition-opacity">
+                                                                    <i class="fas fa-download text-xs"></i>
+                                                                </button>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-1 px-1">
+                                                <span class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")">
+                                                    @message.Timestamp.ToString("h:mm tt")
+                                                </span>
+                                                @if (message.IsEdited)
+                                                {
+                                                    <span class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400") italic">(edited)</span>
+                                                }
+                                                @if (message.IsSentByMe)
+                                                {
+                                                    @if (message.Status == MessageStatus.Sent)
+                                                    {
+                                                        <i class="fas fa-check text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")"></i>
+                                                    }
+                                                    else if (message.Status == MessageStatus.Delivered)
+                                                    {
+                                                        <i class="fas fa-check-double text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400")"></i>
+                                                    }
+                                                    else if (message.Status == MessageStatus.Read)
+                                                    {
+                                                        <i class="fas fa-check-double text-xs text-primary"></i>
+                                                    }
+                                                }
+                                                <button @onclick="() => ToggleEmojiPicker(message.Id)"
+                                                        class="@(IsDarkMode ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600") transition-colors">
+                                                    <i class="fas fa-smile text-xs"></i>
+                                                </button>
+                                            </div>
+
+                                            @* Display reactions *@
+                                            @if (message.Reactions.Any())
+                                            {
+                                                <div class="flex flex-wrap gap-1 mt-1">
+                                                    @foreach (var reaction in message.Reactions)
+                                                    {
+                                                        <button @onclick="() => ToggleReaction(message.Id, reaction.Emoji, reaction.UserReacted)"
+                                                                class="@(reaction.UserReacted ? (IsDarkMode ? "bg-blue-900/50 border-blue-500" : "bg-blue-50 border-blue-400") : (IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-gray-100 border-gray-300"))
+                                                                       border rounded-full px-2 py-0.5 text-xs flex items-center gap-1 hover:opacity-75 transition-opacity">
+                                                            <span>@reaction.Emoji</span>
+                                                            <span class="@(IsDarkMode ? "text-gray-300" : "text-gray-600")">@reaction.Count</span>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+
+                                            @* Emoji Picker *@
+                                            @if (showEmojiPicker && selectedMessageIdForReaction == message.Id)
+                                            {
+                                                <div class="relative">
+                                                    <EmojiPicker IsVisible="@showEmojiPicker"
+                                                                 IsDarkMode="@IsDarkMode"
+                                                                 Position="@(message.IsSentByMe ? "bottom-0 right-0 mt-2" : "bottom-0 left-0 mt-2")"
+                                                                 OnEmojiSelected="@(async (emoji) => await HandleEmojiSelected(message.Id, emoji))"
+                                                                 OnClose="@CloseEmojiPicker" />
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (selectedConversation.IsTyping)
+                            {
+                                <div class="flex justify-start">
+                                    <div class="flex items-end gap-2">
+                                        <img src="@selectedConversation.DoctorImage"
+                                             alt="Doctor"
+                                             class="profile-image w-8 h-8 rounded-full object-cover"
+                                             data-initials="@GetDoctorInitials(selectedConversation.DoctorName)"
+                                             onerror="window.handleImageError(this, '@GetDoctorInitials(selectedConversation.DoctorName)')" />
+                                        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-2xl px-4 py-3 shadow-sm">
+                                            <div class="flex gap-1">
+                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Message Input -->
+                        <div class="p-4 @(IsDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200") border-t">
+                            @if (selectedFiles.Any())
+                            {
+                                <div class="mb-3 flex flex-wrap gap-3">
+                                    @foreach (var file in selectedFiles)
+                                    {
+                                        <div class="relative group">
+                                            <!-- File Preview Card -->
+                                            <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-100") rounded-lg overflow-hidden shadow-sm" style="width: 120px;">
+                                                @if (file.IsImage && !string.IsNullOrEmpty(file.PreviewUrl))
+                                                {
+                                                    <!-- Image Preview -->
+                                                    <div class="relative" style="height: 120px;">
+                                                        <img src="@file.PreviewUrl" alt="@file.Name" class="w-full h-full object-cover" />
+                                                        @if (file.IsUploading)
+                                                        {
+                                                            <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                                                                <div class="text-white text-center">
+                                                                    <i class="fas fa-spinner fa-spin text-2xl mb-1"></i>
+                                                                    <div class="text-xs">@file.UploadProgress%</div>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <!-- File Icon Preview -->
+                                                    <div class="h-24 flex items-center justify-center">
+                                                        <i class="fas @file.FileIcon text-4xl text-primary"></i>
+                                                    </div>
+                                                }
+
+                                                <!-- File Info -->
+                                                <div class="p-2 border-t @(IsDarkMode ? "border-gray-600" : "border-gray-200")">
+                                                    <div class="text-xs @(IsDarkMode ? "text-white" : "text-gray-900") truncate font-medium" title="@file.Name">
+                                                        @file.Name
+                                                    </div>
+                                                    <div class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-500") mt-1">
+                                                        @file.FormattedSize
+                                                    </div>
+
+                                                    <!-- Upload Progress -->
+                                                    @if (file.IsUploading)
+                                                    {
+                                                        <div class="mt-2">
+                                                            <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-600">
+                                                                <div class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width: @file.UploadProgress%"></div>
+                                                            </div>
+                                                        </div>
+                                                    }
+
+                                                    <!-- Error Message -->
+                                                    @if (!string.IsNullOrEmpty(file.ErrorMessage))
+                                                    {
+                                                        <div class="text-xs text-red-500 mt-1 truncate" title="@file.ErrorMessage">
+                                                            @file.ErrorMessage
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <!-- Remove Button -->
+                                            @if (!file.IsUploading)
+                                            {
+                                                <button @onclick="() => RemoveFile(file)"
+                                                        class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <i class="fas fa-times text-xs"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <!-- Smart Reply Suggestions -->
+                            <SmartReplyPanel Suggestions="@smartReplySuggestions"
+                                           IsVisible="@showSmartReplies"
+                                           IsDarkMode="@IsDarkMode"
+                                           OnReplySelected="HandleSmartReply" />
+
+                            <div class="flex items-end gap-2">
+                                <button @onclick="OpenFileSelector"
+                                        class="p-3 rounded-lg @(IsDarkMode ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-100 text-gray-600") transition-colors">
+                                    <i class="fas fa-paperclip"></i>
+                                </button>
+                                <VoiceRecorder OnVoiceMessageReady="HandleVoiceMessage"
+                                               ThemeMode="@(IsDarkMode ? "dark" : "light")" />
+                                <div class="flex-1 relative">
+                                    <textarea @ref="messageInput"
+                                              @bind="newMessage"
+                                              @bind:event="oninput"
+                                              @bind:after="HandleTyping"
+                                              @onkeydown="HandleKeyDown"
+                                              rows="1"
+                                              placeholder="Type a message..."
+                                              class="w-full px-4 py-3 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600 placeholder-gray-400" : "bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-500") border focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition-all"
+                                              style="max-height: 120px;"></textarea>
+                                </div>
+                                <button @onclick="SendMessage"
+                                        disabled="@(string.IsNullOrWhiteSpace(newMessage) && !selectedFiles.Any() || isSendingMessage)"
+                                        class="p-3 rounded-lg bg-primary text-white hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95">
+                                    @if (isSendingMessage)
+                                    {
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-paper-plane"></i>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Empty State -->
+                        <div class="flex-1 flex items-center justify-center @(IsDarkMode ? "bg-gray-900" : "bg-gray-50")">
+                            <div class="text-center">
+                                <i class="fas fa-comments text-6xl @(IsDarkMode ? "text-gray-700" : "text-gray-300") mb-4"></i>
+                                <h3 class="text-xl font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                                    Select a conversation
+                                </h3>
+                                <p class="@(IsDarkMode ? "text-gray-500" : "text-gray-500")">
+                                    Choose a doctor from the list to start messaging
+                                </p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden File Input -->
+<!-- Media Preview Modal -->
+<MediaPreviewModal IsVisible="@showMediaPreview"
+                   MediaUrl="@previewMediaUrl"
+                   MediaType="@previewMediaType"
+                   FileName="@previewFileName"
+                   FileSize="@previewFileSize"
+                   OnClose="CloseMediaPreview"
+                   OnDownload="DownloadCurrentMedia" />
+
+<MessageSearchModal @ref="searchModal"
+                    IsVisible="@showSearchModal"
+                    IsDarkMode="@IsDarkMode"
+                    OnClose="CloseSearchModal"
+                    OnResultClick="HandleSearchResultClick"
+                    OnSearch="HandleSearch" />
+
+<!-- Conversation Summary Modal -->
+@if (showSummaryModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50" @onclick="CloseSummaryModal">
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col" @onclick:stopPropagation>
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between p-6 border-b @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-magic text-purple-500 text-2xl"></i>
+                    <h3 class="text-xl font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">Conversation Summary</h3>
+                </div>
+                <button @onclick="CloseSummaryModal"
+                        class="@(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700") transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto flex-1">
+                @if (isGeneratingSummary)
+                {
+                    <div class="flex flex-col items-center justify-center py-12">
+                        <i class="fas fa-spinner fa-spin text-4xl text-purple-500 mb-4"></i>
+                        <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-600")">Generating summary...</p>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(conversationSummary))
+                {
+                    <!-- Summary Stats -->
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-4 text-center">
+                            <div class="text-2xl font-bold text-purple-500">@summaryStats.TotalMessages</div>
+                            <div class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1">Messages</div>
+                        </div>
+                        <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-4 text-center">
+                            <div class="text-2xl font-bold text-blue-500">@summaryStats.DoctorMessages</div>
+                            <div class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1">From Doctor</div>
+                        </div>
+                        <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-4 text-center">
+                            <div class="text-2xl font-bold text-green-500">@summaryStats.PatientMessages</div>
+                            <div class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1">From Patient</div>
+                        </div>
+                    </div>
+
+                    <!-- Medical Terms Found -->
+                    @if (summaryStats.MedicalTerms.Any())
+                    {
+                        <div class="mb-6">
+                            <h4 class="text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">Medical Terms Discussed:</h4>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach (var term in summaryStats.MedicalTerms)
+                                {
+                                    <span class="px-3 py-1 @(IsDarkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-700") rounded-full text-sm">
+                                        @term
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Summary Text -->
+                    <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-4">
+                        <h4 class="text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">Summary:</h4>
+                        <div class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") leading-relaxed whitespace-pre-wrap">
+                            @conversationSummary
+                        </div>
+                    </div>
+
+                    <!-- Time Range -->
+                    <div class="mt-4 text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") text-center">
+                        Summary generated for messages from @summaryStats.FirstMessageDate to @summaryStats.LastMessageDate
+                    </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-6 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200") flex justify-end gap-3">
+                <button @onclick="CloseSummaryModal"
+                        class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteConfirmation)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i>
+                <h3 class="text-lg font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">Delete Message?</h3>
+            </div>
+            <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-600") mb-6">
+                Are you sure you want to delete this message? This action cannot be undone.
+            </p>
+            <div class="flex gap-3 justify-end">
+                <button @onclick="CancelDelete"
+                        class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmDelete"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Appointment Scheduling Modal -->
+@if (showAppointmentScheduler)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50" @onclick="CloseAppointmentScheduler">
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg shadow-xl max-w-md w-full p-6" @onclick:stopPropagation>
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-calendar-plus text-blue-500 text-2xl"></i>
+                    <h3 class="text-lg font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">Schedule Appointment</h3>
+                </div>
+                <button @onclick="CloseAppointmentScheduler"
+                        class="@(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700") transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Doctor Info -->
+                <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-3 flex items-center gap-3">
+                    <img src="@selectedConversation?.DoctorImage"
+                         alt="@selectedConversation?.DoctorName"
+                         class="w-12 h-12 rounded-full object-cover" />
+                    <div>
+                        <div class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">@selectedConversation?.DoctorName</div>
+                        <div class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">@selectedConversation?.Specialty</div>
+                    </div>
+                </div>
+
+                <!-- Appointment Date -->
+                <div>
+                    <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                        Preferred Date
+                    </label>
+                    <input type="date"
+                           @bind="appointmentDate"
+                           min="@DateTime.Now.ToString("yyyy-MM-dd")"
+                           class="w-full px-3 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                </div>
+
+                <!-- Appointment Time -->
+                <div>
+                    <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                        Preferred Time
+                    </label>
+                    <select value="@appointmentTime.ToString("HH:mm")" @onchange="@((ChangeEventArgs e) => HandleTimeChange(e.Value?.ToString() ?? ""))"
+                            class="w-full px-3 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">Select time...</option>
+                        <option value="09:00">9:00 AM</option>
+                        <option value="10:00">10:00 AM</option>
+                        <option value="11:00">11:00 AM</option>
+                        <option value="12:00">12:00 PM</option>
+                        <option value="14:00">2:00 PM</option>
+                        <option value="15:00">3:00 PM</option>
+                        <option value="16:00">4:00 PM</option>
+                        <option value="17:00">5:00 PM</option>
+                    </select>
+                </div>
+
+                <!-- Reason -->
+                <div>
+                    <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                        Reason for Visit
+                    </label>
+                    <textarea @bind="appointmentReason"
+                              rows="3"
+                              placeholder="Briefly describe your symptoms or reason for visit..."
+                              class="w-full px-3 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600 placeholder-gray-400" : "bg-white text-gray-900 border-gray-300 placeholder-gray-500") border focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"></textarea>
+                </div>
+
+                <!-- Appointment Type -->
+                <div>
+                    <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                        Appointment Type
+                    </label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button @onclick="@(() => appointmentType = "InPerson")"
+                                class="px-4 py-2 rounded-lg border-2 transition-all @(appointmentType == "InPerson" ? "border-blue-500 bg-blue-500 text-white" : (IsDarkMode ? "border-gray-600 hover:border-gray-500" : "border-gray-300 hover:border-gray-400"))">
+                            <i class="fas fa-hospital mr-2"></i>In-Person
+                        </button>
+                        <button @onclick="@(() => appointmentType = "Teleconsultation")"
+                                class="px-4 py-2 rounded-lg border-2 transition-all @(appointmentType == "Teleconsultation" ? "border-blue-500 bg-blue-500 text-white" : (IsDarkMode ? "border-gray-600 hover:border-gray-500" : "border-gray-300 hover:border-gray-400"))">
+                            <i class="fas fa-video mr-2"></i>Online
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 justify-end mt-6">
+                <button @onclick="CloseAppointmentScheduler"
+                        class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button @onclick="SubmitAppointmentRequest"
+                        disabled="@(string.IsNullOrEmpty(appointmentReason))"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-paper-plane mr-2"></i>Request Appointment
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<InputFile @ref="fileInput" OnChange="HandleFileSelection" multiple hidden />
+
+<!-- Video Call Modal -->
+<VideoCallModal @ref="videoCallModal"
+                IsVisible="@isCallActive"
+                PartnerId="@callPartnerId"
+                PartnerName="@callPartnerName"
+                IsVideoCall="@isVideoCall"
+                CallState="@callState"
+                IsDarkMode="@IsDarkMode"
+                OnCallAccepted="HandleCallAccepted"
+                OnCallRejected="HandleCallRejected"
+                OnCallEnded="HandleCallEnded"
+                OnIceCandidateGenerated="HandleIceCandidateGenerated"
+                OnOfferCreated="HandleOfferCreated"
+                OnAnswerCreated="HandleAnswerCreated" />
+
+<!-- AI Assistant Panel -->
+<AiAssistantPanel @ref="aiAssistantPanel"
+                  IsVisible="@showAiAssistant"
+                  IsDarkMode="@IsDarkMode"
+                  UserId="@patientId"
+                  OnClose="CloseAiAssistant"
+                  OnActionClick="HandleAiAction" />
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    private HubConnection? hubConnection;
+    private ElementReference messagesContainer;
+    private ElementReference messageInput;
+    private InputFile? fileInput;
+
+    private string searchQuery = "";
+    private string newMessage = "";
+    private bool isSendingMessage = false;
+    private string? patientId;
+    private System.Timers.Timer? typingTimer;
+    private bool isUserTyping = false;
+
+    private List<ConversationDto> allConversations = new();
+    private List<ConversationDto> filteredConversations = new();
+    private ConversationDto? selectedConversation;
+    private List<MessageDto> currentMessages = new();
+    private List<FileAttachment> selectedFiles = new();
+
+    // Media preview state
+    private bool showMediaPreview = false;
+    private string? previewMediaUrl;
+    private string? previewMediaType;
+    private string? previewFileName;
+    private string? previewFileSize;
+
+    // Emoji picker state
+    private bool showEmojiPicker = false;
+    private string? selectedMessageIdForReaction;
+
+    // Search state
+    private bool showSearchModal = false;
+    private MessageSearchModal? searchModal;
+
+    // Summary state
+    private bool showSummaryModal = false;
+    private bool isGeneratingSummary = false;
+    private string conversationSummary = "";
+    private SummaryStats summaryStats = new();
+
+    // Appointment scheduling state
+    private bool showAppointmentScheduler = false;
+    private DateTime appointmentDate = DateTime.Now;
+    private TimeOnly appointmentTime = new TimeOnly(9, 0);
+    private string appointmentReason = "";
+    private string appointmentType = "Teleconsultation";
+
+    // Edit/Delete state
+    private string? editingMessageId;
+    private string editingContent = "";
+    private bool showDeleteConfirmation = false;
+    private string? messageToDelete;
+
+    // Video/Voice Call state
+    private VideoCallModal? videoCallModal;
+    private bool isCallActive = false;
+    private string callPartnerId = "";
+    private string callPartnerName = "";
+    private bool isVideoCall = false;
+    private VideoCallModal.CallStatus callState = VideoCallModal.CallStatus.Idle;
+
+    // AI Assistant state
+    private AiAssistantPanel? aiAssistantPanel;
+    private bool showAiAssistant = false;
+
+    // Smart Reply state
+    private List<string> smartReplySuggestions = new();
+    private bool showSmartReplies = false;
+
+    private record ConversationDto(
+        string Id,
+        string DoctorName,
+        string Specialty,
+        string DoctorImage,
+        string LastMessage,
+        DateTime LastMessageTime,
+        bool IsOnline)
+    {
+        public int UnreadCount { get; set; }
+        public bool IsTyping { get; set; }
+        public string? PartnerId { get; set; } // Store the actual partner/doctor ID
+    }
+
+    private record MessageDto(
+        string Id,
+        string Content,
+        DateTime Timestamp,
+        bool IsSentByMe,
+        MessageStatus Status,
+        List<AttachmentDto> Attachments)
+    {
+        public List<ReactionDto> Reactions { get; set; } = new();
+        public bool IsEdited { get; set; } = false;
+        public string? MessageType { get; set; }
+        public string? AttachmentUrl { get; set; }
+    }
+
+    private record ReactionDto(string Emoji, int Count, bool UserReacted);
+
+    private record AttachmentDto(string Id, string Name, string Type, string Size, string Url);
+
+    private class SummaryStats
+    {
+        public int TotalMessages { get; set; }
+        public int DoctorMessages { get; set; }
+        public int PatientMessages { get; set; }
+        public List<string> MedicalTerms { get; set; } = new();
+        public string FirstMessageDate { get; set; } = "";
+        public string LastMessageDate { get; set; } = "";
+    }
+
+    private class FileAttachment
+    {
+        public string Name { get; set; } = string.Empty;
+        public long Size { get; set; }
+        public string ContentType { get; set; } = string.Empty;
+        public IBrowserFile? BrowserFile { get; set; }
+        public string? PreviewUrl { get; set; }
+        public bool IsUploading { get; set; }
+        public int UploadProgress { get; set; }
+        public string? UploadedUrl { get; set; }
+        public string? ErrorMessage { get; set; }
+
+        public string FormattedSize
+        {
+            get
+            {
+                if (Size < 1024)
+                    return $"{Size} B";
+                else if (Size < 1024 * 1024)
+                    return $"{Size / 1024.0:F1} KB";
+                else if (Size < 1024 * 1024 * 1024)
+                    return $"{Size / (1024.0 * 1024.0):F1} MB";
+                else
+                    return $"{Size / (1024.0 * 1024.0 * 1024.0):F1} GB";
+            }
+        }
+
+        public string FileIcon => ContentType switch
+        {
+            var t when t.StartsWith("image/") => "fa-file-image",
+            var t when t.StartsWith("video/") => "fa-file-video",
+            var t when t.StartsWith("audio/") => "fa-file-audio",
+            "application/pdf" => "fa-file-pdf",
+            var t when t.Contains("word") => "fa-file-word",
+            var t when t.Contains("excel") || t.Contains("spreadsheet") => "fa-file-excel",
+            var t when t.Contains("powerpoint") || t.Contains("presentation") => "fa-file-powerpoint",
+            _ => "fa-file"
+        };
+
+        public bool IsImage => ContentType.StartsWith("image/");
+        public bool IsVideo => ContentType.StartsWith("video/");
+    }
+
+    private enum MessageStatus
+    {
+        Sending,
+        Sent,
+        Delivered,
+        Read
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            patientId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(patientId))
+            {
+                await LoadConversationsAsync();
+            }
+
+            await InitializeSignalR();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing messages page");
+        }
+    }
+
+    private async Task LoadConversationsAsync()
+    {
+        try
+        {
+            var serviceConversations = await MessagingService.GetConversationsAsync();
+
+            // Map service DTOs to local DTOs
+            allConversations = serviceConversations.Select(c => new ConversationDto(
+                c.Id.ToString(),
+                c.PartnerName,
+                c.PartnerRole, // Used as Specialty
+                c.PartnerProfileImage ?? "https://i.pravatar.cc/150?img=1",
+                c.LastMessage,
+                c.LastMessageTime,
+                c.IsOnline)
+            {
+                UnreadCount = c.UnreadCount,
+                PartnerId = c.PartnerId
+            }).ToList();
+
+            filteredConversations = allConversations;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading conversations");
+            allConversations = new List<ConversationDto>();
+            filteredConversations = new List<ConversationDto>();
+        }
+    }
+
+    private async Task InitializeSignalR()
+    {
+        try
+        {
+            // Get JWT token for authentication
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var token = user.FindFirst("access_token")?.Value ?? "";
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/chathub"), options =>
+                {
+                    options.AccessTokenProvider = () => Task.FromResult<string?>(token);
+                })
+                .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10) })
+                .Build();
+
+            // Handle incoming messages
+            hubConnection.On<object>("ReceiveMessage", async (messageData) =>
+            {
+                try
+                {
+                    var json = System.Text.Json.JsonSerializer.Serialize(messageData);
+                    var message = System.Text.Json.JsonSerializer.Deserialize<ReceivedMessageDto>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (message != null)
+                    {
+                        await ReceiveMessage(message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error processing received message");
+                }
+            });
+
+            // Handle typing indicators
+            hubConnection.On<string>("UserTyping", (userId) =>
+            {
+                HandleUserTyping(userId, true);
+            });
+
+            hubConnection.On<string>("UserStoppedTyping", (userId) =>
+            {
+                HandleUserTyping(userId, false);
+            });
+
+            // Handle message status changes
+            hubConnection.On<string, string, DateTime>("MessageStatusChanged", async (messageId, status, timestamp) =>
+            {
+                await UpdateMessageStatus(messageId, status);
+            });
+
+            // Handle conversation messages read
+            hubConnection.On<string, DateTime>("ConversationMessagesRead", async (conversationId, readTime) =>
+            {
+                await UpdateConversationMessagesRead(conversationId, readTime);
+            });
+
+            // Handle online/offline status
+            hubConnection.On<string>("UserOnline", (userId) =>
+            {
+                UpdateUserOnlineStatus(userId, true);
+            });
+
+            hubConnection.On<string>("UserOffline", (userId) =>
+            {
+                UpdateUserOnlineStatus(userId, false);
+            });
+
+            // Receive list of online users
+            hubConnection.On<List<string>>("OnlineUsers", (onlineUserIds) =>
+            {
+                UpdateOnlineUsersList(onlineUserIds);
+            });
+
+            // Handle message reaction updates
+            hubConnection.On<string, List<object>>("MessageReactionUpdated", async (messageId, reactions) =>
+            {
+                await HandleReactionUpdate(messageId, reactions);
+            });
+
+            // Handle message edited
+            hubConnection.On<string, string, DateTime>("MessageEdited", async (messageId, newContent, editedAt) =>
+            {
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+                if (message != null)
+                {
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with
+                    {
+                        Content = newContent,
+                        IsEdited = true
+                    };
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            // Handle message deleted
+            hubConnection.On<string, DateTime>("MessageDeleted", async (messageId, deletedAt) =>
+            {
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+                if (message != null)
+                {
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with { Content = "This message was deleted" };
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            // Handle WebRTC call signaling
+            hubConnection.On<string, string, bool>("IncomingCall", async (callerId, callerName, isVideo) =>
+            {
+                callPartnerId = callerId;
+                callPartnerName = callerName;
+                isVideoCall = isVideo;
+                callState = VideoCallModal.CallStatus.Incoming;
+                isCallActive = true;
+
+                if (videoCallModal != null)
+                {
+                    await videoCallModal.StartLocalStream();
+                }
+
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string, string>("ReceiveCallOffer", async (senderId, offerJson) =>
+            {
+                if (videoCallModal != null && callState == VideoCallModal.CallStatus.Connecting)
+                {
+                    var answer = await videoCallModal.HandleOffer(offerJson);
+                    if (!string.IsNullOrEmpty(answer) && hubConnection != null)
+                    {
+                        await hubConnection.SendAsync("SendCallAnswer", senderId, answer);
+                    }
+                }
+            });
+
+            hubConnection.On<string, string>("ReceiveCallAnswer", async (responderId, answerJson) =>
+            {
+                if (videoCallModal != null)
+                {
+                    await videoCallModal.HandleAnswer(answerJson);
+                    callState = VideoCallModal.CallStatus.Connected;
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<string, string>("ReceiveIceCandidate", async (senderId, candidateJson) =>
+            {
+                if (videoCallModal != null)
+                {
+                    await videoCallModal.AddIceCandidate(candidateJson);
+                }
+            });
+
+            hubConnection.On<string, string>("CallRejected", async (receiverId, reason) =>
+            {
+                isCallActive = false;
+                callState = VideoCallModal.CallStatus.Ended;
+                await JS.InvokeVoidAsync("alert", $"Call rejected: {reason}");
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string>("CallEnded", async (userId) =>
+            {
+                isCallActive = false;
+                callState = VideoCallModal.CallStatus.Ended;
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string>("CallFailed", async (reason) =>
+            {
+                isCallActive = false;
+                callState = VideoCallModal.CallStatus.Ended;
+                await JS.InvokeVoidAsync("alert", $"Call failed: {reason}");
+                await InvokeAsync(StateHasChanged);
+            });
+
+            // Handle reconnection
+            hubConnection.Reconnecting += error =>
+            {
+                Logger.LogWarning("SignalR reconnecting...");
+                return Task.CompletedTask;
+            };
+
+            hubConnection.Reconnected += async connectionId =>
+            {
+                Logger.LogInformation("SignalR reconnected");
+                await InvokeAsync(StateHasChanged);
+            };
+
+            hubConnection.Closed += async error =>
+            {
+                Logger.LogError(error, "SignalR connection closed");
+                await Task.Delay(5000);
+                try
+                {
+                    await hubConnection.StartAsync();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error restarting SignalR connection");
+                }
+            };
+
+            await hubConnection.StartAsync();
+            Logger.LogInformation("SignalR connected successfully");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "SignalR connection error");
+            await JS.InvokeVoidAsync("console.error", $"Chat connection failed: {ex.Message}");
+        }
+    }
+
+    // DTO for receiving messages from SignalR
+    private record ReceivedMessageDto(
+        string Id,
+        string SenderId,
+        string SenderName,
+        string SenderProfileImage,
+        string ReceiverId,
+        string Content,
+        string MessageType,
+        string Status,
+        DateTime SentAt,
+        string ConversationId,
+        string AttachmentUrl,
+        string AttachmentFileName,
+        long? AttachmentFileSize,
+        string AttachmentMimeType,
+        string ReplyToMessageId
+    );
+
+    private void FilterConversations()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filteredConversations = allConversations;
+        }
+        else
+        {
+            filteredConversations = allConversations
+                .Where(c => c.DoctorName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                           c.Specialty.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                           c.LastMessage.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    private async Task SelectConversation(ConversationDto conversation)
+    {
+        selectedConversation = conversation;
+        conversation.UnreadCount = 0;
+
+        // Load messages for this conversation
+        await LoadMessagesForConversation(conversation.Id);
+
+        // Scroll to bottom
+        await Task.Delay(100);
+        await ScrollToBottom();
+
+        // Mark messages as read
+        try
+        {
+            if (Guid.TryParse(conversation.Id, out var convGuid))
+            {
+                await MessagingService.MarkMessagesAsReadAsync(convGuid);
+            }
+
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                await hubConnection.SendAsync("MarkMessagesAsRead", conversation.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error marking messages as read");
+        }
+    }
+
+    private async Task LoadMessagesForConversation(string conversationId)
+    {
+        try
+        {
+            if (!Guid.TryParse(conversationId, out var convGuid))
+            {
+                Logger.LogWarning("Invalid conversation ID: {ConversationId}", conversationId);
+                return;
+            }
+
+            var serviceMessages = await MessagingService.GetConversationMessagesAsync(convGuid);
+
+            // Map service DTOs to local DTOs
+            currentMessages = serviceMessages.Select(m => new MessageDto(
+                m.Id.ToString(),
+                m.Content,
+                m.SentAt,
+                m.IsSender, // IsSender from service indicates if the current user sent it
+                MapMessageStatus(m.Status),
+                new List<AttachmentDto>() // Attachments to be implemented later
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading messages for conversation {ConversationId}", conversationId);
+            currentMessages = new List<MessageDto>();
+        }
+    }
+
+    private MessageStatus MapMessageStatus(string status)
+    {
+        return status.ToLower() switch
+        {
+            "sent" => MessageStatus.Sent,
+            "delivered" => MessageStatus.Delivered,
+            "read" => MessageStatus.Read,
+            _ => MessageStatus.Sending
+        };
+    }
+
+    private async Task SendMessage()
+    {
+        if (selectedConversation == null || (string.IsNullOrWhiteSpace(newMessage) && !selectedFiles.Any()))
+            return;
+
+        isSendingMessage = true;
+        MessageDto? tempMessage = null;
+
+        try
+        {
+            // Get the partner (doctor) ID from the conversation
+            // Note: In the real implementation, you'll need to store the partnerId in the conversation
+            // For now, we'll use a workaround
+            var receiverId = await GetPartnerIdFromConversation(selectedConversation.Id);
+
+            if (string.IsNullOrEmpty(receiverId))
+            {
+                Logger.LogError("Cannot send message: receiverId not found");
+                await JS.InvokeVoidAsync("alert", "Error: Cannot determine message recipient");
+                return;
+            }
+
+            var messageContent = newMessage.Trim();
+
+            // Store selected files temporarily as they'll be cleared
+            var filesToUpload = selectedFiles.ToList();
+
+            // Create a temporary message for immediate UI feedback
+            tempMessage = new MessageDto(
+                Guid.NewGuid().ToString(),
+                messageContent,
+                DateTime.Now,
+                true,
+                MessageStatus.Sending,
+                new List<AttachmentDto>()
+            );
+
+            currentMessages.Add(tempMessage);
+
+            newMessage = "";
+            selectedFiles.Clear();
+
+            await ScrollToBottom();
+
+            // Upload files first if any
+            string? attachmentUrl = null;
+            if (filesToUpload.Any())
+            {
+                // For now, only upload the first file (can be enhanced for multiple files)
+                var firstFile = filesToUpload.First();
+                attachmentUrl = await UploadFileAsync(firstFile);
+
+                if (string.IsNullOrEmpty(attachmentUrl) && !string.IsNullOrWhiteSpace(firstFile.ErrorMessage))
+                {
+                    await JS.InvokeVoidAsync("alert", $"File upload failed: {firstFile.ErrorMessage}");
+                    // Continue with text message even if file upload fails
+                }
+            }
+
+            // Send via service
+            var input = new ServiceDtos.SendMessageInput
+            {
+                ReceiverId = receiverId,
+                Content = string.IsNullOrWhiteSpace(messageContent) ? (attachmentUrl != null ? "Sent an attachment" : "") : messageContent,
+                AttachmentUrl = attachmentUrl
+            };
+
+            var sentMessage = await MessagingService.SendMessageAsync(input);
+
+            if (sentMessage != null)
+            {
+                // Replace temp message with actual sent message
+                currentMessages.Remove(tempMessage);
+                currentMessages.Add(new MessageDto(
+                    sentMessage.Id.ToString(),
+                    sentMessage.Content,
+                    sentMessage.SentAt,
+                    true,
+                    MapMessageStatus(sentMessage.Status),
+                    new List<AttachmentDto>()
+                ));
+
+                // Update conversation last message
+                selectedConversation = selectedConversation with
+                {
+                    LastMessage = messageContent,
+                    LastMessageTime = sentMessage.SentAt
+                };
+
+                // Send via SignalR to notify receiver in real-time
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    try
+                    {
+                        await hubConnection.SendAsync("SendMessage", sentMessage.Id, receiverId, messageContent, "Text");
+                        Logger.LogInformation("Message sent via SignalR");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Error sending message via SignalR");
+                    }
+                }
+
+                // Stop typing indicator
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    try
+                    {
+                        await hubConnection.SendAsync("StopTyping", receiverId);
+                    }
+                    catch { }
+                }
+
+                await ScrollToBottom();
+            }
+            else
+            {
+                Logger.LogError("Failed to send message");
+                currentMessages.Remove(tempMessage);
+                await JS.InvokeVoidAsync("alert", "Failed to send message. Please try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error sending message");
+            await JS.InvokeVoidAsync("alert", $"Error sending message: {ex.Message}");
+
+            // Remove temp message if it still exists
+            if (tempMessage != null && currentMessages.Contains(tempMessage))
+            {
+                currentMessages.Remove(tempMessage);
+            }
+        }
+        finally
+        {
+            isSendingMessage = false;
+            StateHasChanged();
+        }
+    }
+
+    private Task<string?> GetPartnerIdFromConversation(string conversationId)
+    {
+        // The partnerId is stored in the conversation
+        return Task.FromResult(selectedConversation?.PartnerId);
+    }
+
+    private async Task ReceiveMessage(ReceivedMessageDto message)
+    {
+        try
+        {
+            var isMyConversation = selectedConversation?.Id == message.ConversationId ||
+                                   (selectedConversation?.PartnerId == message.SenderId);
+
+            if (isMyConversation)
+            {
+                // Add message to current conversation
+                var newMsg = new MessageDto(
+                    message.Id,
+                    message.Content,
+                    message.SentAt,
+                    false, // Not sent by me
+                    MapMessageStatus(message.Status),
+                    new List<AttachmentDto>() // TODO: Map attachments
+                )
+                {
+                    MessageType = message.MessageType,
+                    AttachmentUrl = message.AttachmentUrl
+                };
+
+                currentMessages.Add(newMsg);
+                await InvokeAsync(StateHasChanged);
+                await ScrollToBottom();
+
+                // Mark as read immediately if conversation is open
+                if (hubConnection?.State == HubConnectionState.Connected && !string.IsNullOrEmpty(message.ConversationId))
+                {
+                    await hubConnection.SendAsync("MarkMessagesAsRead", Guid.Parse(message.ConversationId), message.SenderId);
+                }
+
+                // Play notification sound
+                await PlayNotificationSound();
+
+                // Generate smart reply suggestions for doctor's message
+                GenerateSmartReplies(message.Content, true);
+            }
+            else
+            {
+                // Update conversation in the list
+                var conversation = allConversations.FirstOrDefault(c =>
+                    c.Id == message.ConversationId || c.PartnerId == message.SenderId);
+
+                if (conversation != null)
+                {
+                    var index = allConversations.IndexOf(conversation);
+                    allConversations[index] = conversation with
+                    {
+                        UnreadCount = conversation.UnreadCount + 1,
+                        LastMessage = message.Content,
+                        LastMessageTime = message.SentAt
+                    };
+
+                    await InvokeAsync(StateHasChanged);
+
+                    // Play notification sound
+                    await PlayNotificationSound();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error receiving message");
+        }
+    }
+
+    private void HandleUserTyping(string userId, bool isTyping)
+    {
+        var conversation = allConversations.FirstOrDefault(c => c.PartnerId == userId);
+        if (conversation != null)
+        {
+            conversation.IsTyping = isTyping;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void UpdateUserOnlineStatus(string userId, bool isOnline)
+    {
+        foreach (var conversation in allConversations.Where(c => c.PartnerId == userId))
+        {
+            var index = allConversations.IndexOf(conversation);
+            allConversations[index] = conversation with { IsOnline = isOnline };
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateOnlineUsersList(List<string> onlineUserIds)
+    {
+        foreach (var conversation in allConversations)
+        {
+            var isOnline = onlineUserIds.Contains(conversation.PartnerId ?? "");
+            var index = allConversations.IndexOf(conversation);
+            allConversations[index] = conversation with { IsOnline = isOnline };
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task UpdateConversationMessagesRead(string conversationId, DateTime readTime)
+    {
+        if (selectedConversation?.Id == conversationId)
+        {
+            // Update all sent messages to Read status
+            for (int i = 0; i < currentMessages.Count; i++)
+            {
+                if (currentMessages[i].IsSentByMe && currentMessages[i].Status != MessageStatus.Read)
+                {
+                    currentMessages[i] = currentMessages[i] with { Status = MessageStatus.Read };
+                }
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task PlayNotificationSound()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "new Audio('/sounds/notification.mp3').play().catch(() => {})");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error playing notification sound");
+        }
+    }
+
+    private async Task HandleTyping()
+    {
+        if (selectedConversation == null || string.IsNullOrEmpty(selectedConversation.PartnerId)) return;
+
+        if (!isUserTyping && hubConnection?.State == HubConnectionState.Connected)
+        {
+            isUserTyping = true;
+            await hubConnection.SendAsync("UserTyping", selectedConversation.PartnerId);
+        }
+
+        typingTimer?.Stop();
+        typingTimer = new System.Timers.Timer(2000); // 2 seconds delay
+        typingTimer.Elapsed += async (sender, e) =>
+        {
+            isUserTyping = false;
+            if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+            {
+                await hubConnection.SendAsync("StopTyping", selectedConversation.PartnerId);
+            }
+            typingTimer?.Stop();
+        };
+        typingTimer.Start();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task UpdateMessageStatus(string messageId, string status)
+    {
+        var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+        if (message != null)
+        {
+            var mappedStatus = MapMessageStatus(status);
+            currentMessages[currentMessages.IndexOf(message)] = message with { Status = mappedStatus };
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ToggleEmojiPicker(string messageId)
+    {
+        if (showEmojiPicker && selectedMessageIdForReaction == messageId)
+        {
+            showEmojiPicker = false;
+            selectedMessageIdForReaction = null;
+        }
+        else
+        {
+            showEmojiPicker = true;
+            selectedMessageIdForReaction = messageId;
+        }
+    }
+
+    private void CloseEmojiPicker()
+    {
+        showEmojiPicker = false;
+        selectedMessageIdForReaction = null;
+    }
+
+    private async Task HandleEmojiSelected(string messageId, string emoji)
+    {
+        try
+        {
+            CloseEmojiPicker();
+
+            // Call the service to add reaction
+            var result = await MessagingService.AddReactionAsync(Guid.Parse(messageId), emoji);
+
+            if (result?.Success == true)
+            {
+                // Update the message reactions locally
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+                if (message != null)
+                {
+                    var updatedReactions = result.Reactions.Select(r => new ReactionDto(r.Emoji, r.Count, r.UserReacted)).ToList();
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with { Reactions = updatedReactions };
+
+                    // Broadcast reaction update via SignalR
+                    if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+                    {
+                        var reactionData = result.Reactions.Select(r => new { r.Emoji, r.Count, r.UserReacted }).ToList<object>();
+                        await hubConnection.SendAsync("BroadcastReaction", Guid.Parse(messageId), emoji, reactionData, selectedConversation.PartnerId);
+                    }
+
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            else
+            {
+                Logger.LogError("Failed to add reaction: {Error}", result?.ErrorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error adding reaction to message {MessageId}", messageId);
+        }
+    }
+
+    private async Task ToggleReaction(string messageId, string emoji, bool userReacted)
+    {
+        try
+        {
+            if (userReacted)
+            {
+                // Remove reaction
+                var result = await MessagingService.RemoveReactionAsync(Guid.Parse(messageId));
+
+                if (result?.Success == true)
+                {
+                    // Update the message reactions locally
+                    var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+                    if (message != null)
+                    {
+                        var updatedReactions = result.Reactions.Select(r => new ReactionDto(r.Emoji, r.Count, r.UserReacted)).ToList();
+                        var index = currentMessages.IndexOf(message);
+                        currentMessages[index] = message with { Reactions = updatedReactions };
+
+                        // Broadcast reaction update via SignalR
+                        if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+                        {
+                            var reactionData = result.Reactions.Select(r => new { r.Emoji, r.Count, r.UserReacted }).ToList<object>();
+                            await hubConnection.SendAsync("BroadcastReaction", Guid.Parse(messageId), "", reactionData, selectedConversation.PartnerId);
+                        }
+
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+            }
+            else
+            {
+                // Add reaction (same emoji)
+                await HandleEmojiSelected(messageId, emoji);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error toggling reaction for message {MessageId}", messageId);
+        }
+    }
+
+    private async Task HandleReactionUpdate(string messageId, List<object> reactions)
+    {
+        try
+        {
+            var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+            if (message != null)
+            {
+                // Convert dynamic objects to ReactionDto
+                var updatedReactions = new List<ReactionDto>();
+                foreach (var reaction in reactions)
+                {
+                    var reactionDict = reaction as IDictionary<string, object>;
+                    if (reactionDict != null)
+                    {
+                        var emoji = reactionDict["Emoji"]?.ToString() ?? "";
+                        var count = Convert.ToInt32(reactionDict["Count"]);
+                        var userReacted = Convert.ToBoolean(reactionDict["UserReacted"]);
+                        updatedReactions.Add(new ReactionDto(emoji, count, userReacted));
+                    }
+                }
+
+                var index = currentMessages.IndexOf(message);
+                currentMessages[index] = message with { Reactions = updatedReactions };
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error handling reaction update for message {MessageId}", messageId);
+        }
+    }
+
+    private async Task OpenFileSelector()
+    {
+        try
+        {
+            var element = fileInput?.Element;
+            if (element != null)
+            {
+                await JS.InvokeVoidAsync("eval", $"document.querySelector('[_bl_{element.Value.Id}]')?.click()");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error opening file selector: {ex.Message}");
+        }
+    }
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            const long maxFileSize = 50 * 1024 * 1024; // 50MB
+
+            foreach (var file in e.GetMultipleFiles(10))
+            {
+                // Validate file size
+                if (file.Size > maxFileSize)
+                {
+                    await JS.InvokeVoidAsync("alert", $"File '{file.Name}' exceeds 50MB limit");
+                    continue;
+                }
+
+                var fileAttachment = new FileAttachment
+                {
+                    Name = file.Name,
+                    Size = file.Size,
+                    ContentType = file.ContentType,
+                    BrowserFile = file
+                };
+
+                // Generate preview for images
+                if (file.ContentType.StartsWith("image/"))
+                {
+                    try
+                    {
+                        var resizedFile = await file.RequestImageFileAsync(file.ContentType, 400, 400);
+                        var buffer = new byte[resizedFile.Size];
+                        await using var stream = resizedFile.OpenReadStream();
+                        await stream.ReadAsync(buffer);
+                        var base64 = Convert.ToBase64String(buffer);
+                        fileAttachment.PreviewUrl = $"data:{file.ContentType};base64,{base64}";
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Error creating image preview for {FileName}", file.Name);
+                    }
+                }
+
+                selectedFiles.Add(fileAttachment);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error handling file selection");
+            await JS.InvokeVoidAsync("alert", "Error selecting files. Please try again.");
+        }
+    }
+
+    private void RemoveFile(FileAttachment file)
+    {
+        selectedFiles.Remove(file);
+        StateHasChanged();
+    }
+
+    private async Task<string?> UploadFileAsync(FileAttachment fileAttachment)
+    {
+        try
+        {
+            if (fileAttachment.BrowserFile == null)
+                return null;
+
+            fileAttachment.IsUploading = true;
+            fileAttachment.UploadProgress = 0;
+            StateHasChanged();
+
+            // Read file as base64
+            var buffer = new byte[fileAttachment.BrowserFile.Size];
+            await using var stream = fileAttachment.BrowserFile.OpenReadStream(50 * 1024 * 1024);
+            await stream.ReadAsync(buffer);
+            var base64 = Convert.ToBase64String(buffer);
+
+            fileAttachment.UploadProgress = 50;
+            StateHasChanged();
+
+            // Upload to server
+            var result = await MessagingService.UploadAttachmentAsync(
+                base64,
+                fileAttachment.Name,
+                fileAttachment.ContentType
+            );
+
+            if (result != null && result.Success)
+            {
+                fileAttachment.UploadProgress = 100;
+                fileAttachment.UploadedUrl = result.Url;
+                fileAttachment.IsUploading = false;
+                Logger.LogInformation("File uploaded successfully: {FileName}", fileAttachment.Name);
+                return result.Url;
+            }
+            else
+            {
+                fileAttachment.ErrorMessage = result?.ErrorMessage ?? "Upload failed";
+                fileAttachment.IsUploading = false;
+                Logger.LogError("File upload failed: {FileName}", fileAttachment.Name);
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error uploading file: {FileName}", fileAttachment.Name);
+            fileAttachment.ErrorMessage = ex.Message;
+            fileAttachment.IsUploading = false;
+            return null;
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleVoiceMessage((string audioUrl, int durationSeconds) voiceData)
+    {
+        if (selectedConversation == null || string.IsNullOrEmpty(selectedConversation.PartnerId)) return;
+
+        try
+        {
+            isSendingMessage = true;
+            StateHasChanged();
+
+            // Convert audio data URL to base64
+            var base64Audio = await JS.InvokeAsync<string>("voiceRecorder.dataURLtoBase64", voiceData.audioUrl);
+
+            if (string.IsNullOrEmpty(base64Audio))
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to process audio recording");
+                return;
+            }
+
+            // Generate filename with timestamp
+            var fileName = $"voice_{DateTime.UtcNow:yyyyMMddHHmmss}.webm";
+            var mimeType = "audio/webm";
+
+            // Upload audio to Cloudinary
+            var uploadResult = await MessagingService.UploadAttachmentAsync(base64Audio, fileName, mimeType);
+
+            if (uploadResult == null || !uploadResult.Success)
+            {
+                await JS.InvokeVoidAsync("alert", "Failed to upload voice message");
+                return;
+            }
+
+            // Send voice message
+            var input = new ServiceDtos.SendMessageInput
+            {
+                ReceiverId = selectedConversation.PartnerId,
+                Content = $"Voice message ({voiceData.durationSeconds}s)",
+                AttachmentUrl = uploadResult.Url
+            };
+
+            var sentMessage = await MessagingService.SendMessageAsync(input);
+
+            if (sentMessage != null)
+            {
+                // Add to current messages
+                var newMessage = new MessageDto(
+                    sentMessage.Id.ToString(),
+                    sentMessage.Content,
+                    sentMessage.SentAt,
+                    true, // IsSentByMe
+                    MapMessageStatus(sentMessage.Status),
+                    new List<AttachmentDto>()
+                )
+                {
+                    MessageType = "Audio",
+                    AttachmentUrl = sentMessage.AttachmentUrl
+                };
+
+                currentMessages.Add(newMessage);
+
+                // Update conversation last message
+                var convIndex = allConversations.IndexOf(selectedConversation);
+                if (convIndex >= 0)
+                {
+                    allConversations[convIndex] = selectedConversation with
+                    {
+                        LastMessage = $"Voice message ({voiceData.durationSeconds}s)",
+                        LastMessageTime = sentMessage.SentAt
+                    };
+                    selectedConversation = allConversations[convIndex];
+                    filteredConversations = allConversations;
+                }
+
+                // Scroll to bottom
+                await ScrollToBottom();
+
+                // Send via SignalR
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    try
+                    {
+                        await hubConnection.SendAsync("SendMessage",
+                            sentMessage.Id.ToString(),
+                            input.ReceiverId,
+                            sentMessage.Content,
+                            "Audio");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Error sending voice message via SignalR");
+                    }
+                }
+
+                Logger.LogInformation("Voice message sent successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error sending voice message");
+            await JS.InvokeVoidAsync("alert", "Failed to send voice message. Please try again.");
+        }
+        finally
+        {
+            isSendingMessage = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenMediaPreview(AttachmentDto attachment)
+    {
+        previewMediaUrl = attachment.Url;
+        previewMediaType = attachment.Type;
+        previewFileName = attachment.Name;
+        previewFileSize = attachment.Size;
+        showMediaPreview = true;
+        StateHasChanged();
+    }
+
+    private Task CloseMediaPreview()
+    {
+        showMediaPreview = false;
+        previewMediaUrl = null;
+        previewMediaType = null;
+        previewFileName = null;
+        previewFileSize = null;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task DownloadCurrentMedia()
+    {
+        Logger.LogInformation("Downloading media: {FileName}", previewFileName);
+        return Task.CompletedTask;
+    }
+
+    private async Task DownloadAttachment(AttachmentDto attachment)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(attachment.Url))
+            {
+                await JS.InvokeVoidAsync("open", attachment.Url, "_blank");
+                Logger.LogInformation("Downloading attachment: {FileName}", attachment.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error downloading attachment");
+        }
+    }
+
+    private void OpenSearchModal()
+    {
+        showSearchModal = true;
+    }
+
+    private Task CloseSearchModal()
+    {
+        showSearchModal = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void GenerateConversationSummary()
+    {
+        if (!currentMessages.Any())
+            return;
+
+        showSummaryModal = true;
+        isGeneratingSummary = true;
+        StateHasChanged();
+
+        try
+        {
+            // Collect all messages from current conversation
+            var allMessages = currentMessages.OrderBy(m => m.Timestamp).ToList();
+
+            if (!allMessages.Any())
+            {
+                conversationSummary = "No messages to summarize.";
+                isGeneratingSummary = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Calculate stats
+            summaryStats = new SummaryStats
+            {
+                TotalMessages = allMessages.Count,
+                DoctorMessages = allMessages.Count(m => !m.IsSentByMe),
+                PatientMessages = allMessages.Count(m => m.IsSentByMe),
+                FirstMessageDate = allMessages.First().Timestamp.ToString("MMM dd, yyyy HH:mm"),
+                LastMessageDate = allMessages.Last().Timestamp.ToString("MMM dd, yyyy HH:mm")
+            };
+
+            // Extract medical terms from messages
+            var medicalTermsFound = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var message in allMessages)
+            {
+                var annotatedMessage = MedicalTermService.AnnotateMessage(message.Content);
+                var matches = System.Text.RegularExpressions.Regex.Matches(annotatedMessage, @"data-term='([^']+)'");
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    if (match.Groups.Count > 1)
+                    {
+                        medicalTermsFound.Add(match.Groups[1].Value);
+                    }
+                }
+            }
+            summaryStats.MedicalTerms = medicalTermsFound.OrderBy(t => t).ToList();
+
+            // Generate summary text
+            var summaryBuilder = new System.Text.StringBuilder();
+            summaryBuilder.AppendLine("Conversation Overview:");
+            summaryBuilder.AppendLine();
+
+            // Group messages by topic/context
+            var recentMessages = allMessages.TakeLast(10).ToList();
+
+            summaryBuilder.AppendLine("Key Discussion Points:");
+            summaryBuilder.AppendLine();
+
+            // Identify main topics
+            var hasAppointmentDiscussion = allMessages.Any(m => m.Content.Contains("appointment", StringComparison.OrdinalIgnoreCase));
+            var hasMedicationDiscussion = allMessages.Any(m => m.Content.Contains("medication", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("prescription", StringComparison.OrdinalIgnoreCase));
+            var hasSymptomsDiscussion = allMessages.Any(m => m.Content.Contains("symptom", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("pain", StringComparison.OrdinalIgnoreCase));
+            var hasTestDiscussion = allMessages.Any(m => m.Content.Contains("test", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("lab", StringComparison.OrdinalIgnoreCase));
+
+            if (hasAppointmentDiscussion)
+            {
+                summaryBuilder.AppendLine("• Appointment scheduling and timing discussed");
+            }
+
+            if (hasMedicationDiscussion)
+            {
+                summaryBuilder.AppendLine("• Medication and prescriptions mentioned");
+            }
+
+            if (hasSymptomsDiscussion)
+            {
+                summaryBuilder.AppendLine("• Patient symptoms and condition discussed");
+            }
+
+            if (hasTestDiscussion)
+            {
+                summaryBuilder.AppendLine("• Medical tests or lab work mentioned");
+            }
+
+            summaryBuilder.AppendLine();
+            summaryBuilder.AppendLine("Recent Activity:");
+            summaryBuilder.AppendLine();
+
+            // Show recent message snippets
+            foreach (var msg in recentMessages.TakeLast(5))
+            {
+                var sender = msg.IsSentByMe ? "Patient" : "Doctor";
+                var preview = msg.Content.Length > 80 ? msg.Content.Substring(0, 80) + "..." : msg.Content;
+                summaryBuilder.AppendLine($"• {sender}: {preview}");
+            }
+
+            conversationSummary = summaryBuilder.ToString();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error generating conversation summary");
+            conversationSummary = "Error generating summary. Please try again.";
+        }
+        finally
+        {
+            isGeneratingSummary = false;
+            StateHasChanged();
+        }
+    }
+
+    private Task CloseSummaryModal()
+    {
+        showSummaryModal = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void OpenAppointmentScheduler()
+    {
+        showAppointmentScheduler = true;
+        appointmentDate = DateTime.Now;
+        appointmentTime = new TimeOnly(9, 0);
+        appointmentReason = "";
+        appointmentType = "Teleconsultation";
+    }
+
+    private void HandleTimeChange(string timeValue)
+    {
+        if (!string.IsNullOrEmpty(timeValue) && TimeOnly.TryParse(timeValue, out var time))
+        {
+            appointmentTime = time;
+        }
+    }
+
+    private Task CloseAppointmentScheduler()
+    {
+        showAppointmentScheduler = false;
+        appointmentDate = DateTime.Now;
+        appointmentTime = new TimeOnly(9, 0);
+        appointmentReason = "";
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task SubmitAppointmentRequest()
+    {
+        if (selectedConversation == null || string.IsNullOrEmpty(appointmentReason))
+            return;
+
+        try
+        {
+            var dateTime = appointmentDate.Add(appointmentTime.ToTimeSpan());
+
+            // Send a message to the doctor about the appointment request
+            var appointmentMessage = $"📅 Appointment Request:\n\n" +
+                                   $"Date: {dateTime:MMM dd, yyyy}\n" +
+                                   $"Time: {dateTime:hh:mm tt}\n" +
+                                   $"Type: {appointmentType}\n" +
+                                   $"Reason: {appointmentReason}";
+
+            newMessage = appointmentMessage;
+            await SendMessage();
+
+            showAppointmentScheduler = false;
+            StateHasChanged();
+
+            // Show success message
+            ToastService.ShowSuccess("Appointment request sent to doctor");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error submitting appointment request");
+            ToastService.ShowError("Failed to send appointment request");
+        }
+    }
+
+    private async Task HandleSearch(SearchMessagesInputDto input)
+    {
+        try
+        {
+            var results = await MessagingService.SearchMessagesAsync(input);
+            if (searchModal != null && results != null)
+            {
+                searchModal.UpdateResults(results);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error searching messages");
+        }
+    }
+
+    private async Task HandleSearchResultClick(MessageSearchResultDto result)
+    {
+        try
+        {
+            // Close search modal
+            showSearchModal = false;
+
+            // Find the conversation for this result
+            var conversation = filteredConversations.FirstOrDefault(c => c.Id == result.ConversationId.ToString());
+
+            if (conversation != null)
+            {
+                // Select the conversation
+                await SelectConversation(conversation);
+
+                // Optionally, scroll to the specific message
+                // This would require additional implementation to highlight/scroll to the message
+                Logger.LogInformation("Navigated to conversation with message {MessageId}", result.Id);
+            }
+            else
+            {
+                Logger.LogWarning("Conversation not found for message {MessageId}", result.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error handling search result click");
+        }
+    }
+
+    private void StartEdit(string messageId, string content)
+    {
+        editingMessageId = messageId;
+        editingContent = content;
+    }
+
+    private void CancelEdit()
+    {
+        editingMessageId = null;
+        editingContent = "";
+    }
+
+    private async Task SaveEdit(string messageId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(editingContent))
+            {
+                return;
+            }
+
+            var result = await MessagingService.EditMessageAsync(Guid.Parse(messageId), editingContent);
+
+            if (result?.Success == true)
+            {
+                // Update message in UI
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageId);
+                if (message != null)
+                {
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with
+                    {
+                        Content = result.NewContent,
+                        IsEdited = true
+                    };
+
+                    // Broadcast via SignalR
+                    if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+                    {
+                        await hubConnection.SendAsync("BroadcastMessageEdited", Guid.Parse(messageId), result.NewContent, result.EditedAt, selectedConversation.PartnerId);
+                    }
+                }
+
+                CancelEdit();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error saving edit for message {MessageId}", messageId);
+        }
+    }
+
+    private void ShowDeleteConfirmation(string messageId)
+    {
+        messageToDelete = messageId;
+        showDeleteConfirmation = true;
+    }
+
+    private void CancelDelete()
+    {
+        messageToDelete = null;
+        showDeleteConfirmation = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (string.IsNullOrEmpty(messageToDelete))
+            return;
+
+        try
+        {
+            var result = await MessagingService.DeleteMessageAsync(Guid.Parse(messageToDelete));
+
+            if (result?.Success == true)
+            {
+                // Update message in UI
+                var message = currentMessages.FirstOrDefault(m => m.Id == messageToDelete);
+                if (message != null)
+                {
+                    var index = currentMessages.IndexOf(message);
+                    currentMessages[index] = message with { Content = "This message was deleted" };
+
+                    // Broadcast via SignalR
+                    if (hubConnection?.State == HubConnectionState.Connected && selectedConversation != null)
+                    {
+                        await hubConnection.SendAsync("BroadcastMessageDeleted", Guid.Parse(messageToDelete), result.DeletedAt, selectedConversation.PartnerId);
+                    }
+                }
+
+                CancelDelete();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error deleting message {MessageId}", messageToDelete);
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                $"document.querySelector('[_bl_{messagesContainer.Id}]')?.scrollTo(0, document.querySelector('[_bl_{messagesContainer.Id}]')?.scrollHeight)");
+        }
+        catch { }
+    }
+
+    private string FormatMessageTime(DateTime time)
+    {
+        var diff = DateTime.Now - time;
+
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d";
+
+        return time.ToString("MMM dd");
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private string GetFileIcon(string fileType)
+    {
+        return fileType.ToLower() switch
+        {
+            "pdf" => "pdf",
+            "doc" or "docx" => "word",
+            "xls" or "xlsx" => "excel",
+            "jpg" or "jpeg" or "png" or "gif" => "image",
+            "zip" or "rar" => "archive",
+            _ => "alt"
+        };
+    }
+
+    private string GetDoctorInitials(string? doctorName)
+    {
+        if (string.IsNullOrWhiteSpace(doctorName))
+            return "Dr";
+
+        var parts = doctorName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        if (parts.Length == 1 && parts[0].Length > 0)
+            return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+
+        return "Dr";
+    }
+
+    // WebRTC Call Methods
+
+    private async Task StartVideoCall()
+    {
+        if (selectedConversation == null) return;
+
+        isVideoCall = true;
+        await InitiateCall();
+    }
+
+    private async Task StartVoiceCall()
+    {
+        if (selectedConversation == null) return;
+
+        isVideoCall = false;
+        await InitiateCall();
+    }
+
+    private async Task InitiateCall()
+    {
+        if (selectedConversation == null || hubConnection == null) return;
+
+        try
+        {
+            callPartnerId = selectedConversation.Id;
+            callPartnerName = selectedConversation.DoctorName;
+            callState = VideoCallModal.CallStatus.Ringing;
+            isCallActive = true;
+
+            // Start local stream
+            if (videoCallModal != null)
+            {
+                await videoCallModal.StartLocalStream();
+            }
+
+            // Notify receiver via SignalR
+            await hubConnection.SendAsync("InitiateCall", callPartnerId, isVideoCall);
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initiating call");
+            await JS.InvokeVoidAsync("alert", "Failed to initiate call. Please try again.");
+            isCallActive = false;
+        }
+    }
+
+    private async Task HandleCallAccepted()
+    {
+        if (hubConnection == null || videoCallModal == null) return;
+
+        try
+        {
+            callState = VideoCallModal.CallStatus.Connecting;
+            StateHasChanged();
+
+            // Create and send offer
+            var offer = await videoCallModal.CreateOffer();
+            if (!string.IsNullOrEmpty(offer))
+            {
+                await hubConnection.SendAsync("SendCallOffer", callPartnerId, offer);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error accepting call");
+            await HandleCallEnded();
+        }
+    }
+
+    private async Task HandleCallRejected()
+    {
+        if (hubConnection == null) return;
+
+        try
+        {
+            await hubConnection.SendAsync("RejectCall", callPartnerId, "Call declined");
+            isCallActive = false;
+            callState = VideoCallModal.CallStatus.Ended;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error rejecting call");
+        }
+    }
+
+    private async Task HandleCallEnded()
+    {
+        if (hubConnection != null && !string.IsNullOrEmpty(callPartnerId))
+        {
+            try
+            {
+                await hubConnection.SendAsync("EndCall", callPartnerId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error ending call via SignalR");
+            }
+        }
+
+        isCallActive = false;
+        callState = VideoCallModal.CallStatus.Ended;
+        callPartnerId = "";
+        callPartnerName = "";
+        StateHasChanged();
+    }
+
+    private async Task HandleIceCandidateGenerated(string candidateJson)
+    {
+        if (hubConnection == null || string.IsNullOrEmpty(callPartnerId)) return;
+
+        try
+        {
+            await hubConnection.SendAsync("SendIceCandidate", callPartnerId, candidateJson);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error sending ICE candidate");
+        }
+    }
+
+    private Task HandleOfferCreated(string offerJson)
+    {
+        // Offer is created and sent in HandleCallAccepted
+        return Task.CompletedTask;
+    }
+
+    private Task HandleAnswerCreated(string answerJson)
+    {
+        // Answer is handled automatically in SignalR event handlers
+        return Task.CompletedTask;
+    }
+
+    // AI Assistant Methods
+
+    private void ToggleAiAssistant()
+    {
+        showAiAssistant = !showAiAssistant;
+        StateHasChanged();
+    }
+
+    private void CloseAiAssistant()
+    {
+        showAiAssistant = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleAiAction(string action)
+    {
+        // Handle AI suggested actions
+        if (action.Contains("call-emergency"))
+        {
+            await JS.InvokeVoidAsync("open", "tel:911");
+        }
+        else if (action.Contains("find-hospital"))
+        {
+            // Could open hospital finder or map
+            Logger.LogInformation("Find hospital action triggered");
+        }
+        else if (action.Contains("book-appointment"))
+        {
+            // Navigate to appointment booking
+            Navigation.NavigateTo("/patient/appointments");
+        }
+    }
+
+    // Smart Reply Methods
+
+    private Task HandleSmartReply(string reply)
+    {
+        newMessage = reply;
+        showSmartReplies = false;
+        smartReplySuggestions.Clear();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void GenerateSmartReplies(string lastMessage, bool isFromDoctor)
+    {
+        try
+        {
+            smartReplySuggestions = SmartReplyService.GenerateSuggestions(lastMessage, isFromDoctor);
+            showSmartReplies = smartReplySuggestions.Any();
+            StateHasChanged();
+
+            // Auto-hide suggestions after 30 seconds
+            Task.Delay(30000).ContinueWith(_ =>
+            {
+                InvokeAsync(() =>
+                {
+                    showSmartReplies = false;
+                    StateHasChanged();
+                });
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error generating smart replies");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        typingTimer?.Dispose();
+
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

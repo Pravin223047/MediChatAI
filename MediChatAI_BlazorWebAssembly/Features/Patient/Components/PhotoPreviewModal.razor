@@ -1,0 +1,151 @@
+@using MediChatAI_BlazorWebAssembly.Core.Services.Theme
+@inject ThemeState ThemeState
+
+<!-- Photo Preview Modal -->
+<div class="fixed inset-0 z-[200] overflow-y-auto @(IsOpen ? "" : "hidden")"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="photo-preview-title">
+
+    <!-- Background overlay with blur -->
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity @(IsOpen ? "ease-out duration-300 opacity-100" : "ease-in duration-200 opacity-0")"
+             aria-hidden="true"
+             @onclick="HandleCancel"></div>
+
+        <!-- Modal panel -->
+        <div class="inline-block align-middle bg-gradient-to-br @(IsDarkMode ? "from-gray-800 to-gray-900" : "from-white to-gray-50") rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all @(IsOpen ? "ease-out duration-300 opacity-100 translate-y-0 sm:scale-100" : "ease-in duration-200 opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95") w-full max-w-4xl relative border-2 @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+
+            <!-- Header with gradient background -->
+            <div class="relative px-6 pt-6 pb-4 bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 border-b @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center shadow-lg">
+                            <i class="fas fa-camera text-white text-2xl"></i>
+                        </div>
+                        <div>
+                            <h3 id="photo-preview-title" class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                Photo Preview
+                            </h3>
+                            <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Review your captured photo before proceeding
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button"
+                            @onclick="HandleCancel"
+                            class="flex-shrink-0 w-10 h-10 rounded-full @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-200 hover:bg-gray-300 text-gray-600") transition-all flex items-center justify-center hover:scale-110 transform">
+                        <i class="fas fa-times text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Photo Display Area -->
+            <div class="px-6 py-6">
+                <div class="relative rounded-2xl overflow-hidden shadow-2xl border-4 @(IsDarkMode ? "border-gray-700" : "border-gray-200") bg-black">
+                    @if (!string.IsNullOrEmpty(PhotoUrl))
+                    {
+                        <img src="@PhotoUrl"
+                             alt="Captured photo preview"
+                             class="w-full h-auto max-h-[60vh] object-contain mx-auto" />
+
+                        <!-- Photo metadata overlay -->
+                        <div class="absolute top-4 left-4 px-4 py-2 rounded-full bg-black/70 backdrop-blur-sm text-white text-xs font-medium shadow-lg flex items-center gap-2">
+                            <i class="fas fa-camera text-green-400"></i>
+                            <span>Captured Successfully</span>
+                        </div>
+
+                        <!-- Photo dimensions indicator -->
+                        <div class="absolute bottom-4 right-4 px-3 py-1.5 rounded-lg bg-black/70 backdrop-blur-sm text-white text-xs font-mono shadow-lg flex items-center gap-2">
+                            <i class="fas fa-expand-arrows-alt text-blue-400"></i>
+                            <span>High Quality</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="flex items-center justify-center h-96 @(IsDarkMode ? "bg-gray-800" : "bg-gray-100")">
+                            <div class="text-center">
+                                <i class="fas fa-image text-6xl @(IsDarkMode ? "text-gray-600" : "text-gray-400") mb-4"></i>
+                                <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600")">No photo available</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Info Section -->
+                <div class="mt-6 p-4 rounded-xl @(IsDarkMode ? "bg-gray-800/50 border-gray-700" : "bg-blue-50 border-blue-200") border-2">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+                            <i class="fas fa-lightbulb text-white"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="font-semibold @(IsDarkMode ? "text-blue-400" : "text-blue-800") mb-1">
+                                Photo Quality Tips
+                            </h4>
+                            <ul class="text-sm @(IsDarkMode ? "text-gray-300" : "text-blue-700") space-y-1">
+                                <li><i class="fas fa-check-circle text-green-500 mr-2"></i>Ensure good lighting for clear visibility</li>
+                                <li><i class="fas fa-check-circle text-green-500 mr-2"></i>Photo should be in focus and not blurry</li>
+                                <li><i class="fas fa-check-circle text-green-500 mr-2"></i>Visible symptoms should be clearly captured</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons Footer -->
+            <div class="px-6 py-4 bg-gradient-to-r @(IsDarkMode ? "from-gray-800 to-gray-850" : "from-gray-50 to-white") border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200") flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <!-- Cancel Button -->
+                <button type="button"
+                        @onclick="HandleCancel"
+                        class="flex-1 sm:flex-initial px-6 py-3.5 rounded-xl font-semibold @(IsDarkMode ? "bg-gray-700 text-white hover:bg-gray-600 border-2 border-gray-600" : "bg-white text-gray-700 hover:bg-gray-100 border-2 border-gray-300") transition-all hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2 group">
+                    <i class="fas fa-times-circle group-hover:rotate-90 transition-transform duration-300"></i>
+                    <span>Cancel</span>
+                </button>
+
+                <!-- Retake Button -->
+                <button type="button"
+                        @onclick="HandleRetake"
+                        class="flex-1 px-6 py-3.5 rounded-xl font-semibold bg-gradient-to-r from-orange-500 to-red-600 text-white hover:from-orange-600 hover:to-red-700 transition-all hover:shadow-xl hover:shadow-orange-500/50 transform hover:-translate-y-0.5 flex items-center justify-center gap-2 group">
+                    <i class="fas fa-redo group-hover:rotate-180 transition-transform duration-500"></i>
+                    <span>Retake Photo</span>
+                </button>
+
+                <!-- Good to Go Button -->
+                <button type="button"
+                        @onclick="HandleConfirm"
+                        class="flex-1 px-8 py-3.5 rounded-xl font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all hover:shadow-xl hover:shadow-green-500/50 transform hover:-translate-y-0.5 flex items-center justify-center gap-2 group relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-r from-emerald-600 to-green-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <i class="fas fa-check-circle text-xl relative z-10 group-hover:scale-110 transition-transform"></i>
+                    <span class="relative z-10">Good to Go</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool IsDarkMode => ThemeState.CurrentTheme.Mode == "dark";
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string PhotoUrl { get; set; } = "";
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnRetake { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task HandleConfirm()
+    {
+        await OnConfirm.InvokeAsync();
+    }
+
+    private async Task HandleRetake()
+    {
+        await OnRetake.InvokeAsync();
+    }
+
+    private async Task HandleCancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+}

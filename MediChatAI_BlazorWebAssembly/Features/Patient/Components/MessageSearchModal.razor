@@ -1,0 +1,283 @@
+@using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
+
+@if (IsVisible)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4" @onclick="Close">
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden" @onclick:stopPropagation="true">
+
+            <!-- Header -->
+            <div class="@(IsDarkMode ? "bg-gray-900 border-gray-700" : "bg-gray-50 border-gray-200") border-b px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-search @(IsDarkMode ? "text-blue-400" : "text-blue-600") text-xl"></i>
+                    <h2 class="text-xl font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">Search Messages</h2>
+                </div>
+                <button @onclick="Close" class="@(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700") transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Search Form -->
+            <div class="p-6 space-y-4">
+                <!-- Search Query -->
+                <div>
+                    <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                        Search Term
+                    </label>
+                    <div class="relative">
+                        <input @bind="searchQuery"
+                               @bind:event="oninput"
+                               @onkeydown="HandleKeyDown"
+                               type="text"
+                               placeholder="Type to search messages..."
+                               class="w-full px-4 py-2 pl-10 @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900") border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                        <i class="fas fa-search absolute left-3 top-3 @(IsDarkMode ? "text-gray-400" : "text-gray-500")"></i>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Date Range -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            From Date
+                        </label>
+                        <input @bind="startDate"
+                               type="date"
+                               class="w-full px-4 py-2 @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900") border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            To Date
+                        </label>
+                        <input @bind="endDate"
+                               type="date"
+                               class="w-full px-4 py-2 @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900") border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+
+                    <!-- Message Type -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Message Type
+                        </label>
+                        <select @bind="messageType"
+                                class="w-full px-4 py-2 @(IsDarkMode ? "bg-gray-700 border-gray-600 text-white" : "bg-white border-gray-300 text-gray-900") border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="All">All Messages</option>
+                            <option value="Text">Text Only</option>
+                            <option value="File">Files Only</option>
+                        </select>
+                    </div>
+
+                    <!-- Has Attachment -->
+                    <div>
+                        <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
+                            Attachments
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input @bind="hasAttachment" type="checkbox" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                            <span class="ml-2 text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700")">Only messages with attachments</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Search Button -->
+                <div class="flex gap-3">
+                    <button @onclick="PerformSearch"
+                            disabled="@isSearching"
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                        @if (isSearching)
+                        {
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Searching...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-search"></i>
+                            <span>Search</span>
+                        }
+                    </button>
+                    <button @onclick="ClearFilters"
+                            class="@(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700") font-medium py-2 px-4 rounded-lg transition-colors">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results -->
+            @if (searchResults != null)
+            {
+                <div class="@(IsDarkMode ? "bg-gray-900 border-gray-700" : "bg-gray-50 border-gray-200") border-t px-6 py-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                            Results (@searchResults.TotalCount)
+                        </h3>
+                        @if (searchResults.TotalPages > 1)
+                        {
+                            <div class="flex items-center gap-2">
+                                <button @onclick="PreviousPage"
+                                        disabled="@(searchResults.PageNumber == 1)"
+                                        class="px-3 py-1 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-white hover:bg-gray-100") rounded border @(IsDarkMode ? "border-gray-600" : "border-gray-300") disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span class="text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                    Page @searchResults.PageNumber of @searchResults.TotalPages
+                                </span>
+                                <button @onclick="NextPage"
+                                        disabled="@(searchResults.PageNumber >= searchResults.TotalPages)"
+                                        class="px-3 py-1 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-white hover:bg-gray-100") rounded border @(IsDarkMode ? "border-gray-600" : "border-gray-300") disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="max-h-96 overflow-y-auto space-y-2">
+                        @if (searchResults.Results.Any())
+                        {
+                            @foreach (var result in searchResults.Results)
+                            {
+                                <div @onclick="() => OnResultClick.InvokeAsync(result)"
+                                     class="@(IsDarkMode ? "bg-gray-800 hover:bg-gray-750" : "bg-white hover:bg-gray-50") p-4 rounded-lg border @(IsDarkMode ? "border-gray-700" : "border-gray-200") cursor-pointer transition-colors">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-medium @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                                @(result.IsSender ? result.ReceiverName : result.SenderName)
+                                            </span>
+                                            <span class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-500")">
+                                                @result.SentAt.ToString("MMM dd, yyyy h:mm tt")
+                                            </span>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(result.AttachmentUrl))
+                                        {
+                                            <i class="fas fa-paperclip @(IsDarkMode ? "text-gray-400" : "text-gray-500")"></i>
+                                        }
+                                    </div>
+                                    <p class="text-sm @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                        @result.MatchedText
+                                    </p>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center py-8 @(IsDarkMode ? "text-gray-400" : "text-gray-500")">
+                                <i class="fas fa-search text-3xl mb-2"></i>
+                                <p>No results found</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public bool IsDarkMode { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<MessageSearchResultDto> OnResultClick { get; set; }
+    [Parameter] public EventCallback<SearchMessagesInputDto> OnSearch { get; set; }
+
+    private string searchQuery = "";
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private string messageType = "All";
+    private bool hasAttachment = false;
+    private bool isSearching = false;
+    private int currentPage = 1;
+
+    private SearchMessagesResponseDto? searchResults;
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private void ClearFilters()
+    {
+        searchQuery = "";
+        startDate = null;
+        endDate = null;
+        messageType = "All";
+        hasAttachment = false;
+        searchResults = null;
+        currentPage = 1;
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isSearching)
+        {
+            await PerformSearch();
+        }
+    }
+
+    private async Task PerformSearch()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery) && !startDate.HasValue && !endDate.HasValue && !hasAttachment)
+        {
+            return; // Need at least one filter
+        }
+
+        isSearching = true;
+        currentPage = 1;
+
+        var input = new SearchMessagesInputDto
+        {
+            SearchQuery = searchQuery,
+            StartDate = startDate,
+            EndDate = endDate,
+            MessageType = messageType,
+            HasAttachment = hasAttachment,
+            PageNumber = currentPage,
+            PageSize = 20
+        };
+
+        await OnSearch.InvokeAsync(input);
+        isSearching = false;
+    }
+
+    private async Task NextPage()
+    {
+        if (searchResults != null && currentPage < searchResults.TotalPages)
+        {
+            currentPage++;
+            await PerformSearchWithPage();
+        }
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await PerformSearchWithPage();
+        }
+    }
+
+    private async Task PerformSearchWithPage()
+    {
+        isSearching = true;
+
+        var input = new SearchMessagesInputDto
+        {
+            SearchQuery = searchQuery,
+            StartDate = startDate,
+            EndDate = endDate,
+            MessageType = messageType,
+            HasAttachment = hasAttachment,
+            PageNumber = currentPage,
+            PageSize = 20
+        };
+
+        await OnSearch.InvokeAsync(input);
+        isSearching = false;
+    }
+
+    public void UpdateResults(SearchMessagesResponseDto? results)
+    {
+        searchResults = results;
+        StateHasChanged();
+    }
+}
