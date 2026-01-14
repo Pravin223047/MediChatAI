@@ -279,6 +279,11 @@
 
         if (response != null)
         {
+            // Sync session ID with server-assigned ID (important for saving conversation)
+            if (!string.IsNullOrEmpty(response.SessionId) && response.SessionId != currentSession.Id)
+            {
+                currentSession.Id = response.SessionId;
+            }
             currentSession.Messages.Add(response);
             currentSession.LastMessageAt = DateTime.UtcNow;
         }
@@ -318,6 +323,11 @@
 
         if (response != null)
         {
+            // Sync session ID with server-assigned ID (important for saving conversation)
+            if (!string.IsNullOrEmpty(response.SessionId) && response.SessionId != currentSession.Id)
+            {
+                currentSession.Id = response.SessionId;
+            }
             currentSession.Messages.Add(response);
         }
 

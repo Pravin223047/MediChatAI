@@ -77,7 +77,7 @@
     <!-- Main Layout -->
     <div class="h-screen flex">
         <!-- Conversation History Sidebar (collapsible on mobile) -->
-        <div class="@(showSidebar ? "w-80" : "w-0") transition-all duration-300 overflow-hidden">
+        <div class="@(showSidebar ? "w-80" : "w-0") transition-all duration-500 ease-in-out overflow-hidden">
             <ConversationHistorySidebar Conversations="@savedConversations"
                                         IsLoading="@isLoadingConversations"
                                         OnLoadConversation="@LoadConversation"
@@ -91,9 +91,18 @@
             <header class="@(IsDarkMode ? "bg-gray-800/90 border-gray-700" : "bg-white/80 border-gray-200") backdrop-blur-md border-b px-6 py-4">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-4">
+                        <!-- Sidebar Toggle Button - AI Animated -->
                         <button @onclick="@(() => showSidebar = !showSidebar)"
-                                class="lg:hidden w-10 h-10 rounded-lg @(IsDarkMode ? "hover:bg-gray-700" : "hover:bg-gray-100") flex items-center justify-center transition-colors">
-                            <i class="fas fa-bars @(IsDarkMode ? "text-gray-300" : "text-gray-700")"></i>
+                                title="@(showSidebar ? "Hide sidebar" : "Show conversation history")"
+                                class="group relative w-11 h-11 rounded-xl @(IsDarkMode ? "bg-gray-700/50 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200") flex items-center justify-center transition-all duration-500 ease-in-out hover:scale-105 hover:shadow-lg overflow-hidden">
+                            <!-- AI Glow Effect -->
+                            <div class="absolute inset-0 bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-in-out"></div>
+                            <!-- Animated Border -->
+                            <div class="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-emerald-400/50 transition-all duration-500 ease-in-out"></div>
+                            <!-- Icon with rotation animation -->
+                            <i class="fas @(showSidebar ? "fa-times" : "fa-bars") @(IsDarkMode ? "text-gray-300 group-hover:text-emerald-400" : "text-gray-700 group-hover:text-emerald-600") text-lg transition-all duration-500 ease-in-out transform group-hover:scale-110 z-10"></i>
+                            <!-- Ripple effect indicator -->
+                            <span class="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 opacity-0 group-active:opacity-30 transition-opacity duration-300"></span>
                         </button>
 
                         <div class="flex items-center gap-3">
@@ -392,6 +401,17 @@
 
         if (response != null)
         {
+            // Sync session ID with server-assigned ID (important for saving conversation)
+            if (!string.IsNullOrEmpty(response.SessionId) && response.SessionId != currentSession.Id)
+            {
+                Logger.LogInformation("Syncing session ID from {OldId} to {NewId}", currentSession.Id, response.SessionId);
+                currentSession.Id = response.SessionId;
+            }
+            else
+            {
+                Logger.LogInformation("Session ID unchanged or response SessionId is empty. Response.SessionId: {SessionId}, CurrentSession.Id: {CurrentId}", 
+                    response.SessionId, currentSession.Id);
+            }
             currentSession.Messages.Add(response);
             currentSession.LastMessageAt = DateTime.UtcNow;
         }
@@ -739,6 +759,7 @@
     {
         try
         {
+            Logger.LogInformation("Saving conversation with SessionId: {SessionId}", currentSession.Id);
             var success = await ChatbotService.SaveConversationAsync(currentSession.Id, data.title, data.summary);
 
             if (success)

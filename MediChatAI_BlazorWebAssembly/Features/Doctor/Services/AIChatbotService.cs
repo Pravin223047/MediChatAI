@@ -423,6 +423,7 @@ public class AIChatbotService : IAIChatbotService
         return new ChatMessage
         {
             Id = dto.Id,
+            SessionId = dto.SessionId,
             Content = dto.Content,
             Role = dto.Role,
             Timestamp = dto.Timestamp,

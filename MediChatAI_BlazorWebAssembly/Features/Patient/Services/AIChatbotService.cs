@@ -54,7 +54,10 @@ public class AIChatbotService : IAIChatbotService
 
             if (response?.SendAIChatMessage?.Success == true && response.SendAIChatMessage.ChatMessage != null)
             {
-                return MapDtoToModel(response.SendAIChatMessage.ChatMessage);
+                var chatMessage = response.SendAIChatMessage.ChatMessage;
+                _logger.LogInformation("AI Response - SessionId from server: {SessionId}, Original sessionId sent: {OriginalId}", 
+                    chatMessage.SessionId, sessionId);
+                return MapDtoToModel(chatMessage);
             }
 
             _logger.LogWarning("Failed to send message: {Message}", response?.SendAIChatMessage?.Message);
@@ -475,6 +478,7 @@ public class AIChatbotService : IAIChatbotService
         return new ChatMessage
         {
             Id = dto.Id,
+            SessionId = dto.SessionId,
             Content = dto.Content,
             Role = dto.Role,
             Timestamp = dto.Timestamp,

@@ -3,6 +3,7 @@ namespace MediChatAI_BlazorWebAssembly.Features.Shared.AIChat.Models;
 public class ChatMessage
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string? SessionId { get; set; }
     public string Content { get; set; } = string.Empty;
     public string Role { get; set; } = "user"; // "user" or "assistant"
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
