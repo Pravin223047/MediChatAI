@@ -8,6 +8,7 @@
 @using System.Security.Claims
 @using MediChatAI_BlazorWebAssembly.Features.Profile.Services
 @using MediChatAI_BlazorWebAssembly.Features.Profile.Models
+@implements IDisposable
 @inject AppSettingsState AppSettings
 @inject IThemeService ThemeService
 @inject NavigationManager Navigation
@@ -1013,6 +1014,7 @@
     private bool showPrefilledNotification = false;
     private bool showProfileTip = false;
     private string errorMessage = "";
+    private CancellationTokenSource _cts = new();
 
     // Validation state
     private Dictionary<string, bool> fieldErrors = new();
@@ -1372,9 +1374,16 @@
 
     private async Task AutoDismissPrefilledNotification()
     {
-        await Task.Delay(10000); // 10 seconds
-        showPrefilledNotification = false;
-        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await Task.Delay(10000, _cts.Token); // 10 seconds
+            showPrefilledNotification = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (TaskCanceledException)
+        {
+            // Component was disposed, skip UI update
+        }
     }
 
     private void OnDateOfBirthChanged(ChangeEventArgs e)
@@ -1889,5 +1898,11 @@
             return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
 
         return "Dr";
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
     }
 }
