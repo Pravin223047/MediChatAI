@@ -106,7 +106,7 @@ public class AppointmentService : IAppointmentService
             IsVirtual = dto.IsVirtual,
             ReasonForVisit = dto.ReasonForVisit,
             ConsultationFee = dto.ConsultationFee,
-            Status = AppointmentStatus.Confirmed,
+            Status = AppointmentStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -433,9 +433,8 @@ public class AppointmentService : IAppointmentService
             // Determine if virtual based on appointment type or preference
             IsVirtual = request.PreferredAppointmentType == AppointmentType.Consultation,
 
-            Status = AppointmentStatus.Confirmed,
-            CreatedAt = DateTime.UtcNow,
-            ConfirmedAt = DateTime.UtcNow
+            Status = AppointmentStatus.Pending,
+            CreatedAt = DateTime.UtcNow
         };
 
         _context.Appointments.Add(appointment);
@@ -608,6 +607,28 @@ public class AppointmentService : IAppointmentService
         request.ReviewedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> CancelAppointmentRequestAsync(int requestId, string patientId, string reason)
+    {
+        var request = await _context.AppointmentRequests.FindAsync(requestId);
+        if (request == null)
+            return false;
+
+        // Ensure the patient can only cancel their own requests
+        if (request.PatientId != patientId)
+            return false;
+
+        // Can only cancel pending or under review requests
+        if (request.Status != RequestStatus.Pending && request.Status != RequestStatus.UnderReview)
+            return false;
+
+        request.Status = RequestStatus.Cancelled;
+        request.RejectionReason = $"Cancelled by patient: {reason}";
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Patient {PatientId} cancelled appointment request {RequestId}", patientId, requestId);
         return true;
     }
 

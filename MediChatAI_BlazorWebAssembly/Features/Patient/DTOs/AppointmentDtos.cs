@@ -67,15 +67,47 @@ public class CancelAppointmentResponse
     public bool CancelAppointment { get; set; }
 }
 
+// Request Status enum
+[JsonConverter(typeof(CaseInsensitiveEnumConverter<RequestStatus>))]
+public enum RequestStatus
+{
+    Pending,
+    UnderReview,
+    Approved,
+    Rejected,
+    Cancelled
+}
+
 // Appointment Request DTOs
 public class AppointmentRequestDto
 {
     public int Id { get; set; }
     public string? PatientId { get; set; }
+    public string? PreferredDoctorId { get; set; }
+    public string? PreferredDoctorName { get; set; }
     public string? FullName { get; set; }
-    public string? Status { get; set; }
-    public DateTime? RequestedAt { get; set; }
+    public int Age { get; set; }
+    public string? Gender { get; set; }
+    public string? Email { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? BloodType { get; set; }
+    public string? Allergies { get; set; }
+    public string? SymptomDescription { get; set; }
+    public string? SymptomSeverity { get; set; }
+    public string? ReasonForVisit { get; set; }
+    public string? InsuranceProvider { get; set; }
     public DateTime? PreferredDate { get; set; }
+    public string? PreferredTimeSlot { get; set; }
+    public bool IsUrgent { get; set; }
+    public RequestStatus Status { get; set; }
+    public DateTime RequestedAt { get; set; }
+    public int? AppointmentId { get; set; }
+}
+
+public class AppointmentRequestsResponse
+{
+    [JsonPropertyName("myAppointmentRequests")]
+    public List<AppointmentRequestDto> MyAppointmentRequests { get; set; } = new();
 }
 
 public class CreateAppointmentRequestResponse

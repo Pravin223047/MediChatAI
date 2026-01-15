@@ -3,6 +3,7 @@
 @using MediChatAI_BlazorWebAssembly.Core.Services.Theme
 @using MediChatAI_BlazorWebAssembly.Features.Patient.DTOs
 @using PatientAppointmentDto = MediChatAI_BlazorWebAssembly.Features.Patient.DTOs.AppointmentDto
+@using PatientAppointmentRequestDto = MediChatAI_BlazorWebAssembly.Features.Patient.DTOs.AppointmentRequestDto
 @inject ThemeState ThemeState
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
@@ -49,6 +50,11 @@
                             class='@GetFilterButtonClass("all")'>
                         <i class="fas fa-list mr-2"></i>
                         All (@totalCount)
+                    </button>
+                    <button @onclick='() => SelectFilter("pending")'
+                            class='@GetFilterButtonClass("pending")'>
+                        <i class="fas fa-hourglass-half mr-2"></i>
+                        Pending (@pendingCount)
                     </button>
                     <button @onclick='() => SelectFilter("upcoming")'
                             class='@GetFilterButtonClass("upcoming")'>
@@ -99,7 +105,8 @@
                 <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") text-lg">Loading appointments...</p>
             </div>
         }
-        else if (filteredAppointments.Count == 0)
+        else if ((currentFilter == "pending" && filteredRequests.Count == 0) || 
+                 (currentFilter != "pending" && filteredAppointments.Count == 0 && filteredRequests.Count == 0))
         {
             <!-- Empty State -->
             <div class="@GetCardClasses() p-16 text-center">
@@ -107,7 +114,8 @@
                     <i class="fas fa-calendar-times text-5xl @(IsDarkMode ? "text-gray-500" : "text-gray-400")"></i>
                 </div>
                 <h3 class="text-2xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-2">
-                    @(currentFilter == "upcoming" ? "No Upcoming Appointments" :
+                    @(currentFilter == "pending" ? "No Pending Appointments" :
+                      currentFilter == "upcoming" ? "No Upcoming Appointments" :
                       currentFilter == "past" ? "No Past Appointments" :
                       currentFilter == "cancelled" ? "No Cancelled Appointments" : "No Appointments Found")
                 </h3>
@@ -116,7 +124,7 @@
                         ? "You don't have any appointments in this category yet."
                         : "No appointments match your search criteria.")
                 </p>
-                @if (currentFilter == "upcoming" && string.IsNullOrEmpty(searchQuery))
+                @if ((currentFilter == "upcoming" || currentFilter == "pending") && string.IsNullOrEmpty(searchQuery))
                 {
                     <button @onclick='() => Navigation.NavigateTo("/patient/book-appointment")'
                             class="px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:shadow-xl transition-all font-semibold">
@@ -126,22 +134,188 @@
                 }
             </div>
         }
+        else if (currentFilter == "pending")
+        {
+            <!-- Pending Requests View -->
+            <div class="space-y-4">
+                @foreach (var request in filteredRequests)
+                {
+                    <div class="@GetCardClasses() p-6 hover:shadow-xl transition-all group border-l-4 border-yellow-500">
+                        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            <!-- Left Section - Request Info -->
+                            <div class="flex items-start gap-4 flex-1">
+                                <!-- Status Icon -->
+                                <div class="flex-shrink-0">
+                                    <div class="w-16 h-16 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center text-white text-2xl">
+                                        <i class="fas fa-hourglass-half animate-pulse"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Request Details -->
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                            Appointment Request
+                                        </h3>
+                                        @if (request.IsUrgent)
+                                        {
+                                            <span class="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
+                                                URGENT
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(request.PreferredDoctorName))
+                                    {
+                                        <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-2">
+                                            <i class="fas fa-user-md mr-1"></i>Requested: Dr. @request.PreferredDoctorName
+                                        </p>
+                                    }
+                                    <div class="flex flex-wrap gap-3 text-sm">
+                                        <span class="flex items-center @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                            <i class="fas fa-calendar mr-2 text-yellow-500"></i>
+                                            Submitted: @request.RequestedAt.ToString("MMM dd, yyyy hh:mm tt")
+                                        </span>
+                                        @if (request.PreferredDate.HasValue)
+                                        {
+                                            <span class="flex items-center @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                                <i class="fas fa-clock mr-2 text-yellow-500"></i>
+                                                Preferred: @request.PreferredDate.Value.ToString("MMM dd, yyyy")
+                                                @if (!string.IsNullOrEmpty(request.PreferredTimeSlot))
+                                                {
+                                                    <text> @request.PreferredTimeSlot</text>
+                                                }
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(request.SymptomDescription))
+                                    {
+                                        <p class="mt-2 text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") italic line-clamp-2">
+                                            <i class="fas fa-notes-medical mr-1"></i>
+                                            "@request.SymptomDescription"
+                                        </p>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Right Section - Status & Actions -->
+                            <div class="flex flex-col items-end gap-3">
+                                <span class="@GetRequestStatusBadgeClass(request.Status)">
+                                    @GetRequestStatusIcon(request.Status)
+                                    @GetRequestStatusText(request.Status)
+                                </span>
+
+                                <div class="flex gap-2 flex-wrap">
+                                    @if (request.Status == RequestStatus.Pending || request.Status == RequestStatus.UnderReview)
+                                    {
+                                        <button @onclick="() => ShowCancelRequestModal(request.Id)"
+                                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all text-sm font-semibold">
+                                            <i class="fas fa-times mr-1"></i>
+                                            Cancel Request
+                                        </button>
+                                    }
+                                    <button @onclick="() => ViewRequestDetails(request.Id)"
+                                            class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") text-gray-700 dark:text-gray-300 rounded-lg transition-all text-sm font-semibold">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
         else
         {
             @if (viewMode == "list")
             {
                 <!-- List View -->
                 <div class="space-y-4">
-                    @foreach (var appointment in filteredAppointments)
+                    @* Show pending requests first in All view *@
+                    @if (currentFilter == "all" && filteredRequests.Count > 0)
                     {
-                        <div class="@GetCardClasses() p-6 hover:shadow-xl transition-all group">
-                            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                                <!-- Left Section - Doctor & Date Info -->
-                                <div class="flex items-start gap-4 flex-1">
-                                    <!-- Doctor Avatar -->
-                                    <div class="flex-shrink-0">
-                                        <div class="w-16 h-16 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-white text-xl font-bold">
-                                            @GetDoctorInitials(appointment.DoctorName)
+                        <div class="mb-4">
+                            <h3 class="text-lg font-semibold @(IsDarkMode ? "text-yellow-400" : "text-yellow-600") mb-3">
+                                <i class="fas fa-hourglass-half mr-2"></i>Pending Requests (@filteredRequests.Count)
+                            </h3>
+                            @foreach (var request in filteredRequests)
+                            {
+                                <div class="@GetCardClasses() p-6 hover:shadow-xl transition-all group border-l-4 border-yellow-500 mb-3">
+                                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                        <div class="flex items-start gap-4 flex-1">
+                                            <div class="flex-shrink-0">
+                                                <div class="w-16 h-16 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center text-white text-2xl">
+                                                    <i class="fas fa-hourglass-half animate-pulse"></i>
+                                                </div>
+                                            </div>
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                                                        Appointment Request
+                                                    </h3>
+                                                    @if (request.IsUrgent)
+                                                    {
+                                                        <span class="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">URGENT</span>
+                                                    }
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(request.PreferredDoctorName))
+                                                {
+                                                    <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-2">
+                                                        <i class="fas fa-user-md mr-1"></i>Requested: Dr. @request.PreferredDoctorName
+                                                    </p>
+                                                }
+                                                <div class="flex flex-wrap gap-3 text-sm">
+                                                    <span class="flex items-center @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                                        <i class="fas fa-calendar mr-2 text-yellow-500"></i>
+                                                        Submitted: @request.RequestedAt.ToString("MMM dd, yyyy")
+                                                    </span>
+                                                    @if (request.PreferredDate.HasValue)
+                                                    {
+                                                        <span class="flex items-center @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                                            <i class="fas fa-clock mr-2 text-yellow-500"></i>
+                                                            Preferred: @request.PreferredDate.Value.ToString("MMM dd, yyyy")
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-col items-end gap-3">
+                                            <span class="@GetRequestStatusBadgeClass(request.Status)">
+                                                @GetRequestStatusIcon(request.Status)
+                                                @GetRequestStatusText(request.Status)
+                                            </span>
+                                            <div class="flex gap-2">
+                                                <button @onclick="() => ViewRequestDetails(request.Id)"
+                                                        class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") text-gray-700 dark:text-gray-300 rounded-lg transition-all text-sm font-semibold">
+                                                    <i class="fas fa-info-circle mr-1"></i>Details
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @* Show confirmed appointments *@
+                    @if (filteredAppointments.Count > 0)
+                    {
+                        @if (currentFilter == "all" && filteredRequests.Count > 0)
+                        {
+                            <h3 class="text-lg font-semibold @(IsDarkMode ? "text-green-400" : "text-green-600") mb-3">
+                                <i class="fas fa-calendar-check mr-2"></i>Confirmed Appointments (@filteredAppointments.Count)
+                            </h3>
+                        }
+                        @foreach (var appointment in filteredAppointments)
+                        {
+                            <div class="@GetCardClasses() p-6 hover:shadow-xl transition-all group">
+                                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                    <!-- Left Section - Doctor & Date Info -->
+                                    <div class="flex items-start gap-4 flex-1">
+                                        <!-- Doctor Avatar -->
+                                        <div class="flex-shrink-0">
+                                            <div class="w-16 h-16 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-white text-xl font-bold">
+                                                @GetDoctorInitials(appointment.DoctorName)
                                         </div>
                                     </div>
 
@@ -231,6 +405,7 @@
                                 </div>
                             </div>
                         </div>
+                        }
                     }
                 </div>
 
@@ -277,10 +452,12 @@
         <div class="@GetCardClasses() max-w-md w-full p-6 transform transition-all">
             <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900") mb-4">
                 <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>
-                Cancel Appointment?
+                @(selectedRequestId.HasValue ? "Cancel Appointment Request?" : "Cancel Appointment?")
             </h3>
             <p class="@(IsDarkMode ? "text-gray-400" : "text-gray-600") mb-4">
-                Are you sure you want to cancel this appointment? This action cannot be undone.
+                @(selectedRequestId.HasValue 
+                    ? "Are you sure you want to cancel this appointment request? This action cannot be undone."
+                    : "Are you sure you want to cancel this appointment? This action cannot be undone.")
             </p>
             <div class="mb-4">
                 <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
@@ -293,11 +470,203 @@
             <div class="flex gap-3">
                 <button @onclick="CloseCancelModal"
                         class="flex-1 px-4 py-2 @(IsDarkMode ? "bg-gray-700" : "bg-gray-200") text-gray-700 dark:text-gray-300 rounded-lg hover:opacity-80 transition-opacity font-semibold">
-                    Keep Appointment
+                    @(selectedRequestId.HasValue ? "Keep Request" : "Keep Appointment")
                 </button>
-                <button @onclick="ConfirmCancelAppointment"
+                <button @onclick="@(selectedRequestId.HasValue ? ConfirmCancelRequest : ConfirmCancelAppointment)"
                         class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-semibold">
                     Yes, Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Request Details Modal -->
+@if (showRequestDetailsModal && selectedRequestForDetails != null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="@GetCardClasses() max-w-2xl w-full max-h-[90vh] overflow-y-auto transform transition-all">
+            <!-- Header -->
+            <div class="sticky top-0 @(IsDarkMode ? "bg-gray-800" : "bg-white") p-6 border-b @(IsDarkMode ? "border-gray-700" : "border-gray-200") flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center text-white">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold @(IsDarkMode ? "text-white" : "text-gray-900")">
+                            Appointment Request Details
+                        </h3>
+                        <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
+                            Request #@selectedRequestForDetails.Id
+                        </p>
+                    </div>
+                </div>
+                <button @onclick="CloseRequestDetailsModal"
+                        class="p-2 rounded-lg @(IsDarkMode ? "hover:bg-gray-700" : "hover:bg-gray-100") transition-colors">
+                    <i class="fas fa-times text-lg @(IsDarkMode ? "text-gray-400" : "text-gray-600")"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="p-6 space-y-6">
+                <!-- Status Badge -->
+                <div class="flex items-center justify-between">
+                    <span class="@GetRequestStatusBadgeClass(selectedRequestForDetails.Status) text-sm">
+                        @GetRequestStatusIcon(selectedRequestForDetails.Status)
+                        @GetRequestStatusText(selectedRequestForDetails.Status)
+                    </span>
+                    @if (selectedRequestForDetails.IsUrgent)
+                    {
+                        <span class="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded-full animate-pulse">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>URGENT
+                        </span>
+                    }
+                </div>
+
+                <!-- Request Timeline -->
+                <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-xl p-4">
+                    <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-3">
+                        <i class="fas fa-clock mr-2 text-primary"></i>Timeline
+                    </h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex items-center gap-2 @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                            <i class="fas fa-paper-plane text-blue-500 w-5"></i>
+                            <span>Submitted: @selectedRequestForDetails.RequestedAt.ToString("MMMM dd, yyyy 'at' hh:mm tt")</span>
+                        </div>
+                        @if (selectedRequestForDetails.PreferredDate.HasValue)
+                        {
+                            <div class="flex items-center gap-2 @(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                                <i class="fas fa-calendar-alt text-green-500 w-5"></i>
+                                <span>Preferred Date: @selectedRequestForDetails.PreferredDate.Value.ToString("MMMM dd, yyyy")</span>
+                                @if (!string.IsNullOrEmpty(selectedRequestForDetails.PreferredTimeSlot))
+                                {
+                                    <span>(@selectedRequestForDetails.PreferredTimeSlot)</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Doctor Preference -->
+                @if (!string.IsNullOrEmpty(selectedRequestForDetails.PreferredDoctorName))
+                {
+                    <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-xl p-4">
+                        <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-3">
+                            <i class="fas fa-user-md mr-2 text-primary"></i>Requested Doctor
+                        </h4>
+                        <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700")">
+                            Dr. @selectedRequestForDetails.PreferredDoctorName
+                        </p>
+                    </div>
+                }
+
+                <!-- Symptoms & Reason -->
+                <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-xl p-4">
+                    <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-3">
+                        <i class="fas fa-notes-medical mr-2 text-primary"></i>Symptoms & Reason
+                    </h4>
+                    <div class="space-y-3">
+                        @if (!string.IsNullOrEmpty(selectedRequestForDetails.ReasonForVisit))
+                        {
+                            <div>
+                                <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Reason for Visit</span>
+                                <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.ReasonForVisit</p>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(selectedRequestForDetails.SymptomDescription))
+                        {
+                            <div>
+                                <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Symptom Description</span>
+                                <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.SymptomDescription</p>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(selectedRequestForDetails.SymptomSeverity))
+                        {
+                            <div>
+                                <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Severity</span>
+                                <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.SymptomSeverity</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Medical Info -->
+                @if (!string.IsNullOrEmpty(selectedRequestForDetails.BloodType) || !string.IsNullOrEmpty(selectedRequestForDetails.Allergies))
+                {
+                    <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-xl p-4">
+                        <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-3">
+                            <i class="fas fa-heartbeat mr-2 text-red-500"></i>Medical Information
+                        </h4>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            @if (!string.IsNullOrEmpty(selectedRequestForDetails.BloodType))
+                            {
+                                <div>
+                                    <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Blood Type</span>
+                                    <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1 font-semibold">@selectedRequestForDetails.BloodType</p>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(selectedRequestForDetails.Allergies))
+                            {
+                                <div>
+                                    <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Allergies</span>
+                                    <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.Allergies</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Patient Info -->
+                <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-xl p-4">
+                    <h4 class="font-semibold @(IsDarkMode ? "text-white" : "text-gray-900") mb-3">
+                        <i class="fas fa-user mr-2 text-primary"></i>Patient Information
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Name</span>
+                            <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.FullName</p>
+                        </div>
+                        <div>
+                            <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Age</span>
+                            <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.Age years</p>
+                        </div>
+                        @if (!string.IsNullOrEmpty(selectedRequestForDetails.Gender))
+                        {
+                            <div>
+                                <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Gender</span>
+                                <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.Gender</p>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(selectedRequestForDetails.Email))
+                        {
+                            <div>
+                                <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Email</span>
+                                <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.Email</p>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(selectedRequestForDetails.PhoneNumber))
+                        {
+                            <div>
+                                <span class="text-xs font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500") uppercase tracking-wide">Phone</span>
+                                <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") mt-1">@selectedRequestForDetails.PhoneNumber</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="sticky bottom-0 @(IsDarkMode ? "bg-gray-800" : "bg-white") p-6 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200") flex gap-3">
+                @if (selectedRequestForDetails.Status == RequestStatus.Pending || selectedRequestForDetails.Status == RequestStatus.UnderReview)
+                {
+                    <button @onclick="() => { CloseRequestDetailsModal(); ShowCancelRequestModal(selectedRequestForDetails.Id); }"
+                            class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-semibold">
+                        <i class="fas fa-times mr-2"></i>Cancel Request
+                    </button>
+                }
+                <button @onclick="CloseRequestDetailsModal"
+                        class="flex-1 px-4 py-2 @(IsDarkMode ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-700") rounded-lg hover:opacity-80 transition-opacity font-semibold">
+                    Close
                 </button>
             </div>
         </div>
@@ -317,17 +686,27 @@
     private int currentPage = 1;
     private int pageSize = 10;
     private bool showCancelModal = false;
+    private bool showRequestDetailsModal = false;
     private int? selectedAppointmentId = null;
+    private int? selectedRequestId = null;
+    private PatientAppointmentRequestDto? selectedRequestForDetails = null;
     private string cancellationReason = "";
 
-    // Data
+    // Data - Appointments and Requests
     private List<PatientAppointmentDto> allAppointments = new();
     private List<PatientAppointmentDto> filteredAppointments = new();
-    private int totalCount => allAppointments.Count;
-    private int upcomingCount => allAppointments.Count(a => a.Status != AppointmentStatus.Cancelled && a.AppointmentDateTime >= DateTime.Now);
-    private int pastCount => allAppointments.Count(a => a.Status == AppointmentStatus.Completed || a.AppointmentDateTime < DateTime.Now);
-    private int cancelledCount => allAppointments.Count(a => a.Status == AppointmentStatus.Cancelled);
-    private int totalPages => (int)Math.Ceiling(filteredAppointments.Count / (double)pageSize);
+    private List<PatientAppointmentRequestDto> allRequests = new();
+    private List<PatientAppointmentRequestDto> filteredRequests = new();
+    
+    // Counts
+    private int totalCount => allAppointments.Count + allRequests.Count(r => r.Status != RequestStatus.Cancelled && r.Status != RequestStatus.Approved);
+    private int pendingCount => allRequests.Count(r => r.Status == RequestStatus.Pending || r.Status == RequestStatus.UnderReview);
+    private int upcomingCount => allAppointments.Count(a => a.Status == AppointmentStatus.Confirmed && a.AppointmentDateTime >= DateTime.Now);
+    private int pastCount => allAppointments.Count(a => a.Status == AppointmentStatus.Completed || (a.Status != AppointmentStatus.Pending && a.Status != AppointmentStatus.Cancelled && a.AppointmentDateTime < DateTime.Now));
+    private int cancelledCount => allAppointments.Count(a => a.Status == AppointmentStatus.Cancelled) + allRequests.Count(r => r.Status == RequestStatus.Cancelled || r.Status == RequestStatus.Rejected);
+    private int totalPages => currentFilter == "pending" 
+        ? (int)Math.Ceiling(filteredRequests.Count / (double)pageSize)
+        : (int)Math.Ceiling(filteredAppointments.Count / (double)pageSize);
 
     protected override async Task OnInitializedAsync()
     {
@@ -346,7 +725,25 @@
 
     private async Task LoadAppointments()
     {
-        allAppointments = await AppointmentService.GetMyAppointmentsAsync();
+        // Fetch both appointments and appointment requests
+        var appointmentsTask = AppointmentService.GetMyAppointmentsAsync();
+        var requestsTask = AppointmentService.GetMyAppointmentRequestsAsync();
+        
+        await Task.WhenAll(appointmentsTask, requestsTask);
+        
+        allAppointments = await appointmentsTask;
+        allRequests = await requestsTask;
+        
+        // Debug: Log counts
+        Logger.LogInformation("Loaded {AppointmentCount} appointments and {RequestCount} requests",
+            allAppointments.Count, allRequests.Count);
+        
+        foreach (var req in allRequests)
+        {
+            Logger.LogInformation("Request {Id}: Status={Status}, RequestedAt={RequestedAt}", 
+                req.Id, req.Status, req.RequestedAt);
+        }
+        
         FilterAppointments();
     }
 
@@ -359,13 +756,46 @@
 
     private void FilterAppointments()
     {
+        // Filter requests for pending tab and all tab
+        var filteredReqs = allRequests.AsEnumerable();
+        if (currentFilter == "pending" || currentFilter == "all")
+        {
+            filteredReqs = filteredReqs.Where(r => r.Status == RequestStatus.Pending || r.Status == RequestStatus.UnderReview);
+        }
+        else if (currentFilter == "cancelled")
+        {
+            filteredReqs = filteredReqs.Where(r => r.Status == RequestStatus.Cancelled || r.Status == RequestStatus.Rejected);
+        }
+        else
+        {
+            filteredReqs = Enumerable.Empty<PatientAppointmentRequestDto>();
+        }
+        
+        // Apply search to requests
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            filteredReqs = filteredReqs.Where(r =>
+                (r.PreferredDoctorName?.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (r.SymptomDescription?.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (r.ReasonForVisit?.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+        
+        filteredRequests = filteredReqs.OrderByDescending(r => r.RequestedAt).ToList();
+
+        // Filter appointments
         var filtered = allAppointments.AsEnumerable();
 
         // Apply filter
-        if (currentFilter == "upcoming")
-            filtered = filtered.Where(a => a.Status != AppointmentStatus.Cancelled && a.AppointmentDateTime >= DateTime.Now);
+        if (currentFilter == "pending")
+        {
+            // For pending tab, we show requests only, not appointments
+            filteredAppointments = new List<PatientAppointmentDto>();
+            return;
+        }
+        else if (currentFilter == "upcoming")
+            filtered = filtered.Where(a => a.Status == AppointmentStatus.Confirmed && a.AppointmentDateTime >= DateTime.Now);
         else if (currentFilter == "past")
-            filtered = filtered.Where(a => a.Status == AppointmentStatus.Completed || a.AppointmentDateTime < DateTime.Now);
+            filtered = filtered.Where(a => a.Status == AppointmentStatus.Completed || (a.Status != AppointmentStatus.Pending && a.Status != AppointmentStatus.Cancelled && a.AppointmentDateTime < DateTime.Now));
         else if (currentFilter == "cancelled")
             filtered = filtered.Where(a => a.Status == AppointmentStatus.Cancelled);
 
@@ -519,6 +949,105 @@
             currentPage++;
             StateHasChanged();
         }
+    }
+
+    // Request status helper methods
+    private string GetRequestStatusBadgeClass(RequestStatus status)
+    {
+        var baseClass = "px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1";
+        return status switch
+        {
+            RequestStatus.Pending => $"{baseClass} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+            RequestStatus.UnderReview => $"{baseClass} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+            RequestStatus.Approved => $"{baseClass} bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+            RequestStatus.Rejected => $"{baseClass} bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+            RequestStatus.Cancelled => $"{baseClass} bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
+            _ => $"{baseClass} bg-gray-100 text-gray-800"
+        };
+    }
+
+    private MarkupString GetRequestStatusIcon(RequestStatus status)
+    {
+        var icon = status switch
+        {
+            RequestStatus.Pending => "<i class='fas fa-hourglass-half'></i>",
+            RequestStatus.UnderReview => "<i class='fas fa-search'></i>",
+            RequestStatus.Approved => "<i class='fas fa-check-circle'></i>",
+            RequestStatus.Rejected => "<i class='fas fa-times-circle'></i>",
+            RequestStatus.Cancelled => "<i class='fas fa-ban'></i>",
+            _ => "<i class='fas fa-question-circle'></i>"
+        };
+        return new MarkupString(icon);
+    }
+
+    private string GetRequestStatusText(RequestStatus status)
+    {
+        return status switch
+        {
+            RequestStatus.Pending => "Awaiting Review",
+            RequestStatus.UnderReview => "Under Review",
+            RequestStatus.Approved => "Approved",
+            RequestStatus.Rejected => "Rejected",
+            RequestStatus.Cancelled => "Cancelled",
+            _ => "Unknown"
+        };
+    }
+
+    private void ShowCancelRequestModal(int requestId)
+    {
+        selectedRequestId = requestId;
+        selectedAppointmentId = null;
+        cancellationReason = "";
+        showCancelModal = true;
+    }
+
+    private async Task ConfirmCancelRequest()
+    {
+        try
+        {
+            if (selectedRequestId == null)
+                return;
+
+            var success = await AppointmentService.CancelAppointmentRequestAsync(
+                selectedRequestId.Value,
+                cancellationReason);
+
+            if (success)
+            {
+                ToastService.ShowSuccess("Appointment request cancelled successfully");
+                await LoadAppointments();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to cancel request. Please try again.");
+            }
+
+            CloseCancelModal();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error cancelling appointment request");
+            ToastService.ShowError("Failed to cancel request");
+        }
+    }
+
+    private void ViewRequestDetails(int requestId)
+    {
+        selectedRequestForDetails = allRequests.FirstOrDefault(r => r.Id == requestId);
+        if (selectedRequestForDetails != null)
+        {
+            showRequestDetailsModal = true;
+        }
+        else
+        {
+            ToastService.ShowError("Request not found");
+        }
+    }
+
+    private void CloseRequestDetailsModal()
+    {
+        showRequestDetailsModal = false;
+        selectedRequestForDetails = null;
     }
 
     private string GetCardClasses()
