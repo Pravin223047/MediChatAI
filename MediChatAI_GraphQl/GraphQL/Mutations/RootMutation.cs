@@ -770,6 +770,23 @@ public class Mutation
     }
 
     /// <summary>
+    /// Cancel an appointment request (for patients)
+    /// </summary>
+    [Authorize(Roles = new[] { "Patient" })]
+    public async Task<bool> CancelAppointmentRequestAsync(
+        int requestId,
+        string reason,
+        ClaimsPrincipal claimsPrincipal,
+        [Service] IAppointmentService appointmentService)
+    {
+        var patientId = claimsPrincipal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(patientId))
+            throw new UnauthorizedAccessException("Patient not authenticated");
+
+        return await appointmentService.CancelAppointmentRequestAsync(requestId, patientId, reason);
+    }
+
+    /// <summary>
     /// Create a direct appointment (for doctors/admin)
     /// </summary>
     [Authorize(Roles = new[] { "Doctor", "Admin" })]

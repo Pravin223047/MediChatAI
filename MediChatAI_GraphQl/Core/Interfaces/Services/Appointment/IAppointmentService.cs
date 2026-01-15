@@ -23,6 +23,7 @@ public interface IAppointmentService
     Task<AppointmentRequestDto> CreateAppointmentRequestAsync(CreateAppointmentRequestDto dto);
     Task<AppointmentDto> ApproveAppointmentRequestAsync(ReviewAppointmentRequestDto dto);
     Task<bool> RejectAppointmentRequestAsync(int requestId, string doctorId, string reason);
+    Task<bool> CancelAppointmentRequestAsync(int requestId, string patientId, string reason);
 
     // Doctor Availability
     Task<List<DoctorAvailabilityDto>> GetDoctorAvailabilityAsync(string doctorId, DateTime startDate, DateTime endDate);
