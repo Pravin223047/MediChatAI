@@ -61,33 +61,55 @@ public class PatientVitalsService : IPatientVitalsService
 
     public async Task<PatientVitalsData> GetLatestVitalsAsync(string patientId)
     {
+        _logger.LogInformation("GetLatestVitalsAsync called for patientId: {PatientId}", patientId);
+        
         var patient = await _context.Users.FindAsync(patientId);
-        if (patient == null) return null!;
+        if (patient == null)
+        {
+            _logger.LogWarning("Patient not found for patientId: {PatientId}", patientId);
+            return null!;
+        }
 
-        var latestVitals = await _context.PatientVitals
+        // Get all vitals for the patient ordered by date, then group in memory
+        var allVitals = await _context.PatientVitals
             .Where(v => v.PatientId == patientId)
-            .GroupBy(v => v.VitalType)
-            .Select(g => g.OrderByDescending(v => v.RecordedAt).FirstOrDefault())
+            .OrderByDescending(v => v.RecordedAt)
             .ToListAsync();
 
-        var heartRate = latestVitals.FirstOrDefault(v => v?.VitalType == VitalType.HeartRate);
-        var bp = latestVitals.FirstOrDefault(v => v?.VitalType == VitalType.BloodPressure);
-        var temp = latestVitals.FirstOrDefault(v => v?.VitalType == VitalType.Temperature);
-        var o2 = latestVitals.FirstOrDefault(v => v?.VitalType == VitalType.OxygenSaturation);
-        var rr = latestVitals.FirstOrDefault(v => v?.VitalType == VitalType.RespiratoryRate);
-        var glucose = latestVitals.FirstOrDefault(v => v?.VitalType == VitalType.BloodGlucose);
+        _logger.LogInformation("Found {Count} vitals for patientId: {PatientId}", allVitals.Count, patientId);
+
+        // If no vitals exist, return null to indicate no data
+        if (allVitals == null || !allVitals.Any())
+        {
+            _logger.LogInformation("No vitals found for patientId: {PatientId}", patientId);
+            return null!;
+        }
+
+        // Get latest of each type (in memory to avoid EF Core GroupBy translation issues)
+        var heartRate = allVitals.FirstOrDefault(v => v.VitalType == VitalType.HeartRate);
+        var bp = allVitals.FirstOrDefault(v => v.VitalType == VitalType.BloodPressure);
+        var temp = allVitals.FirstOrDefault(v => v.VitalType == VitalType.Temperature);
+        var o2 = allVitals.FirstOrDefault(v => v.VitalType == VitalType.OxygenSaturation);
+        var rr = allVitals.FirstOrDefault(v => v.VitalType == VitalType.RespiratoryRate);
+        var glucose = allVitals.FirstOrDefault(v => v.VitalType == VitalType.BloodGlucose);
+
+        // Get the most recent recording date
+        var lastRecorded = allVitals.First().RecordedAt;
+        
+        _logger.LogInformation("Latest vitals for {PatientId}: HR={HeartRate}, BP={BloodPressure}, Temp={Temperature}, O2={O2}, LastRecorded={LastRecorded}",
+            patientId, heartRate?.Value, bp?.Value, temp?.Value, o2?.Value, lastRecorded);
 
         return new PatientVitalsData(
             patientId,
             $"{patient.FirstName} {patient.LastName}",
-            heartRate != null ? int.Parse(heartRate.Value) : null,
+            heartRate != null && int.TryParse(heartRate.Value, out var hr) ? hr : null,
             bp?.Value,
-            temp != null ? decimal.Parse(temp.Value) : null,
-            o2 != null ? int.Parse(o2.Value) : null,
-            rr != null ? int.Parse(rr.Value) : null,
-            glucose != null ? int.Parse(glucose.Value) : null,
-            latestVitals.Max(v => v?.RecordedAt),
-            latestVitals.Any(v => v?.IsAbnormal == true)
+            temp != null && decimal.TryParse(temp.Value, out var t) ? t : null,
+            o2 != null && int.TryParse(o2.Value, out var ox) ? ox : null,
+            rr != null && int.TryParse(rr.Value, out var r) ? r : null,
+            glucose != null && int.TryParse(glucose.Value, out var g) ? g : null,
+            lastRecorded,
+            allVitals.Any(v => v.IsAbnormal)
         );
     }
 

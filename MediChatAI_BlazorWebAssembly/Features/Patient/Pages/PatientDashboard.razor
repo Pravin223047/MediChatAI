@@ -137,7 +137,7 @@
                                 <p class="text-sm font-medium @(IsDarkMode ? "text-gray-400" : "text-gray-500")">
                                     Health Status
                                 </p>
-                                <p class="text-2xl font-bold text-green-600 mt-1">
+                                <p class="text-2xl font-bold @(healthStatus == "Good" ? "text-green-600" : healthStatus == "Pending" ? "text-blue-500" : "text-yellow-500") mt-1">
                                     @healthStatus
                                 </p>
                                 @if (!string.IsNullOrEmpty(latestVitalReading))
@@ -147,7 +147,7 @@
                                     </p>
                                 }
                             </div>
-                            <div class="p-3 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 opacity-80 group-hover:opacity-100 transition-opacity">
+                            <div class="p-3 rounded-full @(healthStatus == "Good" ? "bg-gradient-to-br from-green-400 to-emerald-500" : healthStatus == "Pending" ? "bg-gradient-to-br from-blue-400 to-blue-500" : "bg-gradient-to-br from-yellow-400 to-orange-500") opacity-80 group-hover:opacity-100 transition-opacity">
                                 <i class="fas fa-heartbeat text-white text-2xl"></i>
                             </div>
                         </div>
@@ -540,11 +540,57 @@
                             }
                             else
                             {
-                                <div class="text-center py-8">
-                                    <i class="fas fa-chart-area text-4xl @(IsDarkMode ? "text-gray-700" : "text-gray-300") mb-3"></i>
-                                    <p class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600")">
-                                        No vital data recorded yet
-                                    </p>
+                                <!-- Show sample health metrics when no real data exists -->
+                                <div class="space-y-4">
+                                    <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-lg p-3">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">Blood Pressure</p>
+                                                <p class="text-lg font-semibold @(IsDarkMode ? "text-gray-500" : "text-gray-400") mt-1">
+                                                    -- / -- <span class="text-xs font-normal">mmHg</span>
+                                                </p>
+                                            </div>
+                                            <i class="fas fa-heartbeat text-2xl @(IsDarkMode ? "text-gray-600" : "text-gray-300")"></i>
+                                        </div>
+                                    </div>
+                                    <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-lg p-3">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">Heart Rate</p>
+                                                <p class="text-lg font-semibold @(IsDarkMode ? "text-gray-500" : "text-gray-400") mt-1">
+                                                    -- <span class="text-xs font-normal">bpm</span>
+                                                </p>
+                                            </div>
+                                            <i class="fas fa-heart text-2xl @(IsDarkMode ? "text-gray-600" : "text-gray-300")"></i>
+                                        </div>
+                                    </div>
+                                    <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-lg p-3">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">Temperature</p>
+                                                <p class="text-lg font-semibold @(IsDarkMode ? "text-gray-500" : "text-gray-400") mt-1">
+                                                    -- <span class="text-xs font-normal">°F</span>
+                                                </p>
+                                            </div>
+                                            <i class="fas fa-thermometer-half text-2xl @(IsDarkMode ? "text-gray-600" : "text-gray-300")"></i>
+                                        </div>
+                                    </div>
+                                    <div class="@(IsDarkMode ? "bg-gray-700/50" : "bg-gray-50") rounded-lg p-3">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600")">Oxygen Saturation</p>
+                                                <p class="text-lg font-semibold @(IsDarkMode ? "text-gray-500" : "text-gray-400") mt-1">
+                                                    -- <span class="text-xs font-normal">%</span>
+                                                </p>
+                                            </div>
+                                            <i class="fas fa-lungs text-2xl @(IsDarkMode ? "text-gray-600" : "text-gray-300")"></i>
+                                        </div>
+                                    </div>
+                                    <div class="pt-2 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
+                                        <p class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-400") text-center">
+                                            No vitals recorded yet. Visit your doctor to record health metrics.
+                                        </p>
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -882,8 +928,8 @@
         }
         else
         {
-            healthStatus = "No Data";
-            latestVitalReading = "";
+            healthStatus = "Pending";
+            latestVitalReading = "Record your first vitals";
         }
     }
 

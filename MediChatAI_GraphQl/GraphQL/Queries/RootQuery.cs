@@ -1190,6 +1190,7 @@ namespace MediChatAI_GraphQl.GraphQL.Queries
             [Service] IPrescriptionService prescriptionService,
             [Service] IPatientDocumentService documentService,
             [Service] INotificationService notificationService,
+            [Service] IPatientVitalsService vitalsService,
             [Service] ApplicationDbContext context,
             [Service] ILogger<Query> logger)
         {
@@ -1296,8 +1297,35 @@ namespace MediChatAI_GraphQl.GraphQL.Queries
                 PendingRefills = activePrescriptions.Count(p => (p.RefillsAllowed - p.RefillsUsed) <= 1)
             };
 
-                // TODO: Get latest vitals from health metrics service when implemented
-                dashboard.LatestVitals = null;
+                // Get latest vitals from health metrics service
+                try
+                {
+                    logger.LogInformation("Fetching latest vitals for patient: {PatientId}", patientId);
+                    var vitalsData = await vitalsService.GetLatestVitalsAsync(patientId);
+                    if (vitalsData != null)
+                    {
+                        dashboard.LatestVitals = new PatientVitalsSummary
+                        {
+                            BloodPressure = vitalsData.BloodPressure ?? "",
+                            HeartRate = vitalsData.HeartRate?.ToString() ?? "",
+                            Temperature = vitalsData.Temperature?.ToString("F1") ?? "",
+                            Weight = "", // Weight not in PatientVitalsData, can be added later
+                            OxygenSaturation = vitalsData.OxygenSaturation?.ToString() ?? "",
+                            LastRecorded = vitalsData.LastUpdated ?? DateTime.MinValue
+                        };
+                        logger.LogInformation("Successfully loaded vitals for patient: {PatientId}", patientId);
+                    }
+                    else
+                    {
+                        logger.LogInformation("No vitals data found for patient: {PatientId}", patientId);
+                        dashboard.LatestVitals = null;
+                    }
+                }
+                catch (Exception vitalsEx)
+                {
+                    logger.LogWarning(vitalsEx, "Failed to fetch vitals for patient: {PatientId}", patientId);
+                    dashboard.LatestVitals = null;
+                }
 
                 logger.LogInformation("Successfully built dashboard data for patient: {PatientId}", patientId);
                 return dashboard;
