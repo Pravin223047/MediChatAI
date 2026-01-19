@@ -1,18 +1,23 @@
 @namespace MediChatAI_BlazorWebAssembly.Features.Patient.Components
 
-<!-- Conversation Summary Modal -->
+<!-- AI-Powered Conversation Summary Modal -->
 @if (IsVisible)
 {
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50" @onclick="HandleClose">
-        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col" @onclick:stopPropagation>
+        <div class="@(IsDarkMode ? "bg-gray-800" : "bg-white") rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col" @onclick:stopPropagation>
             <!-- Modal Header -->
             <div class="flex items-center justify-between p-6 border-b @(IsDarkMode ? "border-gray-700" : "border-gray-200")">
                 <div class="flex items-center gap-3">
-                    <i class="fas fa-magic text-purple-500 text-2xl"></i>
-                    <h3 class="text-xl font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">Conversation Summary</h3>
+                    <div class="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg">
+                        <i class="fas fa-robot text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold @(IsDarkMode ? "text-white" : "text-gray-900")">AI Conversation Summary</h3>
+                        <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-500")">Powered by Gemini AI</p>
+                    </div>
                 </div>
                 <button @onclick="HandleClose"
-                        class="@(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700") transition-colors">
+                        class="@(IsDarkMode ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700") transition-colors p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
@@ -22,25 +27,34 @@
                 @if (IsGenerating)
                 {
                     <div class="flex flex-col items-center justify-center py-12">
-                        <i class="fas fa-spinner fa-spin text-4xl text-purple-500 mb-4"></i>
-                        <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-600")">Generating summary...</p>
+                        <div class="relative">
+                            <i class="fas fa-brain text-5xl text-purple-500 animate-pulse"></i>
+                            <div class="absolute -top-1 -right-1">
+                                <span class="flex h-4 w-4">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-4 w-4 bg-purple-500"></span>
+                                </span>
+                            </div>
+                        </div>
+                        <p class="@(IsDarkMode ? "text-gray-300" : "text-gray-600") mt-4 font-medium">Analyzing conversation...</p>
+                        <p class="@(IsDarkMode ? "text-gray-500" : "text-gray-400") text-sm mt-1">AI is generating an intelligent summary</p>
                     </div>
                 }
                 else if (!string.IsNullOrEmpty(Summary))
                 {
-                    <!-- Summary Stats -->
-                    <div class="grid grid-cols-3 gap-4 mb-6">
-                        <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-4 text-center">
+                    <!-- Summary Stats Cards -->
+                    <div class="grid grid-cols-3 gap-3 mb-6">
+                        <div class="@(IsDarkMode ? "bg-gradient-to-br from-purple-900/50 to-purple-800/30 border-purple-700" : "bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200") border rounded-xl p-4 text-center">
                             <div class="text-2xl font-bold text-purple-500">@Stats.TotalMessages</div>
-                            <div class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1">Messages</div>
+                            <div class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1 font-medium">Messages</div>
                         </div>
-                        <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-4 text-center">
+                        <div class="@(IsDarkMode ? "bg-gradient-to-br from-blue-900/50 to-blue-800/30 border-blue-700" : "bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200") border rounded-xl p-4 text-center">
                             <div class="text-2xl font-bold text-blue-500">@Stats.DoctorMessages</div>
-                            <div class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1">From Doctor</div>
+                            <div class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1 font-medium">From Doctor</div>
                         </div>
-                        <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-4 text-center">
+                        <div class="@(IsDarkMode ? "bg-gradient-to-br from-green-900/50 to-green-800/30 border-green-700" : "bg-gradient-to-br from-green-50 to-green-100 border-green-200") border rounded-xl p-4 text-center">
                             <div class="text-2xl font-bold text-green-500">@Stats.PatientMessages</div>
-                            <div class="text-sm @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1">From Patient</div>
+                            <div class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-600") mt-1 font-medium">From Patient</div>
                         </div>
                     </div>
 
@@ -48,11 +62,14 @@
                     @if (Stats.MedicalTerms.Any())
                     {
                         <div class="mb-6">
-                            <h4 class="text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">Medical Terms Discussed:</h4>
+                            <div class="flex items-center gap-2 mb-3">
+                                <i class="fas fa-stethoscope text-blue-500"></i>
+                                <h4 class="text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700")">Medical Terms Discussed</h4>
+                            </div>
                             <div class="flex flex-wrap gap-2">
                                 @foreach (var term in Stats.MedicalTerms)
                                 {
-                                    <span class="px-3 py-1 @(IsDarkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-700") rounded-full text-sm">
+                                    <span class="px-3 py-1.5 @(IsDarkMode ? "bg-blue-900/40 text-blue-300 border-blue-700" : "bg-blue-50 text-blue-700 border-blue-200") border rounded-full text-sm font-medium">
                                         @term
                                     </span>
                                 }
@@ -60,25 +77,35 @@
                         </div>
                     }
 
-                    <!-- Summary Text -->
-                    <div class="@(IsDarkMode ? "bg-gray-700" : "bg-gray-50") rounded-lg p-4">
-                        <h4 class="text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-3">Summary:</h4>
-                        <div class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") leading-relaxed whitespace-pre-wrap">
+                    <!-- AI Summary Content -->
+                    <div class="@(IsDarkMode ? "bg-gradient-to-br from-gray-700/50 to-gray-800/50 border-gray-600" : "bg-gradient-to-br from-gray-50 to-white border-gray-200") border rounded-xl p-5">
+                        <div class="flex items-center gap-2 mb-4">
+                            <i class="fas fa-sparkles text-yellow-500"></i>
+                            <h4 class="text-sm font-semibold @(IsDarkMode ? "text-gray-300" : "text-gray-700")">AI-Generated Summary</h4>
+                        </div>
+                        <div class="@(IsDarkMode ? "text-gray-300" : "text-gray-700") leading-relaxed whitespace-pre-wrap text-sm">
                             @Summary
                         </div>
                     </div>
 
-                    <!-- Time Range -->
-                    <div class="mt-4 text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") text-center">
-                        Summary generated for messages from @Stats.FirstMessageDate to @Stats.LastMessageDate
+                    <!-- Time Range & AI Disclaimer -->
+                    <div class="mt-4 space-y-2">
+                        <div class="text-xs @(IsDarkMode ? "text-gray-500" : "text-gray-500") text-center">
+                            <i class="fas fa-clock mr-1"></i>
+                            Summary for messages from @Stats.FirstMessageDate to @Stats.LastMessageDate
+                        </div>
+                        <div class="text-xs @(IsDarkMode ? "text-gray-600" : "text-gray-400") text-center italic">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            This summary is AI-generated and should not replace professional medical advice
+                        </div>
                     </div>
                 }
             </div>
 
             <!-- Modal Footer -->
-            <div class="p-6 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200") flex justify-end gap-3">
+            <div class="p-4 border-t @(IsDarkMode ? "border-gray-700" : "border-gray-200") flex justify-end gap-3">
                 <button @onclick="HandleClose"
-                        class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-colors">
+                        class="px-5 py-2.5 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-800") rounded-lg transition-colors font-medium">
                     Close
                 </button>
             </div>

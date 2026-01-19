@@ -21,10 +21,15 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject ThemeState ThemeState
+@using MediChatAI_BlazorWebAssembly.Features.Profile.Services
+@using MediChatAI_BlazorWebAssembly.Features.Profile.Models
 @inject IMessagingService MessagingService
 @inject ISmartReplyService SmartReplyService
 @inject IMedicalTermService MedicalTermService
+@inject MediChatAI_BlazorWebAssembly.Features.Patient.Services.IAppointmentService AppointmentService
+@inject IUserProfileService UserProfileService
 @inject IToastService ToastService
+@inject MediChatAI_BlazorWebAssembly.Core.Services.GraphQL.IGraphQLService GraphQLService
 @inject ILogger<Messages> Logger
 
 <PageTitle>Messages - MediChat AI</PageTitle>
@@ -349,6 +354,7 @@
     private string newMessage = "";
     private bool isSendingMessage = false;
     private string? patientId;
+    private UserProfile? userProfile;
     private System.Timers.Timer? typingTimer;
     private bool isUserTyping = false;
 
@@ -484,6 +490,17 @@
             }
 
             patientId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            
+            // Get patient profile for appointment booking
+            try
+            {
+                userProfile = await UserProfileService.GetUserProfileAsync();
+                Logger.LogInformation("Loaded user profile for messaging: {Name}", userProfile?.FirstName);
+            }
+            catch (Exception profileEx)
+            {
+                Logger.LogWarning(profileEx, "Failed to load user profile, will use claims for basic info");
+            }
 
             if (!string.IsNullOrEmpty(patientId))
             {
@@ -1789,7 +1806,7 @@
         return Task.CompletedTask;
     }
 
-    private void GenerateConversationSummary()
+    private async void GenerateConversationSummary()
     {
         if (!currentMessages.Any() || UserRole != "Patient")
             return;
@@ -1811,7 +1828,7 @@
                 return;
             }
 
-            // Calculate stats
+            // Calculate stats for the modal
             summaryStats = new SummaryStats
             {
                 TotalMessages = allMessages.Count,
@@ -1821,7 +1838,7 @@
                 LastMessageDate = allMessages.Last().Timestamp.ToString("MMM dd, yyyy HH:mm")
             };
 
-            // Extract medical terms from messages
+            // Extract medical terms from messages for display
             var medicalTermsFound = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var message in allMessages)
             {
@@ -1837,67 +1854,296 @@
             }
             summaryStats.MedicalTerms = medicalTermsFound.OrderBy(t => t).ToList();
 
-            // Generate summary text
-            var summaryBuilder = new System.Text.StringBuilder();
-            summaryBuilder.AppendLine("Conversation Overview:");
-            summaryBuilder.AppendLine();
-
-            // Group messages by topic/context
-            var recentMessages = allMessages.TakeLast(10).ToList();
-
-            summaryBuilder.AppendLine("Key Discussion Points:");
-            summaryBuilder.AppendLine();
-
-            // Identify main topics
-            var hasAppointmentDiscussion = allMessages.Any(m => m.Content.Contains("appointment", StringComparison.OrdinalIgnoreCase));
-            var hasMedicationDiscussion = allMessages.Any(m => m.Content.Contains("medication", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("prescription", StringComparison.OrdinalIgnoreCase));
-            var hasSymptomsDiscussion = allMessages.Any(m => m.Content.Contains("symptom", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("pain", StringComparison.OrdinalIgnoreCase));
-            var hasTestDiscussion = allMessages.Any(m => m.Content.Contains("test", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("lab", StringComparison.OrdinalIgnoreCase));
-
-            if (hasAppointmentDiscussion)
+            // Build input for AI summarization
+            var messageInputs = allMessages.Select(m => new
             {
-                summaryBuilder.AppendLine("• Appointment scheduling and timing discussed");
-            }
+                content = m.Content,
+                senderRole = m.IsSentByMe ? "patient" : "doctor",
+                timestamp = m.Timestamp.ToString("o")
+            }).ToList();
 
-            if (hasMedicationDiscussion)
+            // Call AI-powered summarization via GraphQL
+            var mutation = @"
+                mutation SummarizeConversation($input: SummarizeConversationInput!) {
+                    summarizeConversation(input: $input) {
+                        success
+                        message
+                        summary {
+                            overview
+                            keyTopics
+                            medicalConcerns
+                            doctorRecommendations
+                            patientQuestions
+                            nextSteps
+                            followUpRecommendation
+                            urgencyLevel
+                            medicationsDiscussed
+                            diagnosis
+                            generatedAt
+                        }
+                    }
+                }";
+
+            var variables = new
             {
-                summaryBuilder.AppendLine("• Medication and prescriptions mentioned");
-            }
+                input = new
+                {
+                    messages = messageInputs,
+                    doctorName = selectedConversation?.DoctorName ?? "Doctor",
+                    patientName = userProfile != null ? $"{userProfile.FirstName} {userProfile.LastName}" : "Patient"
+                }
+            };
 
-            if (hasSymptomsDiscussion)
+            var response = await GraphQLService.SendQueryAsync<Dictionary<string, object>>(mutation, variables);
+
+            if (response != null && response.ContainsKey("summarizeConversation"))
             {
-                summaryBuilder.AppendLine("• Patient symptoms and condition discussed");
-            }
+                var resultJson = System.Text.Json.JsonSerializer.Serialize(response["summarizeConversation"]);
+                var result = System.Text.Json.JsonSerializer.Deserialize<SummarizeConversationResult>(resultJson, 
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            if (hasTestDiscussion)
+                if (result?.Success == true && result.Summary != null)
+                {
+                    // Clean overview if it contains raw JSON
+                    var overview = result.Summary.Overview ?? "";
+                    if (overview.Contains("```") || overview.StartsWith("{"))
+                    {
+                        // Try to extract just the overview text from embedded JSON
+                        try
+                        {
+                            var cleanOverview = overview.Replace("```json", "").Replace("```", "").Trim();
+                            if (cleanOverview.StartsWith("{"))
+                            {
+                                var jsonDoc = System.Text.Json.JsonDocument.Parse(cleanOverview);
+                                if (jsonDoc.RootElement.TryGetProperty("overview", out var overviewProp))
+                                {
+                                    overview = overviewProp.GetString() ?? "Summary generated.";
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            overview = "Conversation summary generated successfully.";
+                        }
+                    }
+
+                    // Build formatted summary text from AI response
+                    var summaryBuilder = new System.Text.StringBuilder();
+                    
+                    // Overview
+                    if (!string.IsNullOrEmpty(overview))
+                    {
+                        summaryBuilder.AppendLine("📋 Overview:");
+                        summaryBuilder.AppendLine(overview);
+                        summaryBuilder.AppendLine();
+                    }
+
+                    // Key Topics
+                    if (result.Summary.KeyTopics?.Any() == true)
+                    {
+                        summaryBuilder.AppendLine("🔑 Key Topics Discussed:");
+                        foreach (var topic in result.Summary.KeyTopics)
+                        {
+                            summaryBuilder.AppendLine($"  • {topic}");
+                        }
+                        summaryBuilder.AppendLine();
+                    }
+
+                    // Medical Concerns
+                    if (result.Summary.MedicalConcerns?.Any() == true)
+                    {
+                        summaryBuilder.AppendLine("⚕️ Medical Concerns:");
+                        foreach (var concern in result.Summary.MedicalConcerns)
+                        {
+                            summaryBuilder.AppendLine($"  • {concern}");
+                        }
+                        summaryBuilder.AppendLine();
+                    }
+
+                    // Diagnosis if available
+                    if (!string.IsNullOrEmpty(result.Summary.Diagnosis))
+                    {
+                        summaryBuilder.AppendLine($"🏥 Diagnosis: {result.Summary.Diagnosis}");
+                        summaryBuilder.AppendLine();
+                    }
+
+                    // Medications
+                    if (result.Summary.MedicationsDiscussed?.Any() == true)
+                    {
+                        summaryBuilder.AppendLine("💊 Medications Discussed:");
+                        foreach (var med in result.Summary.MedicationsDiscussed)
+                        {
+                            summaryBuilder.AppendLine($"  • {med}");
+                        }
+                        summaryBuilder.AppendLine();
+                    }
+
+                    // Doctor Recommendations
+                    if (result.Summary.DoctorRecommendations?.Any() == true)
+                    {
+                        summaryBuilder.AppendLine("👨‍⚕️ Doctor's Recommendations:");
+                        foreach (var rec in result.Summary.DoctorRecommendations)
+                        {
+                            summaryBuilder.AppendLine($"  • {rec}");
+                        }
+                        summaryBuilder.AppendLine();
+                    }
+
+                    // Next Steps
+                    if (!string.IsNullOrEmpty(result.Summary.NextSteps))
+                    {
+                        summaryBuilder.AppendLine("📌 Next Steps:");
+                        summaryBuilder.AppendLine($"  {result.Summary.NextSteps}");
+                        summaryBuilder.AppendLine();
+                    }
+
+                    // Follow-up
+                    if (!string.IsNullOrEmpty(result.Summary.FollowUpRecommendation))
+                    {
+                        summaryBuilder.AppendLine("📅 Follow-up:");
+                        summaryBuilder.AppendLine($"  {result.Summary.FollowUpRecommendation}");
+                        summaryBuilder.AppendLine();
+                    }
+
+                    // Urgency
+                    var urgencyEmoji = result.Summary.UrgencyLevel?.ToLower() switch
+                    {
+                        "high" => "🔴",
+                        "medium" => "🟡",
+                        _ => "🟢"
+                    };
+                    summaryBuilder.AppendLine($"{urgencyEmoji} Urgency Level: {result.Summary.UrgencyLevel ?? "Low"}");
+                    summaryBuilder.AppendLine();
+
+                    // Recent Messages - filter out empty messages and take last 5
+                    var recentMessages = allMessages
+                        .Where(m => !string.IsNullOrWhiteSpace(m.Content))
+                        .TakeLast(5)
+                        .ToList();
+                    
+                    if (recentMessages.Any())
+                    {
+                        summaryBuilder.AppendLine("💬 Recent Messages:");
+                        foreach (var msg in recentMessages)
+                        {
+                            var sender = msg.IsSentByMe ? "You" : "Doctor";
+                            var preview = msg.Content;
+                            // Clean up any markdown/emoji formatting for readability
+                            preview = preview.Replace("\n", " ").Replace("**", "").Replace("_", "").Trim();
+                            if (preview.Length > 100)
+                            {
+                                preview = preview.Substring(0, 100) + "...";
+                            }
+                            summaryBuilder.AppendLine($"  • [{msg.Timestamp:MMM dd, HH:mm}] {sender}: {preview}");
+                        }
+                    }
+
+                    conversationSummary = summaryBuilder.ToString();
+                }
+                else
+                {
+                    conversationSummary = result?.Message ?? "Failed to generate AI summary. Please try again.";
+                }
+            }
+            else
             {
-                summaryBuilder.AppendLine("• Medical tests or lab work mentioned");
+                // Fallback to basic summary if AI fails
+                conversationSummary = GenerateFallbackSummary(allMessages);
             }
-
-            summaryBuilder.AppendLine();
-            summaryBuilder.AppendLine("Recent Activity:");
-            summaryBuilder.AppendLine();
-
-            // Show recent message snippets
-            foreach (var msg in recentMessages.TakeLast(5))
-            {
-                var sender = msg.IsSentByMe ? "Patient" : "Doctor";
-                var preview = msg.Content.Length > 80 ? msg.Content.Substring(0, 80) + "..." : msg.Content;
-                summaryBuilder.AppendLine($"• {sender}: {preview}");
-            }
-
-            conversationSummary = summaryBuilder.ToString();
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error generating conversation summary");
-            conversationSummary = "Error generating summary. Please try again.";
+            // Fallback to basic summary
+            conversationSummary = GenerateFallbackSummary(currentMessages.OrderBy(m => m.Timestamp).ToList());
         }
         finally
         {
             isGeneratingSummary = false;
             StateHasChanged();
         }
+    }
+
+    private string GenerateFallbackSummary(List<MessageDto> messages)
+    {
+        // Filter out empty messages
+        var validMessages = messages.Where(m => !string.IsNullOrWhiteSpace(m.Content)).ToList();
+        
+        var summaryBuilder = new System.Text.StringBuilder();
+        summaryBuilder.AppendLine("📋 Conversation Overview:");
+        summaryBuilder.AppendLine($"This conversation contains {validMessages.Count} messages.");
+        summaryBuilder.AppendLine();
+
+        // Identify main topics with basic keyword analysis
+        var hasAppointmentDiscussion = validMessages.Any(m => m.Content.Contains("appointment", StringComparison.OrdinalIgnoreCase));
+        var hasMedicationDiscussion = validMessages.Any(m => m.Content.Contains("medication", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("prescription", StringComparison.OrdinalIgnoreCase));
+        var hasSymptomsDiscussion = validMessages.Any(m => m.Content.Contains("symptom", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("pain", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("fever", StringComparison.OrdinalIgnoreCase));
+        var hasTestDiscussion = validMessages.Any(m => m.Content.Contains("test", StringComparison.OrdinalIgnoreCase) || m.Content.Contains("lab", StringComparison.OrdinalIgnoreCase));
+
+        summaryBuilder.AppendLine("🔑 Topics Discussed:");
+        if (hasAppointmentDiscussion) summaryBuilder.AppendLine("  • Appointment scheduling");
+        if (hasMedicationDiscussion) summaryBuilder.AppendLine("  • Medications and prescriptions");
+        if (hasSymptomsDiscussion) summaryBuilder.AppendLine("  • Symptoms and condition");
+        if (hasTestDiscussion) summaryBuilder.AppendLine("  • Medical tests or lab work");
+        
+        if (!hasAppointmentDiscussion && !hasMedicationDiscussion && !hasSymptomsDiscussion && !hasTestDiscussion)
+        {
+            summaryBuilder.AppendLine("  • General health discussion");
+        }
+
+        // Check for medical concerns
+        if (validMessages.Any(m => m.Content.Contains("fever", StringComparison.OrdinalIgnoreCase)))
+        {
+            summaryBuilder.AppendLine();
+            summaryBuilder.AppendLine("⚕️ Medical Concerns:");
+            summaryBuilder.AppendLine("  • Fever symptoms mentioned");
+            summaryBuilder.AppendLine();
+            summaryBuilder.AppendLine("🟡 Urgency Level: Medium");
+        }
+        else
+        {
+            summaryBuilder.AppendLine();
+            summaryBuilder.AppendLine("🟢 Urgency Level: Low");
+        }
+
+        summaryBuilder.AppendLine();
+        summaryBuilder.AppendLine("💬 Recent Messages:");
+        var recentMessages = validMessages.TakeLast(5).ToList();
+        foreach (var msg in recentMessages)
+        {
+            var sender = msg.IsSentByMe ? "You" : "Doctor";
+            var preview = msg.Content.Replace("\n", " ").Replace("**", "").Replace("_", "").Trim();
+            if (preview.Length > 100)
+            {
+                preview = preview.Substring(0, 100) + "...";
+            }
+            summaryBuilder.AppendLine($"  • [{msg.Timestamp:MMM dd, HH:mm}] {sender}: {preview}");
+        }
+
+        return summaryBuilder.ToString();
+    }
+
+    // DTO classes for AI summary response
+    private class SummarizeConversationResult
+    {
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+        public ConversationSummaryDto? Summary { get; set; }
+    }
+
+    private class ConversationSummaryDto
+    {
+        public string? Overview { get; set; }
+        public List<string>? KeyTopics { get; set; }
+        public List<string>? MedicalConcerns { get; set; }
+        public List<string>? DoctorRecommendations { get; set; }
+        public List<string>? PatientQuestions { get; set; }
+        public string? NextSteps { get; set; }
+        public string? FollowUpRecommendation { get; set; }
+        public string? UrgencyLevel { get; set; }
+        public List<string>? MedicationsDiscussed { get; set; }
+        public string? Diagnosis { get; set; }
+        public string? GeneratedAt { get; set; }
     }
 
     private Task CloseSummaryModal()
@@ -1912,10 +2158,11 @@
         if (UserRole != "Patient") return;
 
         showAppointmentScheduler = true;
-        appointmentDate = DateTime.Now;
+        appointmentDate = DateTime.Today;
         appointmentTime = new TimeOnly(9, 0);
         appointmentReason = "";
         appointmentType = "Teleconsultation";
+        StateHasChanged();
     }
 
     private void HandleTimeChange(string timeValue)
@@ -1939,32 +2186,94 @@
     private async Task SubmitAppointmentRequest()
     {
         if (selectedConversation == null || string.IsNullOrEmpty(appointmentReason) || UserRole != "Patient")
+        {
+            Logger.LogWarning("Cannot submit appointment: selectedConversation={HasConversation}, reason={HasReason}, role={Role}",
+                selectedConversation != null, !string.IsNullOrEmpty(appointmentReason), UserRole);
             return;
+        }
 
         try
         {
-            var dateTime = appointmentDate.Add(appointmentTime.ToTimeSpan());
+            var dateTime = appointmentDate.Date.Add(appointmentTime.ToTimeSpan());
+            
+            // Validate future date/time
+            if (dateTime <= DateTime.Now.AddMinutes(30))
+            {
+                ToastService.ShowError("Please select a time at least 30 minutes from now.");
+                return;
+            }
 
-            // Send a message to the doctor about the appointment request
-            var appointmentMessage = $"📅 Appointment Request:\n\n" +
-                                   $"Date: {dateTime:MMM dd, yyyy}\n" +
-                                   $"Time: {dateTime:hh:mm tt}\n" +
-                                   $"Type: {appointmentType}\n" +
-                                   $"Reason: {appointmentReason}";
+            Logger.LogInformation("Submitting appointment request: Doctor={DoctorId}, DateTime={DateTime}, Type={Type}, Reason={Reason}",
+                selectedConversation.PartnerId, dateTime, appointmentType, appointmentReason);
 
-            newMessage = appointmentMessage;
-            await SendMessage();
+            // Calculate age from date of birth
+            int patientAge = 18; // Default age
+            if (userProfile?.DateOfBirth != null)
+            {
+                var today = DateTime.Today;
+                var dob = userProfile.DateOfBirth.Value;
+                patientAge = today.Year - dob.Year;
+                if (dob.Date > today.AddYears(-patientAge)) patientAge--;
+                if (patientAge < 1) patientAge = 18; // Fallback
+            }
 
-            showAppointmentScheduler = false;
-            StateHasChanged();
+            // Create appointment request via GraphQL using profile data
+            var input = new QuickAppointmentRequestInput
+            {
+                PatientId = patientId ?? string.Empty,
+                PatientName = userProfile != null ? $"{userProfile.FirstName} {userProfile.LastName}".Trim() : "Patient",
+                PatientEmail = userProfile?.Email ?? "",
+                PatientPhone = userProfile?.PhoneNumber ?? "",
+                PatientAge = patientAge,
+                PatientGender = userProfile?.Gender,
+                BloodType = userProfile?.BloodType,
+                Allergies = userProfile?.Allergies,
+                DoctorId = selectedConversation.PartnerId ?? string.Empty,
+                DoctorName = selectedConversation.DoctorName ?? string.Empty,
+                PreferredDateTime = dateTime,
+                AppointmentType = appointmentType,
+                ReasonForVisit = appointmentReason
+            };
 
-            // Show success message
-            ToastService.ShowSuccess("Appointment request sent to doctor");
+            var result = await AppointmentService.CreateQuickAppointmentRequestAsync(input);
+
+            if (result != null)
+            {
+                Logger.LogInformation("Appointment request created successfully with ID {RequestId}", result.Id);
+                
+                // Also send a message to the doctor about the appointment request
+                var appointmentMessage = $"📅 **Appointment Request Submitted**\n\n" +
+                                       $"📆 Date: {dateTime:dddd, MMMM dd, yyyy}\n" +
+                                       $"🕐 Time: {dateTime:hh:mm tt}\n" +
+                                       $"📍 Type: {(appointmentType == "InPerson" ? "In-Person" : "Online Consultation")}\n" +
+                                       $"📝 Reason: {appointmentReason}\n\n" +
+                                       $"_Request ID: #{result.Id}_";
+
+                newMessage = appointmentMessage;
+                await SendMessage();
+
+                showAppointmentScheduler = false;
+                
+                // Reset form
+                appointmentDate = DateTime.Today;
+                appointmentTime = new TimeOnly(9, 0);
+                appointmentReason = "";
+                appointmentType = "Teleconsultation";
+                
+                StateHasChanged();
+
+                ToastService.ShowSuccess("Appointment request submitted successfully! The doctor will review and confirm.");
+            }
+            else
+            {
+                Logger.LogError("Failed to create appointment request - null result");
+                ToastService.ShowError("Failed to submit appointment request. Please try again.");
+            }
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error submitting appointment request");
-            ToastService.ShowError("Failed to send appointment request");
+            ToastService.ShowError("Failed to send appointment request. Please try again.");
         }
     }
 

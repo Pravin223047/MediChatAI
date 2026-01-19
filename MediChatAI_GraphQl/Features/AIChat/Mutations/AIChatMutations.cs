@@ -117,4 +117,26 @@ public class AIChatMutations
 
         return await chatbotService.DeleteConversationAsync(userId, conversationId);
     }
+
+    /// <summary>
+    /// Generate AI-powered summary of a doctor-patient conversation
+    /// </summary>
+    [Authorize]
+    public async Task<ConversationSummaryResponse> SummarizeConversation(
+        SummarizeConversationInput input,
+        ClaimsPrincipal claimsPrincipal,
+        [Service] IAIChatbotService chatbotService)
+    {
+        var userId = claimsPrincipal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return new ConversationSummaryResponse
+            {
+                Success = false,
+                Message = "User not authenticated"
+            };
+        }
+
+        return await chatbotService.SummarizeConversationAsync(input);
+    }
 }

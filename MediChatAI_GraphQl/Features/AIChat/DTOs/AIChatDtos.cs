@@ -163,3 +163,41 @@ public class SuggestedQuestionsResponse
 {
     public List<string> Questions { get; set; } = new();
 }
+
+// ============================================
+// CONVERSATION SUMMARY DTOS
+// ============================================
+
+public record SummarizeConversationInput(
+    List<ConversationMessageInput> Messages,
+    string? DoctorName,
+    string? PatientName
+);
+
+public record ConversationMessageInput(
+    string Content,
+    string SenderRole,  // "doctor" or "patient"
+    DateTime Timestamp
+);
+
+public class ConversationSummaryResponse
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public ConversationSummaryDto? Summary { get; set; }
+}
+
+public class ConversationSummaryDto
+{
+    public string Overview { get; set; } = string.Empty;
+    public List<string> KeyTopics { get; set; } = new();
+    public List<string> MedicalConcerns { get; set; } = new();
+    public List<string> DoctorRecommendations { get; set; } = new();
+    public List<string> PatientQuestions { get; set; } = new();
+    public string? NextSteps { get; set; }
+    public string? FollowUpRecommendation { get; set; }
+    public string UrgencyLevel { get; set; } = "Low";  // Low, Medium, High
+    public List<string> MedicationsDiscussed { get; set; } = new();
+    public string? Diagnosis { get; set; }
+    public string GeneratedAt { get; set; } = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+}

@@ -344,6 +344,252 @@ public class GeminiAIChatService : IAIChatbotService
         });
     }
 
+    public async Task<ConversationSummaryResponse> SummarizeConversationAsync(SummarizeConversationInput input)
+    {
+        try
+        {
+            if (input.Messages == null || !input.Messages.Any())
+            {
+                return new ConversationSummaryResponse
+                {
+                    Success = false,
+                    Message = "No messages to summarize"
+                };
+            }
+
+            // Filter out empty messages
+            var validMessages = input.Messages.Where(m => !string.IsNullOrWhiteSpace(m.Content)).ToList();
+            if (!validMessages.Any())
+            {
+                return new ConversationSummaryResponse
+                {
+                    Success = false,
+                    Message = "No valid messages to summarize"
+                };
+            }
+
+            var filteredInput = new SummarizeConversationInput(validMessages, input.DoctorName, input.PatientName);
+            var prompt = BuildConversationSummaryPrompt(filteredInput);
+            
+            _logger.LogInformation("Calling Gemini API for conversation summary with {MessageCount} messages", validMessages.Count);
+            
+            var aiResponse = await CallGeminiApiAsync(prompt, "");
+
+            // Check if the response is an error message
+            if (string.IsNullOrEmpty(aiResponse) || 
+                aiResponse.Contains("I'm sorry, I encountered an error") ||
+                aiResponse.Contains("I apologize, but I couldn't"))
+            {
+                _logger.LogWarning("Gemini API returned error or empty response: {Response}", aiResponse);
+                
+                // Return a fallback summary based on the messages
+                return new ConversationSummaryResponse
+                {
+                    Success = true,
+                    Message = "Summary generated (offline mode)",
+                    Summary = GenerateFallbackSummary(filteredInput)
+                };
+            }
+
+            var summary = ParseConversationSummaryResponse(aiResponse);
+
+            return new ConversationSummaryResponse
+            {
+                Success = true,
+                Message = "Summary generated successfully",
+                Summary = summary
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating conversation summary");
+            return new ConversationSummaryResponse
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+
+    private string BuildConversationSummaryPrompt(SummarizeConversationInput input)
+    {
+        var prompt = new StringBuilder();
+        prompt.AppendLine("You are a medical AI assistant. Analyze this doctor-patient conversation and generate a comprehensive summary.");
+        prompt.AppendLine();
+        prompt.AppendLine("Provide a JSON response with the following structure:");
+        prompt.AppendLine(@"{
+  ""overview"": ""A clear, professional 2-3 sentence overview of the conversation"",
+  ""keyTopics"": [""topic1"", ""topic2""],
+  ""medicalConcerns"": [""concern1"", ""concern2""],
+  ""doctorRecommendations"": [""recommendation1"", ""recommendation2""],
+  ""patientQuestions"": [""question1"", ""question2""],
+  ""nextSteps"": ""Clear action items for the patient"",
+  ""followUpRecommendation"": ""When and why to follow up"",
+  ""urgencyLevel"": ""Low/Medium/High"",
+  ""medicationsDiscussed"": [""medication1"", ""medication2""],
+  ""diagnosis"": ""The diagnosed condition if mentioned""
+}");
+        prompt.AppendLine();
+        
+        if (!string.IsNullOrEmpty(input.DoctorName))
+            prompt.AppendLine($"Doctor: {input.DoctorName}");
+        if (!string.IsNullOrEmpty(input.PatientName))
+            prompt.AppendLine($"Patient: {input.PatientName}");
+        
+        prompt.AppendLine();
+        prompt.AppendLine("Conversation:");
+        prompt.AppendLine();
+
+        foreach (var msg in input.Messages.OrderBy(m => m.Timestamp))
+        {
+            var sender = msg.SenderRole.Equals("doctor", StringComparison.OrdinalIgnoreCase) ? "Doctor" : "Patient";
+            prompt.AppendLine($"[{msg.Timestamp:MMM dd, yyyy HH:mm}] {sender}: {msg.Content}");
+        }
+
+        prompt.AppendLine();
+        prompt.AppendLine("Important: Return ONLY the JSON object, no additional text or markdown formatting.");
+
+        return prompt.ToString();
+    }
+
+    private ConversationSummaryDto ParseConversationSummaryResponse(string response)
+    {
+        try
+        {
+            // Remove markdown code blocks if present
+            var cleanResponse = response
+                .Replace("```json", "")
+                .Replace("```JSON", "")
+                .Replace("```", "")
+                .Trim();
+
+            // Try to extract JSON from the response
+            var jsonStart = cleanResponse.IndexOf('{');
+            var jsonEnd = cleanResponse.LastIndexOf('}');
+
+            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            {
+                var jsonString = cleanResponse.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                var parsed = JsonSerializer.Deserialize<JsonElement>(jsonString);
+
+                return new ConversationSummaryDto
+                {
+                    Overview = GetJsonStringValue(parsed, "overview", "Conversation summary generated."),
+                    KeyTopics = GetJsonArrayValue(parsed, "keyTopics"),
+                    MedicalConcerns = GetJsonArrayValue(parsed, "medicalConcerns"),
+                    DoctorRecommendations = GetJsonArrayValue(parsed, "doctorRecommendations"),
+                    PatientQuestions = GetJsonArrayValue(parsed, "patientQuestions"),
+                    NextSteps = GetJsonStringValue(parsed, "nextSteps", null),
+                    FollowUpRecommendation = GetJsonStringValue(parsed, "followUpRecommendation", null),
+                    UrgencyLevel = GetJsonStringValue(parsed, "urgencyLevel", "Low"),
+                    MedicationsDiscussed = GetJsonArrayValue(parsed, "medicationsDiscussed"),
+                    Diagnosis = GetJsonStringValue(parsed, "diagnosis", null),
+                    GeneratedAt = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse AI summary response as JSON, using fallback");
+        }
+
+        // Fallback: return a simple summary
+        return new ConversationSummaryDto
+        {
+            Overview = response.Length > 500 ? response.Substring(0, 500) + "..." : response,
+            KeyTopics = new List<string>(),
+            MedicalConcerns = new List<string>(),
+            DoctorRecommendations = new List<string>(),
+            PatientQuestions = new List<string>(),
+            NextSteps = null,
+            FollowUpRecommendation = null,
+            UrgencyLevel = "Low",
+            MedicationsDiscussed = new List<string>(),
+            Diagnosis = null,
+            GeneratedAt = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
+        };
+    }
+
+    private ConversationSummaryDto GenerateFallbackSummary(SummarizeConversationInput input)
+    {
+        var messages = input.Messages.ToList();
+        var keyTopics = new List<string>();
+        var medicalConcerns = new List<string>();
+        
+        // Analyze messages for topics
+        var allContent = string.Join(" ", messages.Select(m => m.Content));
+        
+        if (allContent.Contains("appointment", StringComparison.OrdinalIgnoreCase))
+            keyTopics.Add("Appointment scheduling");
+        if (allContent.Contains("fever", StringComparison.OrdinalIgnoreCase))
+        {
+            keyTopics.Add("Fever symptoms");
+            medicalConcerns.Add("High fever reported");
+        }
+        if (allContent.Contains("medication", StringComparison.OrdinalIgnoreCase) || allContent.Contains("prescription", StringComparison.OrdinalIgnoreCase))
+            keyTopics.Add("Medications");
+        if (allContent.Contains("pain", StringComparison.OrdinalIgnoreCase))
+        {
+            keyTopics.Add("Pain management");
+            medicalConcerns.Add("Pain symptoms");
+        }
+        if (allContent.Contains("test", StringComparison.OrdinalIgnoreCase) || allContent.Contains("lab", StringComparison.OrdinalIgnoreCase))
+            keyTopics.Add("Medical tests");
+
+        // Build overview
+        var doctorMessages = messages.Count(m => m.SenderRole.Equals("doctor", StringComparison.OrdinalIgnoreCase));
+        var patientMessages = messages.Count(m => m.SenderRole.Equals("patient", StringComparison.OrdinalIgnoreCase));
+        
+        var overview = $"This conversation between {input.PatientName ?? "Patient"} and Dr. {input.DoctorName ?? "Doctor"} contains {messages.Count} messages ({doctorMessages} from doctor, {patientMessages} from patient).";
+        
+        if (keyTopics.Any())
+        {
+            overview += $" Key topics discussed include: {string.Join(", ", keyTopics)}.";
+        }
+
+        return new ConversationSummaryDto
+        {
+            Overview = overview,
+            KeyTopics = keyTopics,
+            MedicalConcerns = medicalConcerns,
+            DoctorRecommendations = new List<string>(),
+            PatientQuestions = new List<string>(),
+            NextSteps = messages.Any(m => m.Content.Contains("appointment", StringComparison.OrdinalIgnoreCase)) 
+                ? "Follow up on scheduled appointment" 
+                : null,
+            FollowUpRecommendation = null,
+            UrgencyLevel = medicalConcerns.Any() ? "Medium" : "Low",
+            MedicationsDiscussed = new List<string>(),
+            Diagnosis = null,
+            GeneratedAt = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
+        };
+    }
+
+    private string? GetJsonStringValue(JsonElement element, string propertyName, string? defaultValue)
+    {
+        if (element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String)
+        {
+            return property.GetString();
+        }
+        return defaultValue;
+    }
+
+    private List<string> GetJsonArrayValue(JsonElement element, string propertyName)
+    {
+        var result = new List<string>();
+        if (element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in property.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String)
+                {
+                    result.Add(item.GetString() ?? "");
+                }
+            }
+        }
+        return result;
+    }
+
     // ============================================
     // PRIVATE HELPER METHODS
     // ============================================

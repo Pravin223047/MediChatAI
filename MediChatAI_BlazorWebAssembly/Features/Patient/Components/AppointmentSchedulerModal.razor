@@ -34,8 +34,9 @@
                         Preferred Date
                     </label>
                     <input type="date"
-                           @bind="AppointmentDate"
-                           min="@DateTime.Now.ToString("yyyy-MM-dd")"
+                           value="@localDate.ToString("yyyy-MM-dd")"
+                           @onchange="HandleDateChange"
+                           min="@DateTime.Today.ToString("yyyy-MM-dd")"
                            class="w-full px-3 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
 
@@ -44,26 +45,38 @@
                     <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
                         Preferred Time
                     </label>
-                    <select value="@AppointmentTime.ToString(@"hh\:mm")" @onchange="@((ChangeEventArgs e) => HandleTimeChange(e.Value?.ToString() ?? ""))"
+                    <select value="@GetTimeSelectValue()" @onchange="HandleTimeChange"
                             class="w-full px-3 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300") border focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         <option value="">Select time...</option>
-                        <option value="09:00">9:00 AM</option>
-                        <option value="10:00">10:00 AM</option>
-                        <option value="11:00">11:00 AM</option>
-                        <option value="12:00">12:00 PM</option>
-                        <option value="14:00">2:00 PM</option>
-                        <option value="15:00">3:00 PM</option>
-                        <option value="16:00">4:00 PM</option>
-                        <option value="17:00">5:00 PM</option>
+                        @foreach (var slot in GetAvailableTimeSlots())
+                        {
+                            <option value="@slot.Value" disabled="@slot.IsDisabled">@slot.Display</option>
+                        }
                     </select>
+                    @if (IsDateToday && localTime != TimeSpan.Zero)
+                    {
+                        <p class="text-xs @(IsDarkMode ? "text-gray-400" : "text-gray-500") mt-1">
+                            <i class="fas fa-info-circle mr-1"></i>Only future time slots are available for today.
+                        </p>
+                    }
                 </div>
+
+                <!-- Validation Error -->
+                @if (!string.IsNullOrEmpty(validationError))
+                {
+                    <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-sm flex items-center gap-2">
+                        <i class="fas fa-exclamation-circle"></i>
+                        @validationError
+                    </div>
+                }
 
                 <!-- Reason -->
                 <div>
                     <label class="block text-sm font-medium @(IsDarkMode ? "text-gray-300" : "text-gray-700") mb-2">
                         Reason for Visit
                     </label>
-                    <textarea @bind="AppointmentReason"
+                    <textarea value="@localReason"
+                              @oninput="HandleReasonChange"
                               rows="3"
                               placeholder="Briefly describe your symptoms or reason for visit..."
                               class="w-full px-3 py-2 rounded-lg @(IsDarkMode ? "bg-gray-700 text-white border-gray-600 placeholder-gray-400" : "bg-white text-gray-900 border-gray-300 placeholder-gray-500") border focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"></textarea>
@@ -75,12 +88,12 @@
                         Appointment Type
                     </label>
                     <div class="grid grid-cols-2 gap-3">
-                        <button @onclick="@(() => AppointmentType = "InPerson")"
-                                class="px-4 py-2 rounded-lg border-2 transition-all @(AppointmentType == "InPerson" ? "border-blue-500 bg-blue-500 text-white" : (IsDarkMode ? "border-gray-600 hover:border-gray-500" : "border-gray-300 hover:border-gray-400"))">
+                        <button type="button" @onclick="@(() => SetAppointmentType("InPerson"))"
+                                class="px-4 py-2 rounded-lg border-2 transition-all @(localType == "InPerson" ? "border-blue-500 bg-blue-500 text-white" : (IsDarkMode ? "border-gray-600 hover:border-gray-500" : "border-gray-300 hover:border-gray-400"))">
                             <i class="fas fa-hospital mr-2"></i>In-Person
                         </button>
-                        <button @onclick="@(() => AppointmentType = "Teleconsultation")"
-                                class="px-4 py-2 rounded-lg border-2 transition-all @(AppointmentType == "Teleconsultation" ? "border-blue-500 bg-blue-500 text-white" : (IsDarkMode ? "border-gray-600 hover:border-gray-500" : "border-gray-300 hover:border-gray-400"))">
+                        <button type="button" @onclick="@(() => SetAppointmentType("Teleconsultation"))"
+                                class="px-4 py-2 rounded-lg border-2 transition-all @(localType == "Teleconsultation" ? "border-blue-500 bg-blue-500 text-white" : (IsDarkMode ? "border-gray-600 hover:border-gray-500" : "border-gray-300 hover:border-gray-400"))">
                             <i class="fas fa-video mr-2"></i>Online
                         </button>
                     </div>
@@ -89,14 +102,23 @@
 
             <!-- Action Buttons -->
             <div class="flex gap-3 justify-end mt-6">
-                <button @onclick="HandleClose"
+                <button type="button" @onclick="HandleClose"
                         class="px-4 py-2 @(IsDarkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300") rounded-lg transition-colors">
                     Cancel
                 </button>
-                <button @onclick="HandleSubmit"
-                        disabled="@(string.IsNullOrEmpty(AppointmentReason))"
+                <button type="button" @onclick="HandleSubmit"
+                        disabled="@(!CanSubmit)"
                         class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i class="fas fa-paper-plane mr-2"></i>Request Appointment
+                    @if (isSubmitting)
+                    {
+                        <i class="fas fa-spinner fa-spin mr-2"></i>
+                        <span>Submitting...</span>
+                    }
+                    else
+                    {
+                        <i class="fas fa-paper-plane mr-2"></i>
+                        <span>Request Appointment</span>
+                    }
                 </button>
             </div>
         </div>
@@ -117,7 +139,10 @@
     public string DoctorSpecialty { get; set; } = string.Empty;
 
     [Parameter]
-    public DateTime AppointmentDate { get; set; } = DateTime.Now.Date;
+    public string DoctorId { get; set; } = string.Empty;
+
+    [Parameter]
+    public DateTime AppointmentDate { get; set; } = DateTime.Today;
 
     [Parameter]
     public EventCallback<DateTime> AppointmentDateChanged { get; set; }
@@ -149,30 +174,229 @@
     [Parameter]
     public EventCallback OnClose { get; set; }
 
+    // Local state for proper binding
+    private DateTime localDate = DateTime.Today;
+    private TimeSpan localTime = TimeSpan.Zero;
+    private string localReason = string.Empty;
+    private string localType = "InPerson";
+    private string validationError = string.Empty;
+    private bool isSubmitting = false;
+
+    private bool IsDateToday => localDate.Date == DateTime.Today;
+
+    private bool CanSubmit => !string.IsNullOrWhiteSpace(localReason) 
+                              && localTime != TimeSpan.Zero 
+                              && string.IsNullOrEmpty(validationError)
+                              && !isSubmitting;
+
+    protected override void OnParametersSet()
+    {
+        // Sync local state with parameters when modal opens
+        if (IsVisible)
+        {
+            localDate = AppointmentDate.Date < DateTime.Today ? DateTime.Today : AppointmentDate.Date;
+            localTime = AppointmentTime;
+            localReason = AppointmentReason;
+            localType = string.IsNullOrEmpty(AppointmentType) ? "InPerson" : AppointmentType;
+            validationError = string.Empty;
+            isSubmitting = false;
+            
+            // Validate time if date is today
+            ValidateDateTime();
+        }
+    }
+
     private async Task HandleClose()
     {
+        validationError = string.Empty;
+        isSubmitting = false;
         await OnClose.InvokeAsync();
     }
 
     private async Task HandleSubmit()
     {
-        await OnSubmit.InvokeAsync();
+        // Validate before submission
+        if (!ValidateDateTime())
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(localReason))
+        {
+            validationError = "Please enter a reason for your visit.";
+            return;
+        }
+
+        if (localTime == TimeSpan.Zero)
+        {
+            validationError = "Please select a time for your appointment.";
+            return;
+        }
+
+        isSubmitting = true;
+        validationError = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            // Update parent with final values
+            await AppointmentDateChanged.InvokeAsync(localDate);
+            await AppointmentTimeChanged.InvokeAsync(localTime);
+            await AppointmentReasonChanged.InvokeAsync(localReason);
+            await AppointmentTypeChanged.InvokeAsync(localType);
+
+            // Small delay to ensure parent state is updated
+            await Task.Delay(50);
+
+            // Invoke submit
+            await OnSubmit.InvokeAsync();
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
     }
 
-    private async Task HandleTimeChange(string value)
+    private async Task HandleDateChange(ChangeEventArgs e)
     {
+        if (DateTime.TryParse(e.Value?.ToString(), out var date))
+        {
+            // Ensure date is not in the past
+            if (date.Date < DateTime.Today)
+            {
+                localDate = DateTime.Today;
+                validationError = "Cannot schedule appointments in the past.";
+            }
+            else
+            {
+                localDate = date.Date;
+                validationError = string.Empty;
+            }
+
+            // If switching to today, validate the time
+            if (IsDateToday && localTime != TimeSpan.Zero)
+            {
+                ValidateDateTime();
+            }
+
+            await AppointmentDateChanged.InvokeAsync(localDate);
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleTimeChange(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
         if (string.IsNullOrEmpty(value))
         {
-            AppointmentTime = TimeSpan.Zero;
+            localTime = TimeSpan.Zero;
         }
         else
         {
             var parts = value.Split(':');
             if (parts.Length == 2 && int.TryParse(parts[0], out int hours) && int.TryParse(parts[1], out int minutes))
             {
-                AppointmentTime = new TimeSpan(hours, minutes, 0);
+                localTime = new TimeSpan(hours, minutes, 0);
             }
         }
-        await AppointmentTimeChanged.InvokeAsync(AppointmentTime);
+
+        ValidateDateTime();
+        await AppointmentTimeChanged.InvokeAsync(localTime);
+        StateHasChanged();
+    }
+
+    private void HandleReasonChange(ChangeEventArgs e)
+    {
+        localReason = e.Value?.ToString() ?? string.Empty;
+        _ = AppointmentReasonChanged.InvokeAsync(localReason);
+    }
+
+    private async Task SetAppointmentType(string type)
+    {
+        localType = type;
+        await AppointmentTypeChanged.InvokeAsync(localType);
+        StateHasChanged();
+    }
+
+    private bool ValidateDateTime()
+    {
+        if (localDate.Date < DateTime.Today)
+        {
+            validationError = "Cannot schedule appointments in the past.";
+            return false;
+        }
+
+        if (IsDateToday && localTime != TimeSpan.Zero)
+        {
+            var selectedDateTime = localDate.Date.Add(localTime);
+            var now = DateTime.Now;
+            
+            // Add 30 minute buffer for same-day appointments
+            if (selectedDateTime <= now.AddMinutes(30))
+            {
+                validationError = "Please select a time at least 30 minutes from now.";
+                return false;
+            }
+        }
+
+        validationError = string.Empty;
+        return true;
+    }
+
+    private string GetTimeSelectValue()
+    {
+        if (localTime == TimeSpan.Zero)
+            return string.Empty;
+        return $"{localTime.Hours:D2}:{localTime.Minutes:D2}";
+    }
+
+    private List<TimeSlotOption> GetAvailableTimeSlots()
+    {
+        var slots = new List<TimeSlotOption>();
+        var now = DateTime.Now;
+        var isToday = IsDateToday;
+
+        // Time slots from 9 AM to 5 PM
+        var timeSlots = new[] 
+        {
+            (9, 0, "9:00 AM"),
+            (10, 0, "10:00 AM"),
+            (11, 0, "11:00 AM"),
+            (12, 0, "12:00 PM"),
+            (14, 0, "2:00 PM"),
+            (15, 0, "3:00 PM"),
+            (16, 0, "4:00 PM"),
+            (17, 0, "5:00 PM")
+        };
+
+        foreach (var (hour, minute, display) in timeSlots)
+        {
+            var slotTime = new TimeSpan(hour, minute, 0);
+            var isDisabled = false;
+
+            if (isToday)
+            {
+                var slotDateTime = localDate.Date.Add(slotTime);
+                // Disable if slot is in the past or within 30 minutes from now
+                isDisabled = slotDateTime <= now.AddMinutes(30);
+            }
+
+            slots.Add(new TimeSlotOption
+            {
+                Value = $"{hour:D2}:{minute:D2}",
+                Display = isDisabled ? $"{display} (Not available)" : display,
+                IsDisabled = isDisabled
+            });
+        }
+
+        return slots;
+    }
+
+    private class TimeSlotOption
+    {
+        public string Value { get; set; } = string.Empty;
+        public string Display { get; set; } = string.Empty;
+        public bool IsDisabled { get; set; }
     }
 }

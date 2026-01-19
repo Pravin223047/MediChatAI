@@ -197,6 +197,71 @@ public class AppointmentService : IAppointmentService
             throw;
         }
     }
+
+    public async Task<AppointmentRequestDto?> CreateQuickAppointmentRequestAsync(QuickAppointmentRequestInput input)
+    {
+        try
+        {
+            _logger.LogInformation("Creating quick appointment request for doctor {DoctorId} at {DateTime}", 
+                input.DoctorId, input.PreferredDateTime);
+
+            const string mutation = """
+                mutation CreateAppointmentRequest($input: CreateAppointmentRequestDtoInput!) {
+                    createAppointmentRequest(input: $input) {
+                        id
+                        patientId
+                        fullName
+                        status
+                        requestedAt
+                        preferredDate
+                        preferredDoctorId
+                        preferredDoctorName
+                        reasonForVisit
+                        preferredTimeSlot
+                    }
+                }
+                """;
+
+            var variables = new
+            {
+                input = new
+                {
+                    patientId = input.PatientId,
+                    fullName = input.PatientName,
+                    email = input.PatientEmail,
+                    phoneNumber = string.IsNullOrEmpty(input.PatientPhone) ? "N/A" : input.PatientPhone,
+                    age = input.PatientAge > 0 ? input.PatientAge : 18,
+                    gender = input.PatientGender,
+                    bloodType = input.BloodType,
+                    allergies = input.Allergies,
+                    preferredDoctorId = input.DoctorId,
+                    preferredDate = input.PreferredDateTime,
+                    preferredTimeSlot = input.PreferredDateTime.ToString("hh:mm tt"),
+                    preferredAppointmentType = input.AppointmentType == "InPerson" ? "GENERAL" : "CONSULTATION",
+                    reasonForVisit = input.ReasonForVisit,
+                    symptomDescription = input.ReasonForVisit,
+                    isUrgent = false
+                }
+            };
+
+            var response = await _graphQLService.SendQueryAsync<CreateAppointmentRequestResponse>(mutation, variables);
+
+            if (response?.CreateAppointmentRequest != null)
+            {
+                _logger.LogInformation("Successfully created appointment request with ID {RequestId}", 
+                    response.CreateAppointmentRequest.Id);
+                return response.CreateAppointmentRequest;
+            }
+
+            _logger.LogWarning("Failed to create appointment request - null response");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating quick appointment request");
+            throw;
+        }
+    }
 }
 
 public class CancelAppointmentRequestResponse

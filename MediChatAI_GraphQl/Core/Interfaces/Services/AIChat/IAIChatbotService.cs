@@ -46,4 +46,9 @@ public interface IAIChatbotService
     /// Get suggested questions for the chatbot
     /// </summary>
     Task<SuggestedQuestionsResponse> GetSuggestedQuestionsAsync();
+
+    /// <summary>
+    /// Generate an AI-powered summary of a doctor-patient conversation
+    /// </summary>
+    Task<ConversationSummaryResponse> SummarizeConversationAsync(SummarizeConversationInput input);
 }
