@@ -9,11 +9,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
+namespace MediChatAI_GraphQl.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251113123552_AddTimeBlocksTable")]
-    partial class AddTimeBlocksTable
+    [Migration("20260120111803_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -76,6 +76,77 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
                     b.HasIndex("DoctorId");
 
                     b.ToTable("TimeBlocks");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.AIChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AttachmentsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MessageType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("AIChatMessages");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.AIChatSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsSaved")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("LastMessageAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MessageCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AIChatSessions");
                 });
 
             modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.ApplicationUser", b =>
@@ -639,6 +710,9 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
                     b.Property<string>("SymptomSeverity")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("VideoUrls")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("VoiceRecordingTranscript")
                         .HasMaxLength(5000)
@@ -2622,33 +2696,8 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Dosage")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int>("DurationDays")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("Form")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Frequency")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("GenericName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Instructions")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<bool>("IsDispensed")
                         .HasColumnType("bit");
@@ -2658,11 +2707,6 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
 
                     b.Property<DateTime?>("LastRefillDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("MedicationName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("PatientId")
                         .IsRequired()
@@ -2684,22 +2728,11 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
                     b.Property<DateTime>("PrescribedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int");
-
                     b.Property<int>("RefillsAllowed")
                         .HasColumnType("int");
 
                     b.Property<int>("RefillsUsed")
                         .HasColumnType("int");
-
-                    b.Property<string>("Route")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("SideEffects")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("datetime2");
@@ -2712,10 +2745,6 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
 
                     b.Property<DateTime?>("VerifiedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("Warnings")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
 
                     b.HasKey("Id");
 
@@ -2732,6 +2761,171 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
                         .HasDatabaseName("IX_Prescriptions_Patient_PrescribedDate");
 
                     b.ToTable("Prescriptions");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.PrescriptionItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Dosage")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Form")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("GenericName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Instructions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("MedicationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("PrescriptionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Route")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("SideEffects")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Warnings")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PrescriptionId")
+                        .HasDatabaseName("IX_PrescriptionItems_PrescriptionId");
+
+                    b.ToTable("PrescriptionItems");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.ScheduledReport", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastRun")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastRunError")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LastRunStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("NextRun")
+                        .HasColumnType("datetime2");
+
+                    b.PrimitiveCollection<string>("Recipients")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReportId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReportName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Schedule")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ScheduledReports");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.ScheduledReportExecution", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<TimeSpan>("Duration")
+                        .HasColumnType("time");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ExecutedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RecipientsFailed")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecipientsSent")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReportDataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScheduledReportId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ScheduledReportExecutions");
                 });
 
             modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.SystemSettings", b =>
@@ -3176,6 +3370,28 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Doctor");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.AIChatMessage", b =>
+                {
+                    b.HasOne("MediChatAI_GraphQl.Core.Entities.AIChatSession", "Session")
+                        .WithMany("Messages")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.AIChatSession", b =>
+                {
+                    b.HasOne("MediChatAI_GraphQl.Core.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.Appointment", b =>
@@ -3737,6 +3953,17 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
                     b.Navigation("Patient");
                 });
 
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.PrescriptionItem", b =>
+                {
+                    b.HasOne("MediChatAI_GraphQl.Core.Entities.Prescription", "Prescription")
+                        .WithMany("Items")
+                        .HasForeignKey("PrescriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Prescription");
+                });
+
             modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.UserActivity", b =>
                 {
                     b.HasOne("MediChatAI_GraphQl.Core.Entities.ApplicationUser", "User")
@@ -3798,6 +4025,11 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.AIChatSession", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.ConsultationSession", b =>
                 {
                     b.Navigation("Notes");
@@ -3833,6 +4065,11 @@ namespace MediChatAI_GraphQl.Infrastructure.Data.Migrations
             modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.MedicationReminder", b =>
                 {
                     b.Navigation("AdherenceLogs");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.Prescription", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

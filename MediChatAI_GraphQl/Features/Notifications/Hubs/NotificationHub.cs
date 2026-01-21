@@ -140,4 +140,36 @@ public class NotificationHub : Hub
         await Clients.Group($"user_{userId}").SendAsync("AppointmentUpdated", appointmentData);
         _logger.LogInformation($"Sent appointment updated notification to user {userId}");
     }
+
+    // ============================================
+    // SCHEDULED REPORT NOTIFICATIONS
+    // ============================================
+
+    /// <summary>
+    /// Notify all admins when a scheduled report has been executed
+    /// </summary>
+    public async Task NotifyScheduledReportExecuted(object reportData)
+    {
+        // Broadcast to all connected admin users
+        await Clients.Group("admins").SendAsync("ScheduledReportExecuted", reportData);
+        _logger.LogInformation("Sent scheduled report execution notification to all admins");
+    }
+
+    /// <summary>
+    /// Join the admins group for receiving admin-only notifications
+    /// </summary>
+    public async Task JoinAdminGroup()
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, "admins");
+        _logger.LogInformation($"Connection {Context.ConnectionId} joined admins group");
+    }
+
+    /// <summary>
+    /// Leave the admins group
+    /// </summary>
+    public async Task LeaveAdminGroup()
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, "admins");
+        _logger.LogInformation($"Connection {Context.ConnectionId} left admins group");
+    }
 }

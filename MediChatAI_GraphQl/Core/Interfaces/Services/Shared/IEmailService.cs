@@ -8,6 +8,9 @@ public interface IEmailService
     Task SendOtpAsync(string email, string firstName, string otpCode);
     Task SendEmailAsync(string email, string subject, string message);
 
+    // Send email with attachment
+    Task SendEmailWithAttachmentAsync(string email, string subject, string message, byte[] attachmentData, string attachmentName, string attachmentMimeType);
+
     // 2FA Email Notifications
     Task SendTwoFactorEnabledAsync(string email, string firstName);
     Task SendTwoFactorDisabledAsync(string email, string firstName);

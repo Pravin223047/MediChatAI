@@ -100,6 +100,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IActivityLoggingService, ActivityLoggingService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<IScheduledReportService, ScheduledReportService>();
 builder.Services.AddHttpClient<IGeminiVerificationService, GeminiVerificationService>();
 builder.Services.AddScoped<IDoctorOnboardingService, DoctorOnboardingService>();
 builder.Services.AddScoped<ISystemSettingsService, SystemSettingsService>();
@@ -150,6 +151,7 @@ builder.Services.AddHttpClient<MediChatAI_GraphQl.Features.Emergency.Services.IG
 
 // Background Services
 builder.Services.AddHostedService<SeedDataHostedService>();
+builder.Services.AddHostedService<ScheduledReportBackgroundService>();
 
 // Memory Cache for performance
 builder.Services.AddMemoryCache();

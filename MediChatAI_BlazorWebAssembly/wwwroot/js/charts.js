@@ -972,17 +972,31 @@ function updateTooltipPosition(tooltip, event) {
 
 // Report Export Functionality
 
-// Download file helper
-window.downloadFile = function(filename, content, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
+// Download file helper (named differently to avoid conflict with attachments.js/fileDownload.js)
+window.downloadFileContent = function(filename, content, mimeType) {
+    console.log('downloadFileContent called:', filename, 'content length:', content?.length, 'mimeType:', mimeType);
+    
+    // For CSV files, add BOM for proper UTF-8 encoding in Excel
+    let fileContent = content;
+    if (mimeType && mimeType.includes('csv')) {
+        fileContent = '\uFEFF' + content; // Add UTF-8 BOM
+    }
+    
+    const blob = new Blob([fileContent], { type: mimeType || 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
+    link.style.display = 'none';
     document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    
+    // Use setTimeout to ensure the click happens
+    setTimeout(() => {
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        console.log('File download initiated:', filename);
+    }, 100);
 };
 
 // Export report as PDF (requires html2canvas and jsPDF libraries)
@@ -1076,7 +1090,7 @@ window.exportDataAsCSV = function(data, filename, headers) {
             });
         }
 
-        downloadFile(filename || 'report.csv', csv, 'text/csv;charset=utf-8;');
+        downloadFileContent(filename || 'report.csv', csv, 'text/csv;charset=utf-8;');
         return true;
     } catch (error) {
         console.error('Error exporting CSV:', error);
@@ -1120,7 +1134,7 @@ window.exportDataAsExcel = function(data, filename, sheetName) {
 window.exportDataAsJSON = function(data, filename) {
     try {
         const jsonString = JSON.stringify(data, null, 2);
-        downloadFile(filename || 'report.json', jsonString, 'application/json;charset=utf-8;');
+        downloadFileContent(filename || 'report.json', jsonString, 'application/json;charset=utf-8;');
         return true;
     } catch (error) {
         console.error('Error exporting JSON:', error);
@@ -1755,6 +1769,1162 @@ window.generateProfessionalReport = async function(reportConfig) {
 
     } catch (error) {
         console.error('Error generating professional report:', error);
+        return false;
+    }
+};
+
+// Detailed Comparison Report Generator
+window.generateComparisonReport = async function(reportConfig) {
+    try {
+        console.log('Generating detailed comparison report...', reportConfig);
+        
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 15;
+        const contentWidth = pageWidth - (margin * 2);
+        let yPos = margin;
+        
+        const primaryColor = reportConfig.primaryColor || '#3b82f6';
+        const accentColor = reportConfig.accentColor || '#8b5cf6';
+        
+        // Helper function to add new page if needed
+        const checkPageBreak = (requiredSpace) => {
+            if (yPos + requiredSpace > pageHeight - margin) {
+                pdf.addPage();
+                yPos = margin;
+                return true;
+            }
+            return false;
+        };
+        
+        // Helper function to draw a colored box
+        const drawBox = (x, y, w, h, color, radius = 3) => {
+            pdf.setFillColor(color);
+            pdf.roundedRect(x, y, w, h, radius, radius, 'F');
+        };
+        
+        // ========== HEADER SECTION ==========
+        // Header background
+        const headerGradient = pdf.setFillColor(59, 130, 246);
+        pdf.rect(0, 0, pageWidth, 45, 'F');
+        
+        // Title
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(22);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(reportConfig.title || 'Comparison Report', margin, 20);
+        
+        // Subtitle
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(reportConfig.subtitle || '', margin, 30);
+        
+        // Date
+        pdf.setFontSize(9);
+        pdf.text(reportConfig.dateRange || '', margin, 38);
+        
+        yPos = 55;
+        
+        // ========== SUMMARY SECTION ==========
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('SUMMARY', margin, yPos);
+        yPos += 8;
+        
+        const summary = reportConfig.summary || {};
+        const boxWidth = (contentWidth - 6) / 4;
+        const boxHeight = 25;
+        
+        // Helper function to convert hex to RGB
+        const hexToRgb = (hex) => {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r: 200, g: 200, b: 200 };
+        };
+        
+        // Summary boxes with RGB colors
+        const summaryBoxes = [
+            { label: 'Baseline (Period A)', value: summary.periodATotal || 0, bgColor: { r: 219, g: 234, b: 254 }, textColor: { r: 30, g: 64, b: 175 }, subtext: summary.periodALabel },
+            { label: 'Current (Period B)', value: summary.periodBTotal || 0, bgColor: { r: 220, g: 252, b: 231 }, textColor: { r: 22, g: 101, b: 52 }, subtext: summary.periodBLabel },
+            { label: 'Change', value: (summary.absoluteChange >= 0 ? '+' : '') + (summary.absoluteChange || 0), bgColor: summary.absoluteChange >= 0 ? { r: 209, g: 250, b: 229 } : { r: 254, g: 226, b: 226 }, textColor: summary.absoluteChange >= 0 ? { r: 5, g: 150, b: 105 } : { r: 220, g: 38, b: 38 } },
+            { label: '% Change', value: (summary.percentageChange >= 0 ? '+' : '') + (summary.percentageChange || 0) + '%', bgColor: summary.percentageChange >= 0 ? { r: 209, g: 250, b: 229 } : { r: 254, g: 226, b: 226 }, textColor: summary.percentageChange >= 0 ? { r: 5, g: 150, b: 105 } : { r: 220, g: 38, b: 38 } }
+        ];
+        
+        summaryBoxes.forEach((box, index) => {
+            const x = margin + (index * (boxWidth + 2));
+            
+            // Box background with RGB values
+            pdf.setFillColor(box.bgColor.r, box.bgColor.g, box.bgColor.b);
+            pdf.roundedRect(x, yPos, boxWidth, boxHeight, 2, 2, 'F');
+            
+            // Label
+            pdf.setTextColor(107, 114, 128);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(box.label, x + 3, yPos + 6);
+            
+            // Value with RGB values
+            pdf.setTextColor(box.textColor.r, box.textColor.g, box.textColor.b);
+            pdf.setFontSize(16);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(String(box.value), x + 3, yPos + 16);
+            
+            // Subtext if exists
+            if (box.subtext) {
+                pdf.setTextColor(107, 114, 128);
+                pdf.setFontSize(7);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(box.subtext, x + 3, yPos + 22);
+            }
+        });
+        
+        yPos += boxHeight + 12;
+        
+        // ========== DAY-BY-DAY BREAKDOWN ==========
+        const breakdown = reportConfig.breakdown || [];
+        if (breakdown.length > 0) {
+            checkPageBreak(50);
+            
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('DAY-BY-DAY BREAKDOWN', margin, yPos);
+            yPos += 8;
+            
+            // Table header
+            const colWidths = [contentWidth * 0.3, contentWidth * 0.17, contentWidth * 0.17, contentWidth * 0.18, contentWidth * 0.18];
+            const headers = ['Date/Label', 'Period A', 'Period B', 'Difference', '% Change'];
+            
+            pdf.setFillColor(243, 244, 246);
+            pdf.rect(margin, yPos, contentWidth, 8, 'F');
+            
+            pdf.setTextColor(75, 85, 99);
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            
+            let xPos = margin + 2;
+            headers.forEach((header, i) => {
+                pdf.text(header, xPos, yPos + 5.5);
+                xPos += colWidths[i];
+            });
+            yPos += 10;
+            
+            // Table rows - show all items
+            pdf.setFont('helvetica', 'normal');
+            breakdown.forEach((row, index) => {
+                checkPageBreak(8);
+                
+                if (index % 2 === 0) {
+                    pdf.setFillColor(249, 250, 251);
+                    pdf.rect(margin, yPos - 2, contentWidth, 7, 'F');
+                }
+                
+                pdf.setTextColor(31, 41, 55);
+                pdf.setFontSize(8);
+                
+                xPos = margin + 2;
+                pdf.text(String(row.label || ''), xPos, yPos + 3);
+                xPos += colWidths[0];
+                pdf.text(String(row.periodA || 0), xPos, yPos + 3);
+                xPos += colWidths[1];
+                pdf.text(String(row.periodB || 0), xPos, yPos + 3);
+                xPos += colWidths[2];
+                
+                // Difference with color
+                const diff = row.difference || 0;
+                if (diff >= 0) {
+                    pdf.setTextColor(22, 163, 74); // Green
+                } else {
+                    pdf.setTextColor(220, 38, 38); // Red
+                }
+                pdf.text((diff >= 0 ? '+' : '') + String(diff), xPos, yPos + 3);
+                xPos += colWidths[3];
+                
+                // Percent change with color
+                const pct = row.percentChange || 0;
+                if (pct >= 0) {
+                    pdf.setTextColor(22, 163, 74); // Green
+                } else {
+                    pdf.setTextColor(220, 38, 38); // Red
+                }
+                pdf.text((pct >= 0 ? '+' : '') + String(pct) + '%', xPos, yPos + 3);
+                
+                yPos += 7;
+            });
+            
+            // Total row
+            pdf.setFillColor(59, 130, 246);
+            pdf.rect(margin, yPos - 2, contentWidth, 8, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(9);
+            
+            xPos = margin + 2;
+            pdf.text('TOTAL', xPos, yPos + 4);
+            xPos += colWidths[0];
+            pdf.text(String(summary.periodATotal || 0), xPos, yPos + 4);
+            xPos += colWidths[1];
+            pdf.text(String(summary.periodBTotal || 0), xPos, yPos + 4);
+            xPos += colWidths[2];
+            const totalDiff = summary.absoluteChange || 0;
+            pdf.text((totalDiff >= 0 ? '+' : '') + String(totalDiff), xPos, yPos + 4);
+            xPos += colWidths[3];
+            const totalPct = summary.percentageChange || 0;
+            pdf.text((totalPct >= 0 ? '+' : '') + String(totalPct) + '%', xPos, yPos + 4);
+            
+            yPos += 15;
+        }
+        
+        // ========== NEW ITEMS SECTION ==========
+        const newItems = reportConfig.newItems || [];
+        if (newItems.length > 0) {
+            checkPageBreak(40);
+            
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            const newItemsTitle = `NEW ${(reportConfig.itemTypeName || 'Items').toUpperCase()} IN CURRENT PERIOD`;
+            pdf.text(newItemsTitle, margin, yPos);
+            
+            // Badge - positioned next to the title text, centered vertically
+            const titleWidth = pdf.getTextWidth(newItemsTitle);
+            const badgeX = margin + titleWidth + 5;
+            const badgeWidth = 22;
+            const badgeHeight = 7;
+            const badgeY = yPos - 6; // Position badge to align with text baseline
+            
+            pdf.setFillColor(34, 197, 94);
+            pdf.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 2, 2, 'F');
+            
+            // Badge text - centered inside the badge
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            const badgeText = `+${newItems.length}`;
+            const badgeTextWidth = pdf.getTextWidth(badgeText);
+            pdf.text(badgeText, badgeX + (badgeWidth - badgeTextWidth) / 2, badgeY + 5);
+            
+            yPos += 8;
+            
+            // Table header
+            const itemColWidths = [contentWidth * 0.25, contentWidth * 0.30, contentWidth * 0.15, contentWidth * 0.15, contentWidth * 0.15];
+            const itemHeaders = ['Name', 'Email', 'Role', 'Action', 'Date'];
+            
+            pdf.setFillColor(220, 252, 231);
+            pdf.rect(margin, yPos, contentWidth, 7, 'F');
+            
+            pdf.setTextColor(22, 101, 52);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'bold');
+            
+            xPos = margin + 2;
+            itemHeaders.forEach((header, i) => {
+                pdf.text(header, xPos, yPos + 5);
+                xPos += itemColWidths[i];
+            });
+            yPos += 9;
+            
+            // Rows - show all items
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(31, 41, 55);
+            newItems.forEach((item, index) => {
+                checkPageBreak(7);
+                
+                if (index % 2 === 0) {
+                    pdf.setFillColor(240, 253, 244);
+                    pdf.rect(margin, yPos - 2, contentWidth, 6, 'F');
+                }
+                
+                pdf.setFontSize(7);
+                xPos = margin + 2;
+                pdf.text(String(item.name || '').substring(0, 25), xPos, yPos + 2);
+                xPos += itemColWidths[0];
+                pdf.text(String(item.email || '').substring(0, 30), xPos, yPos + 2);
+                xPos += itemColWidths[1];
+                pdf.text(String(item.role || ''), xPos, yPos + 2);
+                xPos += itemColWidths[2];
+                pdf.text(String(item.action || ''), xPos, yPos + 2);
+                xPos += itemColWidths[3];
+                pdf.text(String(item.date || ''), xPos, yPos + 2);
+                
+                yPos += 6;
+            });
+            
+            yPos += 8;
+        }
+        
+        // ========== REMOVED ITEMS SECTION ==========
+        const removedItems = reportConfig.removedItems || [];
+        if (removedItems.length > 0) {
+            checkPageBreak(40);
+            
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            const removedItemsTitle = `REMOVED ${(reportConfig.itemTypeName || 'Items').toUpperCase()}`;
+            pdf.text(removedItemsTitle, margin, yPos);
+            
+            // Badge
+            pdf.setFillColor(239, 68, 68);
+            pdf.roundedRect(margin + pdf.getTextWidth(removedItemsTitle) + 5, yPos - 5, 20, 7, 2, 2, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(8);
+            pdf.text(`-${removedItems.length}`, margin + pdf.getTextWidth(removedItemsTitle) + 10, yPos - 0.5);
+            
+            yPos += 8;
+            
+            // Table header
+            const itemColWidths = [contentWidth * 0.25, contentWidth * 0.30, contentWidth * 0.15, contentWidth * 0.15, contentWidth * 0.15];
+            const itemHeaders = ['Name', 'Email', 'Role', 'Action', 'Date'];
+            
+            pdf.setFillColor(254, 226, 226);
+            pdf.rect(margin, yPos, contentWidth, 7, 'F');
+            
+            pdf.setTextColor(153, 27, 27);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'bold');
+            
+            xPos = margin + 2;
+            itemHeaders.forEach((header, i) => {
+                pdf.text(header, xPos, yPos + 5);
+                xPos += itemColWidths[i];
+            });
+            yPos += 9;
+            
+            // Rows - show all items
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(31, 41, 55);
+            removedItems.forEach((item, index) => {
+                checkPageBreak(7);
+                
+                if (index % 2 === 0) {
+                    pdf.setFillColor(254, 242, 242);
+                    pdf.rect(margin, yPos - 2, contentWidth, 6, 'F');
+                }
+                
+                pdf.setFontSize(7);
+                xPos = margin + 2;
+                pdf.text(String(item.name || '').substring(0, 25), xPos, yPos + 2);
+                xPos += itemColWidths[0];
+                pdf.text(String(item.email || '').substring(0, 30), xPos, yPos + 2);
+                xPos += itemColWidths[1];
+                pdf.text(String(item.role || ''), xPos, yPos + 2);
+                xPos += itemColWidths[2];
+                pdf.text(String(item.action || ''), xPos, yPos + 2);
+                xPos += itemColWidths[3];
+                pdf.text(String(item.date || ''), xPos, yPos + 2);
+                
+                yPos += 6;
+            });
+            
+            yPos += 8;
+        }
+        
+        // ========== ALL CURRENT PERIOD ITEMS ==========
+        const allCurrentItems = reportConfig.allCurrentItems || [];
+        if (allCurrentItems.length > 0) {
+            checkPageBreak(40);
+            
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            const allItemsTitle = `ALL ${(reportConfig.itemTypeName || 'Items').toUpperCase()} IN CURRENT PERIOD`;
+            pdf.text(allItemsTitle, margin, yPos);
+            
+            // Badge - positioned next to the title text, centered vertically
+            const allTitleWidth = pdf.getTextWidth(allItemsTitle);
+            const allBadgeX = margin + allTitleWidth + 5;
+            const allBadgeText = `${allCurrentItems.length} total`;
+            pdf.setFontSize(9);
+            const allBadgeTextWidth = pdf.getTextWidth(allBadgeText);
+            const allBadgeWidth = allBadgeTextWidth + 8;
+            const allBadgeHeight = 7;
+            const allBadgeY = yPos - 6;
+            
+            pdf.setFillColor(59, 130, 246);
+            pdf.roundedRect(allBadgeX, allBadgeY, allBadgeWidth, allBadgeHeight, 2, 2, 'F');
+            
+            // Badge text - centered inside the badge
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(allBadgeText, allBadgeX + 4, allBadgeY + 5);
+            
+            yPos += 8;
+            
+            // Table header
+            const itemColWidths = [contentWidth * 0.22, contentWidth * 0.28, contentWidth * 0.12, contentWidth * 0.12, contentWidth * 0.16, contentWidth * 0.10];
+            const itemHeaders = ['Name', 'Email', 'Role', 'Action', 'Date', 'Status'];
+            
+            pdf.setFillColor(219, 234, 254);
+            pdf.rect(margin, yPos, contentWidth, 7, 'F');
+            
+            pdf.setTextColor(30, 64, 175);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'bold');
+            
+            xPos = margin + 2;
+            itemHeaders.forEach((header, i) => {
+                pdf.text(header, xPos, yPos + 5);
+                xPos += itemColWidths[i];
+            });
+            yPos += 9;
+            
+            // Rows - show all items
+            pdf.setFont('helvetica', 'normal');
+            allCurrentItems.forEach((item, index) => {
+                checkPageBreak(7);
+                
+                if (index % 2 === 0) {
+                    pdf.setFillColor(239, 246, 255);
+                    pdf.rect(margin, yPos - 2, contentWidth, 6, 'F');
+                }
+                
+                pdf.setTextColor(31, 41, 55);
+                pdf.setFontSize(7);
+                xPos = margin + 2;
+                pdf.text(String(item.name || '').substring(0, 22), xPos, yPos + 2);
+                xPos += itemColWidths[0];
+                pdf.text(String(item.email || '').substring(0, 28), xPos, yPos + 2);
+                xPos += itemColWidths[1];
+                pdf.text(String(item.role || ''), xPos, yPos + 2);
+                xPos += itemColWidths[2];
+                pdf.text(String(item.action || ''), xPos, yPos + 2);
+                xPos += itemColWidths[3];
+                pdf.text(String(item.date || ''), xPos, yPos + 2);
+                xPos += itemColWidths[4];
+                
+                // New badge
+                if (item.isNew) {
+                    pdf.setFillColor(34, 197, 94);
+                    pdf.roundedRect(xPos, yPos - 1, 12, 4, 1, 1, 'F');
+                    pdf.setTextColor(255, 255, 255);
+                    pdf.setFontSize(6);
+                    pdf.text('NEW', xPos + 2, yPos + 1.5);
+                } else {
+                    pdf.setTextColor(107, 114, 128);
+                    pdf.setFontSize(6);
+                    pdf.text('Existing', xPos, yPos + 2);
+                }
+                
+                yPos += 6;
+            });
+            
+            yPos += 8;
+        }
+        
+        // ========== RECOMMENDATIONS ==========
+        const recommendations = reportConfig.recommendations || [];
+        if (recommendations.length > 0) {
+            checkPageBreak(40);
+            
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('RECOMMENDATIONS', margin, yPos);
+            yPos += 8;
+            
+            recommendations.slice(0, 3).forEach(recItem => {
+                // Handle recommendation as string or object
+                const rec = typeof recItem === 'string' ? { title: recItem, description: '', priority: 'low' } : recItem;
+                checkPageBreak(20);
+                
+                // Use RGB values directly instead of hex strings
+                const priorityColors = {
+                    high: { bg: [254, 242, 242], border: [239, 68, 68], text: [153, 27, 27] },
+                    medium: { bg: [255, 251, 235], border: [245, 158, 11], text: [146, 64, 14] },
+                    low: { bg: [240, 253, 244], border: [34, 197, 94], text: [22, 101, 52] }
+                };
+                const colors = priorityColors[rec.priority] || priorityColors.low;
+                
+                pdf.setFillColor(...colors.bg);
+                pdf.roundedRect(margin, yPos, contentWidth, 15, 2, 2, 'F');
+                
+                // Priority badge
+                pdf.setFillColor(...colors.border);
+                pdf.roundedRect(margin + contentWidth - 25, yPos + 2, 22, 5, 1, 1, 'F');
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFontSize(7);
+                pdf.text((rec.priority || 'low').toUpperCase(), margin + contentWidth - 23, yPos + 5.5);
+                
+                // Title
+                pdf.setTextColor(...colors.text);
+                pdf.setFontSize(10);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(rec.title || '', margin + 4, yPos + 6);
+                
+                // Description
+                pdf.setFont('helvetica', 'normal');
+                pdf.setFontSize(8);
+                pdf.setTextColor(75, 85, 99);
+                const descText = rec.description || '';
+                pdf.text(descText.substring(0, 100) + (descText.length > 100 ? '...' : ''), margin + 4, yPos + 12);
+                
+                yPos += 18;
+            });
+        }
+        
+        // ========== FOOTER ==========
+        const totalPages = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            
+            // Footer line
+            pdf.setDrawColor(229, 231, 235);
+            pdf.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+            
+            // Footer text
+            pdf.setTextColor(156, 163, 175);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text('Generated by MediChat AI', margin, pageHeight - 7);
+            pdf.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 20, pageHeight - 7);
+        }
+        
+        // Save PDF
+        const filename = `${reportConfig.reportType || 'comparison'}_report_${new Date().toISOString().split('T')[0]}.pdf`;
+        pdf.save(filename);
+        
+        console.log('Comparison report PDF generated successfully');
+        return true;
+        
+    } catch (error) {
+        console.error('Error generating comparison report:', error);
+        return false;
+    }
+};
+
+// Generate PDF for preview/sharing (returns data URL) - Uses same logic as generateComparisonReport
+window.generateComparisonReportPreview = function(reportConfig) {
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 15;
+        const contentWidth = pageWidth - (2 * margin);
+        let yPos = 20;
+        
+        // Helper function to check page break
+        const checkPageBreak = (requiredHeight) => {
+            if (yPos + requiredHeight > pageHeight - 20) {
+                pdf.addPage();
+                yPos = 20;
+                return true;
+            }
+            return false;
+        };
+        
+        // Helper function to convert hex to RGB
+        const hexToRgb = (hex) => {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r: 0, g: 0, b: 0 };
+        };
+        
+        // ========== HEADER ==========
+        pdf.setFillColor(59, 130, 246);
+        pdf.rect(0, 0, pageWidth, 45, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(22);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(reportConfig.title || 'Comparison Report', margin, 20);
+        
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(reportConfig.subtitle || '', margin, 30);
+        
+        pdf.setFontSize(9);
+        pdf.text(reportConfig.dateRange || '', margin, 38);
+        
+        yPos = 60;
+        
+        // ========== SUMMARY SECTION ==========
+        const summary = reportConfig.summary || {};
+        
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('SUMMARY', margin, yPos);
+        yPos += 10;
+        
+        // Summary boxes
+        const boxWidth = (contentWidth - 6) / 4;
+        const boxHeight = 25;
+        
+        const boxes = [
+            { label: 'Baseline (Period A)', value: String(summary.periodATotal || 0), subtext: summary.periodALabel || '', bgColor: '#dbeafe', textColor: '#1e40af' },
+            { label: 'Current (Period B)', value: String(summary.periodBTotal || 0), subtext: summary.periodBLabel || '', bgColor: '#dcfce7', textColor: '#166534' },
+            { label: 'Change', value: (summary.absoluteChange >= 0 ? '+' : '') + String(summary.absoluteChange || 0), subtext: 'Increase', bgColor: '#d1fae5', textColor: '#059669' },
+            { label: '% Change', value: (summary.percentageChange >= 0 ? '+' : '') + String(summary.percentageChange || 0) + '%', subtext: 'Growth', bgColor: '#d1fae5', textColor: '#059669' }
+        ];
+        
+        boxes.forEach((box, idx) => {
+            const x = margin + (idx * (boxWidth + 2));
+            
+            const bgRgb = hexToRgb(box.bgColor);
+            pdf.setFillColor(bgRgb.r, bgRgb.g, bgRgb.b);
+            pdf.roundedRect(x, yPos, boxWidth, boxHeight, 2, 2, 'F');
+            
+            pdf.setTextColor(107, 114, 128);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(box.label, x + 3, yPos + 6);
+            
+            const textRgb = hexToRgb(box.textColor);
+            pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
+            pdf.setFontSize(16);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(box.value, x + 3, yPos + 16);
+            
+            pdf.setTextColor(107, 114, 128);
+            pdf.setFontSize(7);
+            pdf.setFont('helvetica', 'normal');
+            const subtext = (box.subtext || '').substring(0, 22);
+            pdf.text(subtext, x + 3, yPos + 22);
+        });
+        
+        yPos += boxHeight + 15;
+        
+        // ========== DAY-BY-DAY BREAKDOWN ==========
+        const breakdown = reportConfig.breakdown || [];
+        if (breakdown.length > 0) {
+            checkPageBreak(50);
+            
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('DAY-BY-DAY BREAKDOWN', margin, yPos);
+            yPos += 8;
+            
+            // Table header
+            pdf.setFillColor(243, 244, 246);
+            pdf.rect(margin, yPos, contentWidth, 8, 'F');
+            
+            pdf.setTextColor(75, 85, 99);
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            
+            const cols = [margin + 2, margin + 56, margin + 100, margin + 147, margin + 200];
+            pdf.text('Date/Label', cols[0], yPos + 5.5);
+            pdf.text('Period A', cols[1], yPos + 5.5);
+            pdf.text('Period B', cols[2], yPos + 5.5);
+            pdf.text('Difference', cols[3], yPos + 5.5);
+            pdf.text('% Change', cols[4], yPos + 5.5);
+            
+            yPos += 8;
+            
+            // Table rows - show all items
+            breakdown.forEach((row, idx) => {
+                checkPageBreak(7);
+                
+                if (idx % 2 === 0) {
+                    pdf.setFillColor(249, 250, 251);
+                    pdf.rect(margin, yPos, contentWidth, 7, 'F');
+                }
+                
+                pdf.setTextColor(31, 41, 55);
+                pdf.setFontSize(8);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(String(row.label || ''), cols[0], yPos + 5);
+                pdf.text(String(row.periodA || 0), cols[1], yPos + 5);
+                pdf.text(String(row.periodB || 0), cols[2], yPos + 5);
+                
+                const diff = row.difference || 0;
+                if (diff >= 0) {
+                    pdf.setTextColor(22, 163, 74);
+                } else {
+                    pdf.setTextColor(220, 38, 38);
+                }
+                pdf.text((diff >= 0 ? '+' : '') + String(diff), cols[3], yPos + 5);
+                
+                const pct = row.percentChange || 0;
+                pdf.text((pct >= 0 ? '+' : '') + String(pct) + '%', cols[4], yPos + 5);
+                
+                yPos += 7;
+            });
+            
+            // Total row
+            pdf.setFillColor(59, 130, 246);
+            pdf.rect(margin, yPos, contentWidth, 8, 'F');
+            
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('TOTAL', cols[0], yPos + 5.5);
+            pdf.text(String(summary.periodATotal || 0), cols[1], yPos + 5.5);
+            pdf.text(String(summary.periodBTotal || 0), cols[2], yPos + 5.5);
+            pdf.text((summary.absoluteChange >= 0 ? '+' : '') + String(summary.absoluteChange || 0), cols[3], yPos + 5.5);
+            pdf.text((summary.percentageChange >= 0 ? '+' : '') + String(summary.percentageChange || 0) + '%', cols[4], yPos + 5.5);
+            
+            yPos += 15;
+        }
+        
+        // ========== NEW ITEMS ==========
+        const newItems = reportConfig.newItems || [];
+        if (newItems.length > 0) {
+            checkPageBreak(40);
+            
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(`NEW ${reportConfig.itemTypeName?.toUpperCase() || 'ITEMS'} IN CURRENT PERIOD`, margin, yPos);
+            
+            // Badge
+            pdf.setFillColor(34, 197, 94);
+            pdf.roundedRect(margin + 155, yPos - 6, 20, 7, 2, 2, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(`+${newItems.length}`, margin + 158, yPos - 1);
+            
+            yPos += 8;
+            
+            // Table header
+            pdf.setFillColor(220, 252, 231);
+            pdf.rect(margin, yPos, contentWidth, 7, 'F');
+            
+            pdf.setTextColor(22, 101, 52);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'bold');
+            
+            const newCols = [margin + 2, margin + 47, margin + 101, margin + 128, margin + 155];
+            pdf.text('Name', newCols[0], yPos + 5);
+            pdf.text('Email', newCols[1], yPos + 5);
+            pdf.text('Role', newCols[2], yPos + 5);
+            pdf.text('Action', newCols[3], yPos + 5);
+            pdf.text('Date', newCols[4], yPos + 5);
+            
+            yPos += 7;
+            
+            // Table rows - show all items
+            newItems.forEach((item, idx) => {
+                checkPageBreak(6);
+                
+                if (idx % 2 === 0) {
+                    pdf.setFillColor(240, 253, 244);
+                    pdf.rect(margin, yPos, contentWidth, 6, 'F');
+                }
+                
+                pdf.setTextColor(31, 41, 55);
+                pdf.setFontSize(7);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text((item.name || '').substring(0, 18), newCols[0], yPos + 4);
+                pdf.text((item.email || '').substring(0, 28), newCols[1], yPos + 4);
+                pdf.text((item.role || '').substring(0, 10), newCols[2], yPos + 4);
+                pdf.text((item.action || '').substring(0, 10), newCols[3], yPos + 4);
+                pdf.text((item.date || '').substring(0, 18), newCols[4], yPos + 4);
+                
+                yPos += 6;
+            });
+            
+            yPos += 10;
+        }
+        
+        // ========== RECOMMENDATIONS ==========
+        const recommendations = reportConfig.recommendations || [];
+        if (recommendations.length > 0) {
+            checkPageBreak(40);
+            
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('RECOMMENDATIONS', margin, yPos);
+            yPos += 8;
+            
+            recommendations.forEach(rec => {
+                checkPageBreak(20);
+                
+                const priorityColors = {
+                    high: { bg: [254, 242, 242], border: [239, 68, 68], text: [153, 27, 27] },
+                    medium: { bg: [255, 251, 235], border: [245, 158, 11], text: [146, 64, 14] },
+                    low: { bg: [240, 253, 244], border: [34, 197, 94], text: [22, 101, 52] }
+                };
+                const colors = priorityColors[rec.priority] || priorityColors.low;
+                
+                pdf.setFillColor(...colors.bg);
+                pdf.roundedRect(margin, yPos, contentWidth, 15, 2, 2, 'F');
+                
+                // Priority badge
+                pdf.setFillColor(...colors.border);
+                pdf.roundedRect(margin + contentWidth - 25, yPos + 2, 22, 5, 1, 1, 'F');
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFontSize(7);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text((rec.priority || 'low').toUpperCase(), margin + contentWidth - 23, yPos + 5.5);
+                
+                // Title
+                pdf.setTextColor(...colors.text);
+                pdf.setFontSize(10);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(rec.title || '', margin + 4, yPos + 6);
+                
+                // Description
+                pdf.setTextColor(75, 85, 99);
+                pdf.setFontSize(8);
+                pdf.setFont('helvetica', 'normal');
+                const descText = rec.description || '';
+                pdf.text(descText.substring(0, 100) + (descText.length > 100 ? '...' : ''), margin + 4, yPos + 12);
+                
+                yPos += 18;
+            });
+        }
+        
+        // ========== FOOTER ==========
+        const totalPages = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            
+            pdf.setDrawColor(229, 231, 235);
+            pdf.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+            
+            pdf.setTextColor(156, 163, 175);
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text('Generated by MediChat AI', margin, pageHeight - 7);
+            pdf.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 20, pageHeight - 7);
+        }
+        
+        // Return as data URL for iframe preview
+        return pdf.output('datauristring');
+        
+    } catch (error) {
+        console.error('Error generating preview:', error);
+        return null;
+    }
+};
+
+// Share PDF via Web Share API or download
+window.sharePdfReport = async function(reportConfig, method) {
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        // Generate a simplified PDF for sharing
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const margin = 15;
+        
+        // Header
+        pdf.setFillColor(59, 130, 246);
+        pdf.rect(0, 0, pageWidth, 35, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(18);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(reportConfig.title || 'Comparison Report', margin, 15);
+        
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(reportConfig.subtitle || '', margin, 23);
+        pdf.text(reportConfig.dateRange || '', margin, 30);
+        
+        // Summary
+        let yPos = 50;
+        const summary = reportConfig.summary || {};
+        
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`Summary: ${summary.periodATotal || 0} -> ${summary.periodBTotal || 0} (${summary.absoluteChange >= 0 ? '+' : ''}${summary.absoluteChange || 0}, ${summary.percentageChange >= 0 ? '+' : ''}${summary.percentageChange || 0}%)`, margin, yPos);
+        
+        // Get PDF blob
+        const pdfBlob = pdf.output('blob');
+        const filename = `${reportConfig.reportType || 'comparison'}_report.pdf`;
+        
+        // Check if Web Share API is available and supports files
+        if (method === 'native' && navigator.share && navigator.canShare) {
+            const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+            const shareData = { files: [file], title: reportConfig.title };
+            
+            if (navigator.canShare(shareData)) {
+                await navigator.share(shareData);
+                return { success: true, message: 'Shared successfully!' };
+            }
+        }
+        
+        // Fallback: download the file
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        return { success: true, message: 'PDF downloaded!' };
+        
+    } catch (error) {
+        console.error('Error sharing PDF:', error);
+        return { success: false, message: error.message };
+    }
+};
+
+// Export CSV to XLSX format
+window.exportCsvToXlsx = function(csvString, filename) {
+    try {
+        // Check if SheetJS is available
+        if (typeof XLSX === 'undefined') {
+            // Fallback: Just download as CSV with xlsx extension (will work in Excel)
+            const blob = new Blob([csvString], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename.replace('.xlsx', '.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log('SheetJS not available, exported as CSV');
+            return;
+        }
+        
+        // Parse CSV to workbook
+        const rows = csvString.split('\n').map(row => {
+            // Handle quoted values with commas
+            const values = [];
+            let inQuotes = false;
+            let currentValue = '';
+            
+            for (let char of row) {
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    values.push(currentValue.trim());
+                    currentValue = '';
+                } else {
+                    currentValue += char;
+                }
+            }
+            values.push(currentValue.trim());
+            return values;
+        }).filter(row => row.length > 1 || row[0] !== '');
+        
+        const worksheet = XLSX.utils.aoa_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
+        
+        // Write and download
+        XLSX.writeFile(workbook, filename);
+        console.log('XLSX file exported successfully');
+        
+    } catch (error) {
+        console.error('Error exporting XLSX:', error);
+        // Fallback to CSV
+        const blob = new Blob([csvString], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename.replace('.xlsx', '.csv');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+};
+
+// Generate Analytics PDF Report
+window.generateAnalyticsPdfReport = function(reportConfig) {
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 15;
+        const contentWidth = pageWidth - (2 * margin);
+        let yPos = 20;
+        
+        // Header with gradient effect
+        pdf.setFillColor(59, 130, 246);
+        pdf.rect(0, 0, pageWidth, 40, 'F');
+        pdf.setFillColor(99, 102, 241);
+        pdf.rect(0, 30, pageWidth, 10, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(22);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(reportConfig.title || 'Analytics Report', margin, 18);
+        
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(reportConfig.subtitle || '', margin, 28);
+        pdf.setFontSize(9);
+        pdf.text(reportConfig.dateRange || '', margin, 36);
+        
+        yPos = 55;
+        
+        // Stats Overview Section
+        const stats = reportConfig.stats || {};
+        
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('OVERVIEW', margin, yPos);
+        yPos += 10;
+        
+        // Stats boxes
+        const statBoxWidth = (contentWidth - 6) / 4;
+        const statItems = [
+            { label: 'Total Users', value: String(stats.totalUsers || 0), color: '#3b82f6' },
+            { label: 'Patients', value: String(stats.totalPatients || 0), color: '#22c55e' },
+            { label: 'Doctors', value: String(stats.totalDoctors || 0), color: '#8b5cf6' },
+            { label: 'Active Today', value: String(stats.activeUsersToday || 0), color: '#f59e0b' }
+        ];
+        
+        statItems.forEach((stat, idx) => {
+            const x = margin + (idx * (statBoxWidth + 2));
+            pdf.setFillColor(248, 250, 252);
+            pdf.roundedRect(x, yPos, statBoxWidth, 25, 2, 2, 'F');
+            
+            pdf.setTextColor(107, 114, 128);
+            pdf.setFontSize(8);
+            pdf.text(stat.label, x + 3, yPos + 6);
+            
+            const hexColor = stat.color;
+            const r = parseInt(hexColor.slice(1, 3), 16);
+            const g = parseInt(hexColor.slice(3, 5), 16);
+            const b = parseInt(hexColor.slice(5, 7), 16);
+            pdf.setTextColor(r, g, b);
+            pdf.setFontSize(16);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(stat.value, x + 3, yPos + 18);
+        });
+        
+        yPos += 40;
+        
+        // User Growth Section
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('USER GROWTH TREND', margin, yPos);
+        yPos += 8;
+        
+        const userGrowth = reportConfig.userGrowth || { labels: [], data: [] };
+        if (userGrowth.labels && userGrowth.labels.length > 0) {
+            pdf.setFillColor(239, 246, 255);
+            pdf.roundedRect(margin, yPos, contentWidth, 30, 2, 2, 'F');
+            
+            pdf.setTextColor(59, 130, 246);
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'normal');
+            
+            const growthLabels = userGrowth.labels.slice(0, 7);
+            const growthData = userGrowth.data.slice(0, 7);
+            let xOffset = margin + 5;
+            
+            growthLabels.forEach((label, idx) => {
+                pdf.text(`${label}: ${growthData[idx] || 0}`, xOffset, yPos + 15);
+                xOffset += (contentWidth - 10) / 7;
+            });
+            
+            yPos += 35;
+        }
+        
+        // Activity Breakdown Section
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('ACTIVITY BREAKDOWN', margin, yPos);
+        yPos += 8;
+        
+        const activityData = reportConfig.activityBreakdown || { labels: [], data: [] };
+        if (activityData.labels && activityData.labels.length > 0) {
+            pdf.setFillColor(240, 253, 244);
+            pdf.roundedRect(margin, yPos, contentWidth, 35, 2, 2, 'F');
+            
+            let actY = yPos + 8;
+            const actLabels = activityData.labels.slice(0, 6);
+            const actValues = activityData.data.slice(0, 6);
+            
+            actLabels.forEach((label, idx) => {
+                pdf.setTextColor(22, 163, 74);
+                pdf.setFontSize(9);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(`${label}:`, margin + 5 + (idx % 3) * 60, actY + (Math.floor(idx / 3) * 12));
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(String(actValues[idx] || 0), margin + 35 + (idx % 3) * 60, actY + (Math.floor(idx / 3) * 12));
+            });
+            
+            yPos += 45;
+        }
+        
+        // Role Distribution Section
+        pdf.setTextColor(31, 41, 55);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('ROLE DISTRIBUTION', margin, yPos);
+        yPos += 8;
+        
+        const roleData = reportConfig.roleDistribution || { labels: [], data: [] };
+        if (roleData.labels && roleData.labels.length > 0) {
+            const roleColors = ['#3b82f6', '#22c55e', '#8b5cf6', '#f59e0b'];
+            
+            roleData.labels.forEach((label, idx) => {
+                const color = roleColors[idx % roleColors.length];
+                const r = parseInt(color.slice(1, 3), 16);
+                const g = parseInt(color.slice(3, 5), 16);
+                const b = parseInt(color.slice(5, 7), 16);
+                
+                pdf.setFillColor(r, g, b);
+                pdf.roundedRect(margin + (idx * 45), yPos, 40, 20, 2, 2, 'F');
+                
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFontSize(8);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(label, margin + 3 + (idx * 45), yPos + 8);
+                pdf.setFontSize(12);
+                pdf.text(String(roleData.data[idx] || 0), margin + 3 + (idx * 45), yPos + 16);
+            });
+            
+            yPos += 30;
+        }
+        
+        // Footer
+        pdf.setDrawColor(229, 231, 235);
+        pdf.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+        pdf.setTextColor(156, 163, 175);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text('Generated by MediChat AI Analytics', margin, pageHeight - 7);
+        pdf.text(new Date().toLocaleString(), pageWidth - margin - 40, pageHeight - 7);
+        
+        // Save PDF
+        const filename = `analytics-report-${new Date().toISOString().split('T')[0]}.pdf`;
+        pdf.save(filename);
+        
+        console.log('Analytics PDF report generated successfully');
+        return true;
+        
+    } catch (error) {
+        console.error('Error generating analytics PDF:', error);
         return false;
     }
 };

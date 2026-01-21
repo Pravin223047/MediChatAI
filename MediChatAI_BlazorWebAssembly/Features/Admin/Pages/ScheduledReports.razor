@@ -1,0 +1,1591 @@
+@page "/admin/scheduled-reports"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Components
+@inject IAdminService AdminService
+@inject NavigationManager Navigation
+@inject AppSettingsState AppSettings
+@inject IJSRuntime JS
+@inject IToastService ToastService
+@inject IReportService ReportService
+@inject IThemeService ThemeService
+@inject ThemeState ThemeState
+@inject ILocalStorageService LocalStorage
+@implements IAsyncDisposable
+
+<PageTitle>Scheduled Reports - @AppSettings.Settings.SiteName Admin</PageTitle>
+
+<AuthorizeRouteGuard RequiredRole="Admin">
+
+<div class="min-h-screen bg-theme dark:bg-gray-900">
+    <!-- Hero Header with Glassmorphism -->
+    <header class="backdrop-blur-md bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 border-b border-gray-200/50 dark:border-gray-700/50 shadow-2xl">
+        <div class="py-10 px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-4">
+                    <div class="p-4 bg-white/20 dark:bg-white/10 rounded-2xl shadow-lg backdrop-blur-sm">
+                        <svg class="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-4xl font-bold text-white">
+                            Scheduled Reports
+                        </h1>
+                        <p class="mt-2 text-lg text-white/90">Automate and manage your report scheduling</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button @onclick="OpenCreateModal"
+                            class="group flex items-center px-5 py-2.5 rounded-xl bg-white/20 dark:bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/30 transition-all duration-300 shadow-lg hover:shadow-xl">
+                        <svg class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        New Schedule
+                    </button>
+                    <button @onclick='() => Navigation.NavigateTo("/admin/reports")'
+                            class="group flex items-center px-4 py-2.5 rounded-xl bg-white/20 dark:bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/30 transition-all duration-300 shadow-lg">
+                        <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        </svg>
+                        Back to Reports
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="py-8 px-4 sm:px-6 lg:px-8">
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Total Schedules</p>
+                        <p class="text-3xl font-bold mt-1">@scheduledReports.Count</p>
+                    </div>
+                    <div class="p-3 bg-white/20 rounded-xl">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Active</p>
+                        <p class="text-3xl font-bold mt-1">@scheduledReports.Count(r => r.IsActive)</p>
+                    </div>
+                    <div class="p-3 bg-white/20 rounded-xl">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl p-6 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Paused</p>
+                        <p class="text-3xl font-bold mt-1">@scheduledReports.Count(r => !r.IsActive)</p>
+                    </div>
+                    <div class="p-3 bg-white/20 rounded-xl">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl p-6 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Next Run</p>
+                        <p class="text-lg font-bold mt-1">@GetNextRunTime()</p>
+                    </div>
+                    <div class="p-3 bg-white/20 rounded-xl">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter and Search Bar -->
+        <div class="mb-6 bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-4">
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex-1 min-w-64">
+                    <div class="relative">
+                        <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="text" @bind="searchTerm" @bind:event="oninput" placeholder="Search schedules..."
+                               class="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary transition-all"/>
+                    </div>
+                </div>
+                <select @bind="filterFrequency" class="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="">All Frequencies</option>
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="Bi-Weekly">Bi-Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="Quarterly">Quarterly</option>
+                </select>
+                <select @bind="filterStatus" class="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="">All Status</option>
+                    <option value="Active">Active</option>
+                    <option value="Paused">Paused</option>
+                </select>
+                <button @onclick="RefreshSchedules" class="px-4 py-2.5 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors flex items-center">
+                    <svg class="w-5 h-5 mr-2 @(isLoading ? "animate-spin" : "")" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="flex justify-center items-center py-20">
+                <div class="relative">
+                    <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-primary"></div>
+                    <div class="absolute inset-0 animate-ping rounded-full h-16 w-16 border border-primary opacity-20"></div>
+                </div>
+            </div>
+        }
+        else if (!GetFilteredSchedules().Any())
+        {
+            <!-- Empty State -->
+            <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-12 text-center">
+                <div class="mx-auto w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Scheduled Reports</h3>
+                <p class="text-gray-500 dark:text-gray-400 mb-6">Create your first scheduled report to automate your reporting workflow.</p>
+                <button @onclick="OpenCreateModal" class="px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors inline-flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Create Schedule
+                </button>
+            </div>
+        }
+        else
+        {
+            <!-- Scheduled Reports Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                @foreach (var schedule in GetFilteredSchedules())
+                {
+                    <div class="group bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden">
+                        <!-- Card Header -->
+                        <div class="p-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r @GetScheduleHeaderGradient(schedule.Frequency)">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h3 class="text-lg font-semibold text-white truncate">@schedule.ReportName</h3>
+                                    <div class="flex items-center mt-2 space-x-2">
+                                        <span class="px-2.5 py-0.5 text-xs font-medium rounded-full @GetFrequencyBadgeClass(schedule.Frequency)">
+                                            @schedule.Frequency
+                                        </span>
+                                        <span class="px-2.5 py-0.5 text-xs font-medium rounded-full @(schedule.IsActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800")">
+                                            @(schedule.IsActive ? "Active" : "Paused")
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <button @onclick="() => ToggleStatus(schedule)" title="@(schedule.IsActive ? "Pause" : "Activate")"
+                                            class="p-2 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+                                        @if (schedule.IsActive)
+                                        {
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                        }
+                                        else
+                                        {
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Body -->
+                        <div class="p-5 space-y-4">
+                            <!-- Schedule Details -->
+                            <div class="space-y-3">
+                                <div class="flex items-center text-sm">
+                                    <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span class="text-gray-600 dark:text-gray-400">Schedule:</span>
+                                    <span class="ml-2 font-medium text-gray-900 dark:text-white">@schedule.Schedule</span>
+                                </div>
+                                <div class="flex items-center text-sm">
+                                    <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <span class="text-gray-600 dark:text-gray-400">Format:</span>
+                                    <span class="ml-2 font-medium text-gray-900 dark:text-white">@schedule.Format</span>
+                                </div>
+                                <div class="flex items-start text-sm">
+                                    <svg class="w-4 h-4 mr-2 mt-0.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                    </svg>
+                                    <span class="text-gray-600 dark:text-gray-400">Recipients:</span>
+                                    <span class="ml-2 font-medium text-gray-900 dark:text-white">@schedule.Recipients.Count emails</span>
+                                </div>
+                            </div>
+
+                            <!-- Run Info -->
+                            <div class="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-500 dark:text-gray-400">Next Run:</span>
+                                    <span class="font-medium @(schedule.NextRun.HasValue ? "text-primary" : "text-gray-400")">
+                                        @(schedule.NextRun.HasValue ? FormatIst(schedule.NextRun) : "Not scheduled")
+                                    </span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-500 dark:text-gray-400">Last Run:</span>
+                                    <span class="font-medium text-gray-900 dark:text-white">
+                                        @(schedule.LastRun.HasValue ? FormatIst(schedule.LastRun) : "Never")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Footer -->
+                        <div class="px-5 py-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                            <button @onclick="() => RunNow(schedule)" 
+                                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
+                                <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                                </svg>
+                                Run Now
+                            </button>
+                            <div class="flex items-center space-x-2">
+                                <button @onclick="() => EditSchedule(schedule)" title="Edit"
+                                        class="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                </button>
+                                <button @onclick="() => ViewHistory(schedule)" title="View History"
+                                        class="p-2 rounded-lg text-gray-500 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </button>
+                                <button @onclick="() => ConfirmDelete(schedule)" title="Delete"
+                                        class="p-2 rounded-lg text-gray-500 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Recent Execution History -->
+        @if (executionHistory.Any())
+        {
+            <div class="mt-8 bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Recent Execution History
+                    </h3>
+                    <button @onclick='() => Navigation.NavigateTo("/admin/reports")' class="text-sm text-primary hover:underline">
+                        View All
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Report</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Executed At</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recipients</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            @foreach (var history in executionHistory.Take(5))
+                            {
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white">@history.ReportName</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">@history.Format</div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
+                                        @history.ExecutedAt.ToString("MMM dd, yyyy HH:mm")
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2.5 py-0.5 text-xs font-medium rounded-full @GetStatusBadgeClass(history.Status)">
+                                            @history.Status
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
+                                        @history.RecipientCount recipients
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <button @onclick="() => DownloadReport(history)" class="text-primary hover:text-primary/80 transition-colors">
+                                            Download
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+    </main>
+</div>
+
+<!-- Create/Edit Schedule Modal -->
+@if (showScheduleModal)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity bg-gray-900/75 backdrop-blur-sm" @onclick="CloseModal"></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen"></span>&#8203;
+
+            <div class="relative inline-block w-full max-w-2xl px-4 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white dark:bg-gray-800 rounded-2xl shadow-2xl sm:my-8 sm:align-middle sm:p-6">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                        <div class="p-2 bg-primary/10 rounded-xl mr-3">
+                            <svg class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        @(isEditing ? "Edit Schedule" : "Create New Schedule")
+                    </h3>
+                    <button @onclick="CloseModal" class="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="space-y-5 max-h-[70vh] overflow-y-auto pr-2">
+                    <!-- Report Selection -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Report Template</label>
+                        <select @bind="editModel.ReportId" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary transition-all">
+                            <option value="">Select a report template...</option>
+                            <option value="new-registrations">New Registrations Trend</option>
+                            <option value="user-activity">User Activity Heatmap</option>
+                            <option value="engagement">Engagement Metrics</option>
+                            <option value="role-distribution">Role Distribution</option>
+                            <option value="retention">Retention Analysis</option>
+                            <option value="performance-metrics">Performance Metrics</option>
+                            <option value="response-times">API Response Times</option>
+                            <option value="error-rate">Error Rate Analysis</option>
+                            <option value="uptime">Uptime/Downtime Report</option>
+                            <option value="activity-types">Top Activities by Type</option>
+                            <option value="peak-hours">Peak Usage Hours</option>
+                            <option value="timeline">Activity Timeline</option>
+                        </select>
+                    </div>
+
+                    <!-- Schedule Name -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule Name</label>
+                        <input type="text" @bind="editModel.ReportName" placeholder="e.g., Weekly User Activity Report"
+                               class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary transition-all"/>
+                    </div>
+
+                    <!-- Start Date -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Start Date</label>
+                        <input type="date" value="@scheduleStartDate.ToString("yyyy-MM-dd")" 
+                               @onchange="OnScheduleStartDateChanged"
+                               min="@DateTime.Today.ToString("yyyy-MM-dd")"
+                               class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary transition-all"/>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Select today or a future date</p>
+                    </div>
+
+                    <!-- Frequency and Time -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Frequency</label>
+                            <select @bind="editModel.Frequency" @bind:after="UpdateScheduleExpression"
+                                    class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary transition-all">
+                                <option value="Daily">Daily</option>
+                                <option value="Weekly">Weekly</option>
+                                <option value="Bi-Weekly">Bi-Weekly</option>
+                                <option value="Monthly">Monthly</option>
+                                <option value="Quarterly">Quarterly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Time</label>
+                            <input type="time" value="@scheduleTimeString" 
+                                   @onchange="OnScheduleTimeChanged"
+                                   class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary transition-all"/>
+                        </div>
+                    </div>
+
+                    <!-- Day Selection for Weekly/Bi-Weekly -->
+                    @if (editModel.Frequency == "Weekly" || editModel.Frequency == "Bi-Weekly")
+                    {
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Day of Week</label>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach (var day in daysOfWeek)
+                                {
+                                    <button type="button" @onclick="() => ToggleDaySelection(day.Key)"
+                                            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors @(selectedDays.Contains(day.Key) ? "bg-primary text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600")">
+                                        @day.Value
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Day of Month for Monthly -->
+                    @if (editModel.Frequency == "Monthly" || editModel.Frequency == "Quarterly")
+                    {
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Day of Month</label>
+                            <select @bind="selectedDayOfMonth" @bind:after="UpdateScheduleExpression"
+                                    class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary transition-all">
+                                @for (int i = 1; i <= 28; i++)
+                                {
+                                    <option value="@i">@GetOrdinalSuffix(i)</option>
+                                }
+                                <option value="0">Last day of month</option>
+                            </select>
+                        </div>
+                    }
+
+                    <!-- Export Format -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Export Format</label>
+                        <div class="grid grid-cols-4 gap-3">
+                            @foreach (var format in exportFormats)
+                            {
+                                <button type="button" @onclick="() => editModel.Format = format"
+                                        class="p-3 rounded-xl text-center transition-all @(editModel.Format == format ? "bg-primary text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600")">
+                                    <span class="text-sm font-medium">@format</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Recipients -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recipients</label>
+                        <div class="space-y-2">
+                            <div class="flex gap-2">
+                                <input type="email" @bind="newRecipientEmail" placeholder="Enter email address..."
+                                       class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary transition-all"/>
+                                <button type="button" @onclick="AddRecipient" 
+                                        class="px-4 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors">
+                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            @if (editModel.Recipients.Any())
+                            {
+                                <div class="flex flex-wrap gap-2 mt-3">
+                                    @foreach (var recipient in editModel.Recipients)
+                                    {
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                            @recipient
+                                            <button type="button" @onclick="() => RemoveRecipient(recipient)" class="ml-2 text-gray-400 hover:text-red-500">
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Active Toggle -->
+                    <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <div>
+                            <label class="text-sm font-medium text-gray-900 dark:text-white">Active</label>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Enable or disable this scheduled report</p>
+                        </div>
+                        <button type="button" @onclick="() => editModel.IsActive = !editModel.IsActive"
+                                class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out @(editModel.IsActive ? "bg-primary" : "bg-gray-200 dark:bg-gray-600")">
+                            <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out @(editModel.IsActive ? "translate-x-5" : "translate-x-0")"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex justify-end space-x-3 mt-6 pt-5 border-t border-gray-200 dark:border-gray-700">
+                    <button type="button" @onclick="CloseModal"
+                            class="px-6 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" @onclick="SaveSchedule" disabled="@isSaving"
+                            class="px-6 py-2.5 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+                        @if (isSaving)
+                        {
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span>@(isEditing ? "Update Schedule" : "Create Schedule")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal)
+{
+    <ConfirmationModal 
+        Title="Delete Schedule"
+        Message="@($"Are you sure you want to delete the schedule '{scheduleToDelete?.ReportName}'? This action cannot be undone.")"
+        ConfirmText="Delete"
+        CancelText="Cancel"
+        IsDestructive="true"
+        OnConfirm="DeleteSchedule"
+        OnCancel="() => showDeleteModal = false" />
+}
+
+<!-- History Modal -->
+@if (showHistoryModal)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity bg-gray-900/75 backdrop-blur-sm" @onclick="() => showHistoryModal = false"></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen"></span>&#8203;
+
+            <div class="relative inline-block w-full max-w-4xl px-4 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white dark:bg-gray-800 rounded-2xl shadow-2xl sm:my-8 sm:align-middle sm:p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Execution History - @historySchedule?.ReportName</h3>
+                    <button @onclick="() => showHistoryModal = false" class="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto max-h-96">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Executed At</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Duration</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Recipients</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            @foreach (var item in scheduleHistory)
+                            {
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">@item.ExecutedAt.ToString("MMM dd, yyyy HH:mm")</td>
+                                    <td class="px-4 py-3">
+                                        <span class="px-2 py-1 text-xs font-medium rounded-full @GetStatusBadgeClass(item.Status)">@item.Status</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">@item.Duration</td>
+                                    <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">@item.RecipientCount</td>
+                                    <td class="px-4 py-3">
+                                        <button @onclick="() => DownloadReport(item)" class="text-sm text-primary hover:underline">Download</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                    <button @onclick="() => showHistoryModal = false" class="px-6 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+</AuthorizeRouteGuard>
+
+@code {
+    // State
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool showScheduleModal = false;
+    private bool showDeleteModal = false;
+    private bool showHistoryModal = false;
+    private bool isEditing = false;
+    private string searchTerm = "";
+    private string filterFrequency = "";
+    private string filterStatus = "";
+
+    // SignalR
+    private HubConnection? hubConnection;
+    private bool isHubConnected => hubConnection?.State == HubConnectionState.Connected;
+
+    // IST TimeZone offset (UTC+5:30)
+    private static readonly TimeSpan IstOffset = TimeSpan.FromHours(5.5);
+    
+    // Helper to convert DateTime to IST for display
+    // Handles both UTC and already-converted local times from JSON deserialization
+    private static DateTime ToIst(DateTime dateTime)
+    {
+        // If DateTime is UTC, convert to IST by adding offset
+        if (dateTime.Kind == DateTimeKind.Utc)
+        {
+            return dateTime.Add(IstOffset);
+        }
+        // If DateTime is Local (already converted by JSON deserializer), use as-is
+        // since browser in IST timezone already has correct local time
+        return dateTime;
+    }
+    
+    // Helper to format date in IST
+    private static string FormatIst(DateTime? dateTime, string format = "MMM dd, HH:mm")
+    {
+        if (!dateTime.HasValue) return "N/A";
+        return ToIst(dateTime.Value).ToString(format);
+    }
+
+    // Data
+    private List<ScheduledReportDto> scheduledReports = new();
+    private List<ReportTemplateDto> reportTemplates = new();
+    private List<ExecutionHistoryItem> executionHistory = new();
+    private List<ExecutionHistoryItem> scheduleHistory = new();
+
+    // Edit state - using mutable class for binding
+    private ScheduleEditModel editModel = new();
+    private ScheduledReportDto? scheduleToDelete;
+    private ScheduledReportDto? historySchedule;
+    private string newRecipientEmail = "";
+    private string scheduleTimeString = "09:00";
+    private DateTime scheduleStartDate = DateTime.Today;
+    private HashSet<int> selectedDays = new() { 1 }; // Monday default
+    private int selectedDayOfMonth = 1;
+
+    // Constants
+    private readonly Dictionary<int, string> daysOfWeek = new()
+    {
+        { 0, "Sun" }, { 1, "Mon" }, { 2, "Tue" }, { 3, "Wed" },
+        { 4, "Thu" }, { 5, "Fri" }, { 6, "Sat" }
+    };
+
+    private readonly string[] exportFormats = { "PDF", "Excel", "CSV", "JSON" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThemeState.OnChange += StateHasChanged;
+        await LoadData();
+        await InitializeSignalRConnection();
+    }
+
+    private async Task InitializeSignalRConnection()
+    {
+        try
+        {
+            var token = await LocalStorage.GetItemAsStringAsync("token");
+            if (string.IsNullOrEmpty(token))
+            {
+                Console.WriteLine("No auth token found for SignalR connection");
+                return;
+            }
+
+            token = token.Trim('"').Trim();
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl($"http://localhost:5095/notificationHub?access_token={Uri.EscapeDataString(token)}")
+                .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10) })
+                .Build();
+
+            // Handle scheduled report execution notification
+            hubConnection.On<object>("ScheduledReportExecuted", async (notification) =>
+            {
+                try
+                {
+                    var json = System.Text.Json.JsonSerializer.Serialize(notification);
+                    var data = System.Text.Json.JsonSerializer.Deserialize<ScheduledReportNotification>(json, 
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (data != null)
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            // Download the report automatically if available
+                            if (data.HasDownload && !string.IsNullOrEmpty(data.ReportBase64) && !string.IsNullOrEmpty(data.FileName))
+                            {
+                                try
+                                {
+                                    await JS.InvokeVoidAsync("downloadBase64File", data.ReportBase64, data.FileName, data.MimeType ?? "application/pdf");
+                                    // Single consolidated toast message
+                                    ToastService.ShowSuccess($"📊 Scheduled report '{data.ReportName}' executed and downloaded! Sent to {data.RecipientsSent} recipient(s).");
+                                }
+                                catch (Exception downloadEx)
+                                {
+                                    Console.WriteLine($"Error downloading report: {downloadEx.Message}");
+                                    ToastService.ShowSuccess($"📊 Scheduled report '{data.ReportName}' executed! Sent to {data.RecipientsSent} recipient(s).");
+                                }
+                            }
+                            else
+                            {
+                                ToastService.ShowSuccess($"📊 Scheduled report '{data.ReportName}' executed! Sent to {data.RecipientsSent} recipient(s).");
+                            }
+                            
+                            // Refresh the schedule list to update LastRun and NextRun times
+                            _ = RefreshScheduleInBackground(data.ReportId);
+                            
+                            StateHasChanged();
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error handling ScheduledReportExecuted: {ex.Message}");
+                }
+            });
+
+            // Handle scheduled report failure notification
+            hubConnection.On<object>("ScheduledReportFailed", async (notification) =>
+            {
+                try
+                {
+                    var json = System.Text.Json.JsonSerializer.Serialize(notification);
+                    var data = System.Text.Json.JsonSerializer.Deserialize<ScheduledReportNotification>(json, 
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (data != null)
+                    {
+                        await InvokeAsync(() =>
+                        {
+                            ToastService.ShowError($"❌ Scheduled report '{data.ReportName}' failed: {data.Error}");
+                            StateHasChanged();
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error handling ScheduledReportFailed: {ex.Message}");
+                }
+            });
+
+            hubConnection.Reconnecting += error =>
+            {
+                Console.WriteLine($"SignalR reconnecting: {error?.Message}");
+                return Task.CompletedTask;
+            };
+
+            hubConnection.Reconnected += async connectionId =>
+            {
+                Console.WriteLine($"SignalR reconnected with ID: {connectionId}");
+                await JoinAdminGroup();
+            };
+
+            hubConnection.Closed += error =>
+            {
+                Console.WriteLine($"SignalR connection closed: {error?.Message}");
+                return Task.CompletedTask;
+            };
+
+            await hubConnection.StartAsync();
+            Console.WriteLine("SignalR notification hub connected");
+
+            // Join admin group to receive scheduled report notifications
+            await JoinAdminGroup();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing SignalR: {ex.Message}");
+        }
+    }
+
+    private async Task JoinAdminGroup()
+    {
+        try
+        {
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                await hubConnection.InvokeAsync("JoinAdminGroup");
+                Console.WriteLine("Joined admin group for scheduled report notifications");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error joining admin group: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshScheduleInBackground(string? reportId)
+    {
+        try
+        {
+            // Reload all schedules to get updated LastRun and NextRun
+            var updatedSchedules = await ReportService.GetScheduledReportsAsync();
+            if (updatedSchedules != null)
+            {
+                scheduledReports = updatedSchedules;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing schedules: {ex.Message}");
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            scheduledReports = await ReportService.GetScheduledReportsAsync() ?? new();
+            reportTemplates = await ReportService.GetReportTemplatesAsync() ?? new();
+            
+            // Generate sample execution history
+            executionHistory = GenerateSampleExecutionHistory();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error loading data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshSchedules()
+    {
+        await LoadData();
+        ToastService.ShowSuccess("Schedules refreshed");
+    }
+
+    private IEnumerable<ScheduledReportDto> GetFilteredSchedules()
+    {
+        var filtered = scheduledReports.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filtered = filtered.Where(s => 
+                s.ReportName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filterFrequency))
+        {
+            filtered = filtered.Where(s => s.Frequency == filterFrequency);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filterStatus))
+        {
+            var isActive = filterStatus == "Active";
+            filtered = filtered.Where(s => s.IsActive == isActive);
+        }
+
+        return filtered.OrderBy(s => s.NextRun);
+    }
+
+    private string GetNextRunTime()
+    {
+        var nextSchedule = scheduledReports
+            .Where(s => s.IsActive && s.NextRun.HasValue)
+            .OrderBy(s => s.NextRun)
+            .FirstOrDefault();
+
+        if (nextSchedule?.NextRun == null)
+            return "No upcoming runs";
+
+        // NextRun is in UTC, compare with current UTC time
+        var diff = nextSchedule.NextRun.Value - DateTime.UtcNow;
+        if (diff.TotalMinutes < 0)
+            return "Due now";
+        if (diff.TotalHours < 1)
+            return $"In {(int)diff.TotalMinutes}m";
+        if (diff.TotalDays < 1)
+            return $"In {(int)diff.TotalHours}h {diff.Minutes}m";
+        return $"In {(int)diff.TotalDays}d {diff.Hours}h";
+    }
+
+    private void OpenCreateModal()
+    {
+        isEditing = false;
+        editModel = new ScheduleEditModel();
+        scheduleTimeString = "09:00";
+        scheduleStartDate = DateTime.Today;
+        selectedDays = new HashSet<int> { 1 };
+        selectedDayOfMonth = 1;
+        newRecipientEmail = "";
+        showScheduleModal = true;
+    }
+
+    private void EditSchedule(ScheduledReportDto schedule)
+    {
+        isEditing = true;
+        editModel = new ScheduleEditModel
+        {
+            Id = schedule.Id,
+            ReportId = schedule.ReportId,
+            ReportName = schedule.ReportName,
+            Schedule = schedule.Schedule,
+            Frequency = schedule.Frequency,
+            Recipients = new List<string>(schedule.Recipients),
+            Format = schedule.Format,
+            IsActive = schedule.IsActive,
+            NextRun = schedule.NextRun,
+            LastRun = schedule.LastRun,
+            CreatedAt = schedule.CreatedAt
+        };
+        // Set start date from NextRun if available, otherwise use today
+        scheduleStartDate = schedule.NextRun.HasValue ? ToIst(schedule.NextRun.Value).Date : DateTime.Today;
+        ParseScheduleExpression(schedule.Schedule);
+        showScheduleModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showScheduleModal = false;
+        editModel = new ScheduleEditModel();
+    }
+
+    private async Task SaveSchedule()
+    {
+        if (string.IsNullOrWhiteSpace(editModel.ReportName))
+        {
+            ToastService.ShowWarning("Please enter a schedule name");
+            return;
+        }
+
+        if (!editModel.Recipients.Any())
+        {
+            ToastService.ShowWarning("Please add at least one recipient");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            UpdateScheduleExpression();
+            var schedule = new ScheduledReportDto(
+                Id: editModel.Id,
+                ReportId: editModel.ReportId,
+                ReportName: editModel.ReportName,
+                Schedule: editModel.Schedule,
+                Frequency: editModel.Frequency,
+                Recipients: editModel.Recipients,
+                Format: editModel.Format,
+                IsActive: editModel.IsActive,
+                NextRun: CalculateNextRun(),
+                LastRun: editModel.LastRun,
+                CreatedAt: editModel.CreatedAt
+            );
+
+            if (isEditing)
+            {
+                var updatedSchedule = await ReportService.UpdateScheduledReportAsync(schedule);
+                if (updatedSchedule != null)
+                {
+                    var index = scheduledReports.FindIndex(s => s.Id == updatedSchedule.Id);
+                    if (index >= 0)
+                        scheduledReports[index] = updatedSchedule;
+                    ToastService.ShowSuccess("Schedule updated successfully");
+                }
+            }
+            else
+            {
+                var result = await ReportService.ScheduleReportAsync(schedule);
+                if (result != null)
+                {
+                    scheduledReports.Add(result);
+                    ToastService.ShowSuccess("Schedule created successfully");
+                }
+            }
+
+            CloseModal();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error saving schedule: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ConfirmDelete(ScheduledReportDto schedule)
+    {
+        scheduleToDelete = schedule;
+        showDeleteModal = true;
+    }
+
+    private async Task DeleteSchedule()
+    {
+        if (scheduleToDelete == null) return;
+
+        try
+        {
+            var success = await ReportService.DeleteScheduledReportAsync(scheduleToDelete.Id);
+            if (success)
+            {
+                scheduledReports.Remove(scheduleToDelete);
+                ToastService.ShowSuccess("Schedule deleted successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error deleting schedule: {ex.Message}");
+        }
+        finally
+        {
+            showDeleteModal = false;
+            scheduleToDelete = null;
+        }
+    }
+
+    private async Task ToggleStatus(ScheduledReportDto schedule)
+    {
+        var updated = schedule with { IsActive = !schedule.IsActive };
+        var result = await ReportService.UpdateScheduledReportAsync(updated);
+        if (result != null)
+        {
+            var index = scheduledReports.FindIndex(s => s.Id == schedule.Id);
+            if (index >= 0)
+                scheduledReports[index] = result;
+            
+            ToastService.ShowSuccess(result.IsActive ? "Schedule activated" : "Schedule paused");
+        }
+    }
+
+    private async Task RunNow(ScheduledReportDto schedule)
+    {
+        ToastService.ShowInfo($"Running {schedule.ReportName} and sending to {schedule.Recipients.Count} recipient(s)...");
+        
+        try
+        {
+            // Execute via backend (which handles email sending and report generation)
+            var executionResult = await ReportService.ExecuteScheduledReportNowAsync(schedule.Id, sendEmail: true);
+            
+            if (executionResult?.Success == true)
+            {
+                // Download the report locally if available
+                if (!string.IsNullOrEmpty(executionResult.ReportBase64) && 
+                    !string.IsNullOrEmpty(executionResult.FileName) &&
+                    !string.IsNullOrEmpty(executionResult.MimeType))
+                {
+                    try
+                    {
+                        await JS.InvokeVoidAsync("downloadBase64File", 
+                            executionResult.ReportBase64, 
+                            executionResult.FileName, 
+                            executionResult.MimeType);
+                        ToastService.ShowSuccess($"{schedule.ReportName} executed! Report downloaded and {executionResult.Execution?.RecipientsSent ?? 0} email(s) sent with attachment.");
+                    }
+                    catch
+                    {
+                        ToastService.ShowSuccess($"{schedule.ReportName} executed! {executionResult.Execution?.RecipientsSent ?? 0} email(s) sent.");
+                    }
+                }
+                else
+                {
+                    ToastService.ShowSuccess($"{schedule.ReportName} executed! {executionResult.Execution?.RecipientsSent ?? 0} email(s) sent.");
+                }
+
+                // Add to execution history
+                executionHistory.Insert(0, new ExecutionHistoryItem
+                {
+                    Id = executionResult.Execution?.Id ?? Guid.NewGuid().ToString(),
+                    ScheduleId = schedule.Id,
+                    ReportName = schedule.ReportName,
+                    ExecutedAt = executionResult.Execution?.ExecutedAt ?? DateTime.Now,
+                    Status = executionResult.Execution?.Status ?? "Success",
+                    Duration = "2.3s",
+                    Format = schedule.Format,
+                    RecipientCount = executionResult.Execution?.RecipientsSent ?? schedule.Recipients.Count
+                });
+
+                // Update schedule in list immediately (real-time update)
+                var index = scheduledReports.FindIndex(s => s.Id == schedule.Id);
+                if (index >= 0)
+                {
+                    var updatedSchedule = schedule with 
+                    { 
+                        LastRun = executionResult.LastRun ?? DateTime.UtcNow,
+                        NextRun = executionResult.NextRun
+                    };
+                    scheduledReports[index] = updatedSchedule;
+                }
+                
+                StateHasChanged();
+            }
+            else
+            {
+                ToastService.ShowError($"Failed to execute report: {executionResult?.Message ?? "Unknown error"}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"RunNow error: {ex}");
+            ToastService.ShowError($"Error running schedule: {ex.Message}");
+        }
+    }
+
+    private void ViewHistory(ScheduledReportDto schedule)
+    {
+        historySchedule = schedule;
+        scheduleHistory = executionHistory.Where(h => h.ScheduleId == schedule.Id).ToList();
+        
+        // Add some sample history if none exists
+        if (!scheduleHistory.Any())
+        {
+            scheduleHistory = GenerateSampleHistoryForSchedule(schedule);
+        }
+        
+        showHistoryModal = true;
+    }
+
+    private async Task DownloadReport(ExecutionHistoryItem history)
+    {
+        ToastService.ShowInfo($"Downloading {history.ReportName}...");
+        
+        try
+        {
+            // Re-run the report to generate and download the file
+            var schedule = scheduledReports.FirstOrDefault(s => s.Id == history.ScheduleId);
+            if (schedule != null)
+            {
+                var executionResult = await ReportService.ExecuteScheduledReportNowAsync(schedule.Id, sendEmail: false);
+                
+                if (executionResult?.Success == true && 
+                    !string.IsNullOrEmpty(executionResult.ReportBase64) && 
+                    !string.IsNullOrEmpty(executionResult.FileName))
+                {
+                    await JS.InvokeVoidAsync("downloadBase64File", 
+                        executionResult.ReportBase64, 
+                        executionResult.FileName, 
+                        executionResult.MimeType ?? "application/pdf");
+                    ToastService.ShowSuccess("Download started");
+                }
+                else
+                {
+                    ToastService.ShowError("Failed to generate report for download");
+                }
+            }
+            else
+            {
+                ToastService.ShowWarning("Schedule not found");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DownloadReport error: {ex}");
+            ToastService.ShowError("Download failed");
+        }
+    }
+
+    private void AddRecipient()
+    {
+        if (string.IsNullOrWhiteSpace(newRecipientEmail)) return;
+        
+        if (!IsValidEmail(newRecipientEmail))
+        {
+            ToastService.ShowWarning("Please enter a valid email address");
+            return;
+        }
+
+        if (editModel.Recipients.Contains(newRecipientEmail, StringComparer.OrdinalIgnoreCase))
+        {
+            ToastService.ShowWarning("This email is already added");
+            return;
+        }
+
+        editModel.Recipients.Add(newRecipientEmail);
+        newRecipientEmail = "";
+    }
+
+    private void RemoveRecipient(string email)
+    {
+        editModel.Recipients.Remove(email);
+    }
+
+    private bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void ToggleDaySelection(int day)
+    {
+        if (selectedDays.Contains(day))
+            selectedDays.Remove(day);
+        else
+            selectedDays.Add(day);
+        
+        UpdateScheduleExpression();
+    }
+
+    private void OnScheduleStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var date))
+        {
+            scheduleStartDate = date;
+            UpdateScheduleExpression();
+        }
+    }
+
+    private void OnScheduleTimeChanged(ChangeEventArgs e)
+    {
+        scheduleTimeString = e.Value?.ToString() ?? "09:00";
+        UpdateScheduleExpression();
+    }
+
+    private void UpdateScheduleExpression()
+    {
+        // Parse time string
+        var timeParts = scheduleTimeString.Split(':');
+        int hour = 9, minute = 0;
+        if (timeParts.Length >= 2)
+        {
+            int.TryParse(timeParts[0], out hour);
+            int.TryParse(timeParts[1], out minute);
+        }
+
+        string cronExpression;
+
+        switch (editModel.Frequency)
+        {
+            case "Daily":
+                cronExpression = $"{minute} {hour} * * *";
+                break;
+            case "Weekly":
+            case "Bi-Weekly":
+                var days = string.Join(",", selectedDays.OrderBy(d => d));
+                cronExpression = $"{minute} {hour} * * {days}";
+                break;
+            case "Monthly":
+                var dayOfMonth = selectedDayOfMonth == 0 ? "L" : selectedDayOfMonth.ToString();
+                cronExpression = $"{minute} {hour} {dayOfMonth} * *";
+                break;
+            case "Quarterly":
+                var qDayOfMonth = selectedDayOfMonth == 0 ? "L" : selectedDayOfMonth.ToString();
+                cronExpression = $"{minute} {hour} {qDayOfMonth} 1,4,7,10 *";
+                break;
+            default:
+                cronExpression = $"{minute} {hour} * * 1";
+                break;
+        }
+
+        editModel.Schedule = cronExpression;
+    }
+
+    private void ParseScheduleExpression(string cron)
+    {
+        try
+        {
+            var parts = cron.Split(' ');
+            if (parts.Length >= 5)
+            {
+                if (int.TryParse(parts[0], out var minute) && int.TryParse(parts[1], out var hour))
+                {
+                    scheduleTimeString = $"{hour:D2}:{minute:D2}";
+                }
+
+                // Parse day of week for weekly
+                if (parts[4] != "*")
+                {
+                    selectedDays = parts[4].Split(',')
+                        .Where(d => int.TryParse(d, out _))
+                        .Select(int.Parse)
+                        .ToHashSet();
+                }
+
+                // Parse day of month for monthly
+                if (parts[2] != "*" && parts[2] != "L")
+                {
+                    if (int.TryParse(parts[2], out var dayOfMonth))
+                        selectedDayOfMonth = dayOfMonth;
+                }
+                else if (parts[2] == "L")
+                {
+                    selectedDayOfMonth = 0;
+                }
+            }
+        }
+        catch
+        {
+            // Use defaults if parsing fails
+        }
+    }
+
+    private DateTime CalculateNextRun()
+    {
+        // Parse time string
+        var timeParts = scheduleTimeString.Split(':');
+        int hour = 9, minute = 0;
+        if (timeParts.Length >= 2)
+        {
+            int.TryParse(timeParts[0], out hour);
+            int.TryParse(timeParts[1], out minute);
+        }
+        var scheduleTime = new TimeSpan(hour, minute, 0);
+
+        var now = DateTime.Now;
+        // Use the selected start date if it's today or in the future
+        var baseDate = scheduleStartDate >= DateTime.Today ? scheduleStartDate : DateTime.Today;
+        var nextRun = baseDate.Add(scheduleTime);
+        
+        // If the scheduled time has already passed today and baseDate is today, use tomorrow
+        if (baseDate.Date == DateTime.Today && nextRun <= now)
+            nextRun = nextRun.AddDays(1);
+
+        return editModel.Frequency switch
+        {
+            "Weekly" => GetNextWeekday(nextRun, selectedDays.FirstOrDefault(), scheduleTime),
+            "Bi-Weekly" => GetNextWeekday(nextRun, selectedDays.FirstOrDefault(), scheduleTime).AddDays(7),
+            "Monthly" => GetNextMonthDay(nextRun, selectedDayOfMonth, scheduleTime),
+            "Quarterly" => GetNextQuarterDay(nextRun, selectedDayOfMonth, scheduleTime),
+            _ => nextRun
+        };
+    }
+
+    private DateTime GetNextWeekday(DateTime from, int dayOfWeek, TimeSpan time)
+    {
+        var daysUntil = ((dayOfWeek - (int)from.DayOfWeek + 7) % 7);
+        return from.AddDays(daysUntil == 0 ? 7 : daysUntil);
+    }
+
+    private DateTime GetNextMonthDay(DateTime from, int dayOfMonth, TimeSpan time)
+    {
+        var next = new DateTime(from.Year, from.Month, 1).Add(time);
+        if (dayOfMonth == 0)
+        {
+            next = next.AddMonths(1).AddDays(-1);
+        }
+        else
+        {
+            var daysInMonth = DateTime.DaysInMonth(from.Year, from.Month);
+            next = next.AddDays(Math.Min(dayOfMonth, daysInMonth) - 1);
+        }
+        
+        if (next <= from)
+            next = next.AddMonths(1);
+        
+        return next;
+    }
+
+    private DateTime GetNextQuarterDay(DateTime from, int dayOfMonth, TimeSpan time)
+    {
+        int[] quarterMonths = { 1, 4, 7, 10 };
+        var currentMonth = from.Month;
+        var nextQuarterMonth = quarterMonths.FirstOrDefault(m => m > currentMonth);
+        
+        if (nextQuarterMonth == 0)
+            nextQuarterMonth = quarterMonths[0];
+
+        var year = nextQuarterMonth < currentMonth ? from.Year + 1 : from.Year;
+        var day = dayOfMonth == 0 ? DateTime.DaysInMonth(year, nextQuarterMonth) : dayOfMonth;
+        
+        return new DateTime(year, nextQuarterMonth, Math.Min(day, DateTime.DaysInMonth(year, nextQuarterMonth))).Add(time);
+    }
+
+    private string GetOrdinalSuffix(int number)
+    {
+        return number switch
+        {
+            1 or 21 => $"{number}st",
+            2 or 22 => $"{number}nd",
+            3 or 23 => $"{number}rd",
+            _ => $"{number}th"
+        };
+    }
+
+    private string GetScheduleHeaderGradient(string frequency)
+    {
+        return frequency switch
+        {
+            "Daily" => "from-blue-500 to-blue-600",
+            "Weekly" => "from-purple-500 to-purple-600",
+            "Bi-Weekly" => "from-indigo-500 to-indigo-600",
+            "Monthly" => "from-emerald-500 to-emerald-600",
+            "Quarterly" => "from-amber-500 to-orange-500",
+            _ => "from-gray-500 to-gray-600"
+        };
+    }
+
+    private string GetFrequencyBadgeClass(string frequency)
+    {
+        return frequency switch
+        {
+            "Daily" => "bg-blue-100 text-blue-800",
+            "Weekly" => "bg-purple-100 text-purple-800",
+            "Bi-Weekly" => "bg-indigo-100 text-indigo-800",
+            "Monthly" => "bg-emerald-100 text-emerald-800",
+            "Quarterly" => "bg-amber-100 text-amber-800",
+            _ => "bg-gray-100 text-gray-800"
+        };
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Success" => "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300",
+            "Failed" => "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300",
+            "Pending" => "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300",
+            _ => "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+        };
+    }
+
+    private List<ExecutionHistoryItem> GenerateSampleExecutionHistory()
+    {
+        var history = new List<ExecutionHistoryItem>();
+        var random = new Random();
+
+        foreach (var schedule in scheduledReports.Take(3))
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                history.Add(new ExecutionHistoryItem
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ScheduleId = schedule.Id,
+                    ReportName = schedule.ReportName,
+                    ExecutedAt = DateTime.Now.AddDays(-random.Next(1, 14)).AddHours(-random.Next(1, 12)),
+                    Status = random.Next(10) > 1 ? "Success" : "Failed",
+                    Duration = $"{random.Next(1, 5)}.{random.Next(0, 9)}s",
+                    Format = schedule.Format,
+                    RecipientCount = schedule.Recipients.Count
+                });
+            }
+        }
+
+        return history.OrderByDescending(h => h.ExecutedAt).ToList();
+    }
+
+    private List<ExecutionHistoryItem> GenerateSampleHistoryForSchedule(ScheduledReportDto schedule)
+    {
+        var history = new List<ExecutionHistoryItem>();
+        var random = new Random();
+
+        for (int i = 0; i < 10; i++)
+        {
+            history.Add(new ExecutionHistoryItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                ScheduleId = schedule.Id,
+                ReportName = schedule.ReportName,
+                ExecutedAt = DateTime.Now.AddDays(-i * 7).AddHours(9),
+                Status = random.Next(10) > 1 ? "Success" : "Failed",
+                Duration = $"{random.Next(1, 5)}.{random.Next(0, 9)}s",
+                Format = schedule.Format,
+                RecipientCount = schedule.Recipients.Count
+            });
+        }
+
+        return history;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        ThemeState.OnChange -= StateHasChanged;
+        
+        if (hubConnection != null)
+        {
+            try
+            {
+                await hubConnection.InvokeAsync("LeaveAdminGroup");
+            }
+            catch { /* Ignore errors during disposal */ }
+            
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    // Notification model for SignalR messages
+    private class ScheduledReportNotification
+    {
+        public string Type { get; set; } = "";
+        public string ReportName { get; set; } = "";
+        public string? ReportId { get; set; }
+        public int RecipientsSent { get; set; }
+        public DateTime ExecutedAt { get; set; }
+        public string? Message { get; set; }
+        public string? Error { get; set; }
+        public DateTime? FailedAt { get; set; }
+        // Download properties for scheduled reports
+        public string? ReportBase64 { get; set; }
+        public string? FileName { get; set; }
+        public string? MimeType { get; set; }
+        public bool HasDownload { get; set; }
+    }
+
+    // Mutable edit model for two-way binding
+    private class ScheduleEditModel
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string ReportId { get; set; } = "";
+        public string ReportName { get; set; } = "";
+        public string Schedule { get; set; } = "0 9 * * 1";
+        public string Frequency { get; set; } = "Weekly";
+        public List<string> Recipients { get; set; } = new();
+        public string Format { get; set; } = "PDF";
+        public bool IsActive { get; set; } = true;
+        public DateTime? NextRun { get; set; } = DateTime.Now.AddDays(1);
+        public DateTime? LastRun { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+    }
+
+    // Helper class for execution history
+    private class ExecutionHistoryItem
+    {
+        public string Id { get; set; } = "";
+        public string ScheduleId { get; set; } = "";
+        public string ReportName { get; set; } = "";
+        public DateTime ExecutedAt { get; set; }
+        public string Status { get; set; } = "";
+        public string Duration { get; set; } = "";
+        public string Format { get; set; } = "";
+        public int RecipientCount { get; set; }
+    }
+}

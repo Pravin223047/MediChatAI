@@ -7,6 +7,7 @@ using MediChatAI_BlazorWebAssembly.Features.Profile.Models;
 using MediChatAI_BlazorWebAssembly.Features.Notifications.Models;
 using MediChatAI_BlazorWebAssembly.Core.Services;
 using MediChatAI_BlazorWebAssembly.Core.Services.Theme;
+using MediChatAI_BlazorWebAssembly.Core.Services.GraphQL;
 using Blazored.LocalStorage;
 using System.Text.Json;
 
@@ -17,15 +18,21 @@ public class ReportService : IReportService
     private readonly IAdminService _adminService;
     private readonly ILocalStorageService _localStorage;
     private readonly IThemeService _themeService;
+    private readonly IGraphQLService _graphQLService;
     private const string TEMPLATES_KEY = "report_templates";
     private const string HISTORY_KEY = "report_history";
     private const string SCHEDULES_KEY = "report_schedules";
 
-    public ReportService(IAdminService adminService, ILocalStorageService localStorage, IThemeService themeService)
+    public ReportService(
+        IAdminService adminService, 
+        ILocalStorageService localStorage, 
+        IThemeService themeService,
+        IGraphQLService graphQLService)
     {
         _adminService = adminService;
         _localStorage = localStorage;
         _themeService = themeService;
+        _graphQLService = graphQLService;
     }
 
     public async Task<ReportDataDto?> GenerateReportAsync(string reportType, ReportFilterModel? filters = null)
@@ -92,7 +99,65 @@ public class ReportService : IReportService
     // Report-specific data methods
     private async Task<Dictionary<string, object>> GetNewRegistrationsDataAsync(ReportFilterModel filters)
     {
-        var trend = await GetUserRegistrationTrendAsync(filters.FromDate, filters.ToDate, filters.GroupBy == "none" ? "day" : filters.GroupBy);
+        Console.WriteLine($"[ReportService] GetNewRegistrationsDataAsync - FromDate: {filters.FromDate}, ToDate: {filters.ToDate}");
+        
+        // Use direct user count by CreatedAt instead of activity logs
+        var users = await _adminService.GetUsersAsync(new GetUsersInput(
+            FromDate: filters.FromDate,
+            ToDate: filters.ToDate,
+            Take: 10000
+        ));
+
+        Console.WriteLine($"[ReportService] Users returned: {users?.Users?.Count() ?? 0}, TotalCount: {users?.TotalCount ?? 0}");
+        
+        if (users?.Users != null)
+        {
+            foreach (var user in users.Users)
+            {
+                Console.WriteLine($"[ReportService] User: {user.Email}, CreatedAt: {user.CreatedAt}, Role: {user.Role}");
+            }
+        }
+
+        if (users?.Users == null || !users.Users.Any())
+        {
+            return new Dictionary<string, object>
+            {
+                ["labels"] = new List<string>(),
+                ["values"] = new List<int>(),
+                ["total"] = 0,
+                ["average"] = 0.0,
+                ["chartType"] = "line",
+                ["details"] = new List<Dictionary<string, object>>()
+            };
+        }
+
+        // Group by the selected grouping
+        var groupBy = filters.GroupBy == "none" ? "day" : filters.GroupBy;
+        var trend = users.Users
+            .GroupBy(u => groupBy switch
+            {
+                "day" => u.CreatedAt.ToString("yyyy-MM-dd"),
+                "week" => $"Week {GetWeekOfYear(u.CreatedAt)}",
+                "month" => u.CreatedAt.ToString("yyyy-MM"),
+                "quarter" => $"Q{((u.CreatedAt.Month - 1) / 3) + 1} {u.CreatedAt.Year}",
+                "year" => u.CreatedAt.ToString("yyyy"),
+                _ => u.CreatedAt.ToString("yyyy-MM-dd")
+            })
+            .OrderBy(g => g.Key)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Include detailed user list for comparison
+        var details = users.Users.Select(u => new Dictionary<string, object>
+        {
+            ["id"] = u.Id,
+            ["name"] = !string.IsNullOrEmpty(u.FirstName) || !string.IsNullOrEmpty(u.LastName) 
+                ? $"{u.FirstName} {u.LastName}".Trim() 
+                : u.Email.Split('@')[0],
+            ["email"] = u.Email,
+            ["role"] = u.Role ?? "Patient",
+            ["createdAt"] = u.CreatedAt,
+            ["action"] = "Registered"
+        }).ToList();
 
         return new Dictionary<string, object>
         {
@@ -100,55 +165,211 @@ public class ReportService : IReportService
             ["values"] = trend.Values.ToList(),
             ["total"] = trend.Values.Sum(),
             ["average"] = trend.Values.Any() ? trend.Values.Average() : 0,
-            ["chartType"] = "line"
+            ["chartType"] = "line",
+            ["details"] = details
         };
     }
 
     private async Task<Dictionary<string, object>> GetUserActivityDataAsync(ReportFilterModel filters)
     {
-        var heatmap = await GetUserActivityHeatmapAsync(filters.FromDate, filters.ToDate);
+        var activities = await _adminService.GetUserActivitiesAsync(new GetUserActivitiesInput(
+            FromDate: filters.FromDate,
+            ToDate: filters.ToDate,
+            Take: 10000
+        ));
+
+        if (activities?.Activities == null || !activities.Activities.Any())
+        {
+            return new Dictionary<string, object>
+            {
+                ["labels"] = new List<string>(),
+                ["values"] = new List<int>(),
+                ["total"] = 0,
+                ["chartType"] = "bar",
+                ["details"] = new List<Dictionary<string, object>>()
+            };
+        }
+
+        var heatmap = activities.Activities
+            .GroupBy(a => a.Timestamp.ToString("yyyy-MM-dd"))
+            .OrderBy(g => g.Key)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Include detailed activity list for comparison
+        var details = activities.Activities.Select(a => new Dictionary<string, object>
+        {
+            ["id"] = a.Id ?? Guid.NewGuid().ToString(),
+            ["name"] = !string.IsNullOrEmpty(a.UserName) ? a.UserName : a.UserEmail?.Split('@')[0] ?? "Unknown",
+            ["email"] = a.UserEmail ?? "",
+            ["role"] = a.UserRole ?? "User",
+            ["createdAt"] = a.Timestamp,
+            ["action"] = a.ActivityType ?? "Activity",
+            ["description"] = a.Description ?? ""
+        }).ToList();
 
         return new Dictionary<string, object>
         {
             ["labels"] = heatmap.Keys.ToList(),
             ["values"] = heatmap.Values.ToList(),
-            ["chartType"] = "bar"
+            ["total"] = heatmap.Values.Sum(),
+            ["chartType"] = "bar",
+            ["details"] = details
         };
     }
 
     private async Task<Dictionary<string, object>> GetEngagementDataAsync(ReportFilterModel filters)
     {
-        var metrics = await GetEngagementMetricsAsync(filters.FromDate, filters.ToDate);
+        var activities = await _adminService.GetUserActivitiesAsync(new GetUserActivitiesInput(
+            FromDate: filters.FromDate,
+            ToDate: filters.ToDate,
+            Take: 10000
+        ));
+
+        if (activities?.Activities == null || !activities.Activities.Any())
+        {
+            return new Dictionary<string, object>
+            {
+                ["labels"] = new List<string>(),
+                ["values"] = new List<double>(),
+                ["total"] = 0,
+                ["chartType"] = "radar",
+                ["details"] = new List<Dictionary<string, object>>()
+            };
+        }
+
+        var totalActivities = activities.Activities.Count;
+        var uniqueUsers = activities.Activities.Select(a => a.UserId).Distinct().Count();
+        var loginCount = activities.Activities.Count(a => a.ActivityType == "Login");
+
+        var metrics = new Dictionary<string, double>
+        {
+            ["Total Activities"] = totalActivities,
+            ["Unique Users"] = uniqueUsers,
+            ["Avg Activities/User"] = uniqueUsers > 0 ? (double)totalActivities / uniqueUsers : 0,
+            ["Login Rate"] = totalActivities > 0 ? (double)loginCount / totalActivities * 100 : 0
+        };
+
+        // Group by user for detailed engagement
+        var userEngagement = activities.Activities
+            .GroupBy(a => new { a.UserId, a.UserName, a.UserEmail, a.UserRole })
+            .Select(g => new Dictionary<string, object>
+            {
+                ["id"] = g.Key.UserId ?? Guid.NewGuid().ToString(),
+                ["name"] = !string.IsNullOrEmpty(g.Key.UserName) ? g.Key.UserName : g.Key.UserEmail?.Split('@')[0] ?? "Unknown",
+                ["email"] = g.Key.UserEmail ?? "",
+                ["role"] = g.Key.UserRole ?? "User",
+                ["createdAt"] = g.Max(a => a.Timestamp),
+                ["action"] = $"{g.Count()} activities",
+                ["description"] = $"Last activity: {g.OrderByDescending(a => a.Timestamp).FirstOrDefault()?.ActivityType ?? "Unknown"}"
+            }).ToList();
 
         return new Dictionary<string, object>
         {
             ["labels"] = metrics.Keys.ToList(),
             ["values"] = metrics.Values.ToList(),
-            ["chartType"] = "radar"
+            ["total"] = totalActivities,
+            ["chartType"] = "radar",
+            ["details"] = userEngagement
         };
     }
 
     private async Task<Dictionary<string, object>> GetRoleDistributionDataAsync(ReportFilterModel filters)
     {
-        var distribution = await GetRoleDistributionAsync();
+        var users = await _adminService.GetUsersAsync(new GetUsersInput(
+            FromDate: filters.FromDate,
+            ToDate: filters.ToDate,
+            Take: 10000
+        ));
+
+        if (users?.Users == null || !users.Users.Any())
+        {
+            return new Dictionary<string, object>
+            {
+                ["labels"] = new List<string>(),
+                ["values"] = new List<int>(),
+                ["total"] = 0,
+                ["chartType"] = "pie",
+                ["details"] = new List<Dictionary<string, object>>()
+            };
+        }
+
+        var distribution = users.Users
+            .GroupBy(u => u.Role ?? "Unknown")
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Include detailed user list grouped by role
+        var details = users.Users.Select(u => new Dictionary<string, object>
+        {
+            ["id"] = u.Id,
+            ["name"] = !string.IsNullOrEmpty(u.FirstName) || !string.IsNullOrEmpty(u.LastName) 
+                ? $"{u.FirstName} {u.LastName}".Trim() 
+                : u.Email.Split('@')[0],
+            ["email"] = u.Email,
+            ["role"] = u.Role ?? "Unknown",
+            ["createdAt"] = u.CreatedAt,
+            ["action"] = u.Role ?? "Unknown"
+        }).ToList();
 
         return new Dictionary<string, object>
         {
             ["labels"] = distribution.Keys.ToList(),
             ["values"] = distribution.Values.ToList(),
-            ["chartType"] = "pie"
+            ["total"] = distribution.Values.Sum(),
+            ["chartType"] = "pie",
+            ["details"] = details
         };
     }
 
     private async Task<Dictionary<string, object>> GetRetentionDataAsync(ReportFilterModel filters)
     {
-        var retention = await GetRetentionAnalysisAsync(filters.FromDate, filters.ToDate);
+        var users = await _adminService.GetUsersAsync(new GetUsersInput(Take: 10000));
+
+        if (users?.Users == null || !users.Users.Any())
+        {
+            return new Dictionary<string, object>
+            {
+                ["labels"] = new List<string>(),
+                ["values"] = new List<double>(),
+                ["total"] = 0,
+                ["chartType"] = "line",
+                ["details"] = new List<Dictionary<string, object>>()
+            };
+        }
+
+        var totalUsers = users.Users.Count;
+        var activeUsers = users.Users.Where(u => u.LastLoginAt.HasValue && u.LastLoginAt >= filters.FromDate).ToList();
+        var inactiveUsers = users.Users.Where(u => !u.LastLoginAt.HasValue || u.LastLoginAt < filters.FromDate).ToList();
+        var retentionRate = totalUsers > 0 ? (double)activeUsers.Count / totalUsers * 100 : 0;
+
+        var retention = new Dictionary<string, double>
+        {
+            ["Total Users"] = totalUsers,
+            ["Active Users"] = activeUsers.Count,
+            ["Inactive Users"] = inactiveUsers.Count,
+            ["Retention Rate"] = Math.Round(retentionRate, 1)
+        };
+
+        // Include detailed user list with retention status
+        var details = users.Users.Select(u => new Dictionary<string, object>
+        {
+            ["id"] = u.Id,
+            ["name"] = !string.IsNullOrEmpty(u.FirstName) || !string.IsNullOrEmpty(u.LastName) 
+                ? $"{u.FirstName} {u.LastName}".Trim() 
+                : u.Email.Split('@')[0],
+            ["email"] = u.Email,
+            ["role"] = u.Role ?? "Unknown",
+            ["createdAt"] = u.LastLoginAt ?? u.CreatedAt,
+            ["action"] = u.LastLoginAt.HasValue && u.LastLoginAt >= filters.FromDate ? "Active" : "Inactive",
+            ["description"] = u.LastLoginAt.HasValue ? $"Last login: {u.LastLoginAt:MMM dd, yyyy}" : "Never logged in"
+        }).ToList();
 
         return new Dictionary<string, object>
         {
             ["labels"] = retention.Keys.ToList(),
             ["values"] = retention.Values.ToList(),
-            ["chartType"] = "line"
+            ["total"] = totalUsers,
+            ["chartType"] = "line",
+            ["details"] = details
         };
     }
 
@@ -219,25 +440,96 @@ public class ReportService : IReportService
 
     private async Task<Dictionary<string, object>> GetActivityTypesDataAsync(ReportFilterModel filters)
     {
-        var distribution = await GetActivityTypeDistributionAsync(filters.FromDate, filters.ToDate);
+        var activities = await _adminService.GetUserActivitiesAsync(new GetUserActivitiesInput(
+            FromDate: filters.FromDate,
+            ToDate: filters.ToDate,
+            Take: 10000
+        ));
+
+        if (activities?.Activities == null || !activities.Activities.Any())
+        {
+            return new Dictionary<string, object>
+            {
+                ["labels"] = new List<string>(),
+                ["values"] = new List<int>(),
+                ["total"] = 0,
+                ["chartType"] = "bar",
+                ["details"] = new List<Dictionary<string, object>>()
+            };
+        }
+
+        var distribution = activities.Activities
+            .GroupBy(a => a.ActivityType ?? "Unknown")
+            .OrderByDescending(g => g.Count())
+            .Take(10)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Include detailed activity list
+        var details = activities.Activities.Select(a => new Dictionary<string, object>
+        {
+            ["id"] = a.Id ?? Guid.NewGuid().ToString(),
+            ["name"] = !string.IsNullOrEmpty(a.UserName) ? a.UserName : a.UserEmail?.Split('@')[0] ?? "Unknown",
+            ["email"] = a.UserEmail ?? "",
+            ["role"] = a.UserRole ?? "User",
+            ["createdAt"] = a.Timestamp,
+            ["action"] = a.ActivityType ?? "Activity",
+            ["description"] = a.Description ?? ""
+        }).ToList();
 
         return new Dictionary<string, object>
         {
             ["labels"] = distribution.Keys.ToList(),
             ["values"] = distribution.Values.ToList(),
-            ["chartType"] = "bar"
+            ["total"] = distribution.Values.Sum(),
+            ["chartType"] = "bar",
+            ["details"] = details
         };
     }
 
     private async Task<Dictionary<string, object>> GetPeakHoursDataAsync(ReportFilterModel filters)
     {
-        var peakHours = await GetPeakUsageHoursAsync(filters.FromDate, filters.ToDate);
+        var activities = await _adminService.GetUserActivitiesAsync(new GetUserActivitiesInput(
+            FromDate: filters.FromDate,
+            ToDate: filters.ToDate,
+            Take: 10000
+        ));
+
+        if (activities?.Activities == null || !activities.Activities.Any())
+        {
+            return new Dictionary<string, object>
+            {
+                ["labels"] = new List<string>(),
+                ["values"] = new List<int>(),
+                ["total"] = 0,
+                ["chartType"] = "bar",
+                ["details"] = new List<Dictionary<string, object>>()
+            };
+        }
+
+        var peakHours = activities.Activities
+            .GroupBy(a => a.Timestamp.Hour)
+            .OrderBy(g => g.Key)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Include detailed activity list with hour info
+        var details = activities.Activities.Select(a => new Dictionary<string, object>
+        {
+            ["id"] = a.Id ?? Guid.NewGuid().ToString(),
+            ["name"] = !string.IsNullOrEmpty(a.UserName) ? a.UserName : a.UserEmail?.Split('@')[0] ?? "Unknown",
+            ["email"] = a.UserEmail ?? "",
+            ["role"] = a.UserRole ?? "User",
+            ["createdAt"] = a.Timestamp,
+            ["action"] = $"{a.ActivityType} at {a.Timestamp:HH:mm}",
+            ["description"] = a.Description ?? ""
+        }).ToList();
 
         return new Dictionary<string, object>
         {
             ["labels"] = peakHours.Keys.Select(h => $"{h:00}:00").ToList(),
             ["values"] = peakHours.Values.ToList(),
-            ["chartType"] = "bar"
+            ["total"] = peakHours.Values.Sum(),
+            ["chartType"] = "bar",
+            ["details"] = details
         };
     }
 
@@ -524,23 +816,256 @@ public class ReportService : IReportService
         return Convert.ToBase64String(bytes);
     }
 
-    // Scheduling
+    // Scheduling - Using GraphQL for backend persistence
     public async Task<ScheduledReportDto?> ScheduleReportAsync(ScheduledReportDto schedule)
     {
         try
         {
-            var schedules = await GetScheduledReportsAsync();
+            var mutation = @"
+                mutation CreateScheduledReport($input: CreateScheduledReportInput!) {
+                    createScheduledReport(input: $input) {
+                        success
+                        message
+                        schedule {
+                            id
+                            reportId
+                            reportName
+                            schedule
+                            frequency
+                            recipients
+                            format
+                            isActive
+                            nextRun
+                            lastRun
+                            createdAt
+                        }
+                    }
+                }";
+
+            var variables = new
+            {
+                input = new
+                {
+                    reportId = schedule.ReportId,
+                    reportName = schedule.ReportName,
+                    schedule = schedule.Schedule,
+                    frequency = schedule.Frequency,
+                    recipients = schedule.Recipients,
+                    format = schedule.Format,
+                    isActive = schedule.IsActive,
+                    nextRun = schedule.NextRun
+                }
+            };
+
+            var response = await _graphQLService.SendQueryAsync<CreateScheduledReportResponse>(mutation, variables);
+            
+            if (response?.CreateScheduledReport?.Success == true && response.CreateScheduledReport.Schedule != null)
+            {
+                var s = response.CreateScheduledReport.Schedule;
+                return new ScheduledReportDto(
+                    s.Id, s.ReportId, s.ReportName, s.Schedule, s.Frequency,
+                    s.Recipients, s.Format, s.IsActive, s.NextRun, s.LastRun, s.CreatedAt
+                );
+            }
+
+            // Fallback to local storage if GraphQL fails
+            var schedules = await GetLocalSchedulesAsync();
             schedules.Add(schedule);
             await _localStorage.SetItemAsync(SCHEDULES_KEY, schedules);
             return schedule;
         }
         catch
         {
-            return null;
+            // Fallback to local storage
+            var schedules = await GetLocalSchedulesAsync();
+            schedules.Add(schedule);
+            await _localStorage.SetItemAsync(SCHEDULES_KEY, schedules);
+            return schedule;
         }
     }
 
     public async Task<List<ScheduledReportDto>> GetScheduledReportsAsync()
+    {
+        try
+        {
+            var query = @"
+                query GetScheduledReports {
+                    scheduledReports {
+                        id
+                        reportId
+                        reportName
+                        schedule
+                        frequency
+                        recipients
+                        format
+                        isActive
+                        nextRun
+                        lastRun
+                        lastRunStatus
+                        createdAt
+                    }
+                }";
+
+            var response = await _graphQLService.SendQueryAsync<ScheduledReportsResponse>(query);
+            
+            if (response?.ScheduledReports != null)
+            {
+                return response.ScheduledReports.Select(s => new ScheduledReportDto(
+                    s.Id, s.ReportId, s.ReportName, s.Schedule, s.Frequency,
+                    s.Recipients ?? new List<string>(), s.Format, s.IsActive, s.NextRun, s.LastRun, s.CreatedAt
+                )).ToList();
+            }
+
+            // Fallback to local storage
+            return await GetLocalSchedulesAsync();
+        }
+        catch
+        {
+            return await GetLocalSchedulesAsync();
+        }
+    }
+
+    public async Task<ScheduledReportDto?> UpdateScheduledReportAsync(ScheduledReportDto schedule)
+    {
+        try
+        {
+            var mutation = @"
+                mutation UpdateScheduledReport($input: UpdateScheduledReportInput!) {
+                    updateScheduledReport(input: $input) {
+                        success
+                        message
+                        schedule {
+                            id
+                            reportId
+                            reportName
+                            schedule
+                            frequency
+                            recipients
+                            format
+                            isActive
+                            nextRun
+                            lastRun
+                            lastRunStatus
+                            createdAt
+                        }
+                    }
+                }";
+
+            var variables = new
+            {
+                input = new
+                {
+                    id = schedule.Id,
+                    reportId = schedule.ReportId,
+                    reportName = schedule.ReportName,
+                    schedule = schedule.Schedule,
+                    frequency = schedule.Frequency,
+                    recipients = schedule.Recipients,
+                    format = schedule.Format,
+                    isActive = schedule.IsActive,
+                    nextRun = schedule.NextRun
+                }
+            };
+
+            var response = await _graphQLService.SendQueryAsync<UpdateScheduledReportResponse>(mutation, variables);
+            
+            if (response?.UpdateScheduledReport?.Success == true && response.UpdateScheduledReport.Schedule != null)
+            {
+                var s = response.UpdateScheduledReport.Schedule;
+                return new ScheduledReportDto(
+                    s.Id, s.ReportId, s.ReportName, s.Schedule, s.Frequency,
+                    s.Recipients ?? new List<string>(), s.Format, s.IsActive, s.NextRun, s.LastRun, s.CreatedAt
+                );
+            }
+
+            // Fallback to local storage
+            await UpdateLocalScheduleAsync(schedule);
+            return schedule;
+        }
+        catch
+        {
+            await UpdateLocalScheduleAsync(schedule);
+            return schedule;
+        }
+    }
+
+    public async Task<bool> DeleteScheduledReportAsync(string scheduleId)
+    {
+        try
+        {
+            var mutation = @"
+                mutation DeleteScheduledReport($id: String!) {
+                    deleteScheduledReport(id: $id) {
+                        success
+                        message
+                    }
+                }";
+
+            var variables = new { id = scheduleId };
+
+            var response = await _graphQLService.SendQueryAsync<DeleteScheduledReportResponse>(mutation, variables);
+            
+            if (response?.DeleteScheduledReport?.Success == true)
+            {
+                return true;
+            }
+
+            // Fallback to local storage
+            return await DeleteLocalScheduleAsync(scheduleId);
+        }
+        catch
+        {
+            return await DeleteLocalScheduleAsync(scheduleId);
+        }
+    }
+
+    /// <summary>
+    /// Execute a scheduled report immediately and send emails to recipients
+    /// </summary>
+    public async Task<ScheduledReportExecutionResult?> ExecuteScheduledReportNowAsync(string scheduleId, bool sendEmail = true)
+    {
+        try
+        {
+            var mutation = @"
+                mutation ExecuteScheduledReportNow($id: String!, $sendEmail: Boolean!) {
+                    executeScheduledReportNow(id: $id, sendEmail: $sendEmail) {
+                        success
+                        message
+                        execution {
+                            id
+                            scheduledReportId
+                            executedAt
+                            status
+                            recipientsSent
+                            recipientsFailed
+                            errorMessage
+                        }
+                        reportBase64
+                        fileName
+                        mimeType
+                        lastRun
+                        nextRun
+                    }
+                }";
+
+            var variables = new { id = scheduleId, sendEmail = sendEmail };
+
+            var response = await _graphQLService.SendQueryAsync<ExecuteScheduledReportResponse>(mutation, variables);
+            
+            return response?.ExecuteScheduledReportNow;
+        }
+        catch
+        {
+            return new ScheduledReportExecutionResult
+            {
+                Success = false,
+                Message = "Failed to connect to server. Please try again."
+            };
+        }
+    }
+
+    // Local storage fallback methods
+    private async Task<List<ScheduledReportDto>> GetLocalSchedulesAsync()
     {
         try
         {
@@ -553,11 +1078,11 @@ public class ReportService : IReportService
         }
     }
 
-    public async Task<bool> UpdateScheduledReportAsync(ScheduledReportDto schedule)
+    private async Task<bool> UpdateLocalScheduleAsync(ScheduledReportDto schedule)
     {
         try
         {
-            var schedules = await GetScheduledReportsAsync();
+            var schedules = await GetLocalSchedulesAsync();
             var index = schedules.FindIndex(s => s.Id == schedule.Id);
             if (index >= 0)
             {
@@ -573,11 +1098,11 @@ public class ReportService : IReportService
         }
     }
 
-    public async Task<bool> DeleteScheduledReportAsync(string scheduleId)
+    private async Task<bool> DeleteLocalScheduleAsync(string scheduleId)
     {
         try
         {
-            var schedules = await GetScheduledReportsAsync();
+            var schedules = await GetLocalSchedulesAsync();
             schedules.RemoveAll(s => s.Id == scheduleId);
             await _localStorage.SetItemAsync(SCHEDULES_KEY, schedules);
             return true;
@@ -593,13 +1118,72 @@ public class ReportService : IReportService
     {
         try
         {
-            var history = await _localStorage.GetItemAsync<List<ReportHistoryDto>>(HISTORY_KEY);
-            return history?.OrderByDescending(h => h.GeneratedAt).Skip(skip).Take(take).ToList()
+            // Get local history (manual reports)
+            var localHistory = await _localStorage.GetItemAsync<List<ReportHistoryDto>>(HISTORY_KEY) 
                 ?? new List<ReportHistoryDto>();
+
+            // Get scheduled report executions from backend
+            var scheduledExecutions = await GetScheduledReportExecutionsAsync(skip, take);
+            
+            // Convert scheduled executions to ReportHistoryDto
+            var scheduledHistory = scheduledExecutions.Select(e => new ReportHistoryDto(
+                Id: e.Id,
+                ReportName: e.ScheduledReport?.ReportName ?? e.ReportName ?? "Scheduled Report",
+                ReportType: "scheduled",
+                GeneratedBy: "Scheduled",
+                GeneratedAt: e.ExecutedAt,
+                Format: e.ScheduledReport?.Format ?? e.Format ?? "PDF",
+                FileSize: 0,
+                ReportTypeId: e.ScheduledReportId,
+                FromDate: null,
+                ToDate: null,
+                ConfigJson: null
+            )).ToList();
+
+            // Merge and sort by date
+            var allHistory = localHistory.Concat(scheduledHistory)
+                .OrderByDescending(h => h.GeneratedAt)
+                .Skip(skip)
+                .Take(take)
+                .ToList();
+
+            return allHistory;
         }
         catch
         {
             return new List<ReportHistoryDto>();
+        }
+    }
+
+    private async Task<List<ScheduledReportExecutionGraphQL>> GetScheduledReportExecutionsAsync(int skip = 0, int take = 50)
+    {
+        try
+        {
+            var query = @"
+                query GetAllScheduledReportExecutions($skip: Int!, $take: Int!) {
+                    allScheduledReportExecutions(skip: $skip, take: $take) {
+                        id
+                        scheduledReportId
+                        executedAt
+                        status
+                        recipientsSent
+                        recipientsFailed
+                        errorMessage
+                        scheduledReport {
+                            reportName
+                            format
+                        }
+                    }
+                }";
+
+            var variables = new { skip, take };
+            var response = await _graphQLService.SendQueryAsync<AllScheduledReportExecutionsResponse>(query, variables);
+            
+            return response?.AllScheduledReportExecutions ?? new List<ScheduledReportExecutionGraphQL>();
+        }
+        catch
+        {
+            return new List<ScheduledReportExecutionGraphQL>();
         }
     }
 
@@ -725,4 +1309,84 @@ public class ReportService : IReportService
             System.Globalization.CalendarWeekRule.FirstFourDayWeek,
             DayOfWeek.Monday);
     }
+}
+
+// GraphQL Response Types for Scheduled Reports
+public class CreateScheduledReportResponse
+{
+    public ScheduledReportMutationResult? CreateScheduledReport { get; set; }
+}
+
+public class UpdateScheduledReportResponse
+{
+    public ScheduledReportMutationResult? UpdateScheduledReport { get; set; }
+}
+
+public class DeleteScheduledReportResponse
+{
+    public ScheduledReportMutationResult? DeleteScheduledReport { get; set; }
+}
+
+public class ExecuteScheduledReportResponse
+{
+    public ScheduledReportExecutionResult? ExecuteScheduledReportNow { get; set; }
+}
+
+public class ScheduledReportsResponse
+{
+    public List<ScheduledReportGraphQL>? ScheduledReports { get; set; }
+}
+
+public class ScheduledReportMutationResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public ScheduledReportGraphQL? Schedule { get; set; }
+}
+
+public class ScheduledReportExecutionResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public ScheduledReportExecutionGraphQL? Execution { get; set; }
+    public string? ReportBase64 { get; set; }
+    public string? FileName { get; set; }
+    public string? MimeType { get; set; }
+    public DateTime? LastRun { get; set; }
+    public DateTime? NextRun { get; set; }
+}
+
+public class ScheduledReportGraphQL
+{
+    public string Id { get; set; } = "";
+    public string ReportId { get; set; } = "";
+    public string ReportName { get; set; } = "";
+    public string Schedule { get; set; } = "";
+    public string Frequency { get; set; } = "";
+    public List<string>? Recipients { get; set; }
+    public string Format { get; set; } = "";
+    public bool IsActive { get; set; }
+    public DateTime? NextRun { get; set; }
+    public DateTime? LastRun { get; set; }
+    public string? LastRunStatus { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class ScheduledReportExecutionGraphQL
+{
+    public string Id { get; set; } = "";
+    public string ScheduledReportId { get; set; } = "";
+    public DateTime ExecutedAt { get; set; }
+    public string Status { get; set; } = "";
+    public int RecipientsSent { get; set; }
+    public int RecipientsFailed { get; set; }
+    public string? ErrorMessage { get; set; }
+    public string? ReportName { get; set; }
+    public string? Format { get; set; }
+    public ScheduledReportGraphQL? ScheduledReport { get; set; }
+}
+
+public class AllScheduledReportExecutionsResponse
+{
+    public List<ScheduledReportExecutionGraphQL>? AllScheduledReportExecutions { get; set; }
 }

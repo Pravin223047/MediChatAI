@@ -74,6 +74,8 @@ public record GetUsersInput(
     string? SearchTerm = null,
     string? Role = null,
     bool? IsActive = null,
+    DateTime? FromDate = null,
+    DateTime? ToDate = null,
     string? SortBy = "CreatedAt",
     bool SortDescending = true
 );

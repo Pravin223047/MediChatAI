@@ -1922,6 +1922,75 @@ namespace MediChatAI_GraphQl.GraphQL.Queries
 
             return await patientManagementService.SearchPatientsAsync(doctorId, searchTerm);
         }
+
+        // ========================
+        // Scheduled Reports Queries
+        // ========================
+
+        /// <summary>
+        /// Get all scheduled reports
+        /// </summary>
+        [Authorize(Roles = new[] { "Admin" })]
+        public async Task<List<ScheduledReport>> GetScheduledReportsAsync(
+            [Service] IScheduledReportService scheduledReportService)
+        {
+            return await scheduledReportService.GetAllScheduledReportsAsync();
+        }
+
+        /// <summary>
+        /// Get a specific scheduled report by ID
+        /// </summary>
+        [Authorize(Roles = new[] { "Admin" })]
+        public async Task<ScheduledReport?> GetScheduledReportAsync(
+            string id,
+            [Service] IScheduledReportService scheduledReportService)
+        {
+            return await scheduledReportService.GetScheduledReportAsync(id);
+        }
+
+        /// <summary>
+        /// Get active scheduled reports
+        /// </summary>
+        [Authorize(Roles = new[] { "Admin" })]
+        public async Task<List<ScheduledReport>> GetActiveScheduledReportsAsync(
+            [Service] IScheduledReportService scheduledReportService)
+        {
+            return await scheduledReportService.GetActiveScheduledReportsAsync();
+        }
+
+        /// <summary>
+        /// Get execution history for a scheduled report
+        /// </summary>
+        [Authorize(Roles = new[] { "Admin" })]
+        public async Task<List<ScheduledReportExecution>> GetScheduledReportExecutionHistoryAsync(
+            string scheduleId,
+            int take,
+            [Service] IScheduledReportService scheduledReportService)
+        {
+            return await scheduledReportService.GetExecutionHistoryAsync(scheduleId, take);
+        }
+
+        /// <summary>
+        /// Get all scheduled report execution history for Report History view
+        /// </summary>
+        [Authorize(Roles = new[] { "Admin" })]
+        public async Task<List<ScheduledReportExecution>> GetAllScheduledReportExecutionsAsync(
+            int skip,
+            int take,
+            [Service] IScheduledReportService scheduledReportService)
+        {
+            return await scheduledReportService.GetAllExecutionHistoryAsync(skip, take);
+        }
+
+        /// <summary>
+        /// Get reports that are due for execution
+        /// </summary>
+        [Authorize(Roles = new[] { "Admin" })]
+        public async Task<List<ScheduledReport>> GetDueScheduledReportsAsync(
+            [Service] IScheduledReportService scheduledReportService)
+        {
+            return await scheduledReportService.GetDueReportsAsync();
+        }
     }
 
     public class AppointmentRequestDebugInfo

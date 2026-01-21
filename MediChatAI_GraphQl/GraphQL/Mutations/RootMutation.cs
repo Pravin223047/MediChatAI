@@ -2196,6 +2196,270 @@ public class Mutation
             };
         }
     }
+
+    // ========================
+    // Scheduled Reports Mutations
+    // ========================
+
+    /// <summary>
+    /// Create a new scheduled report
+    /// </summary>
+    [Authorize(Roles = new[] { "Admin" })]
+    public async Task<ScheduledReportResult> CreateScheduledReport(
+        CreateScheduledReportInput input,
+        [Service] IScheduledReportService scheduledReportService,
+        [Service] ILogger<Mutation> logger)
+    {
+        try
+        {
+            var schedule = new ScheduledReport
+            {
+                ReportId = input.ReportId,
+                ReportName = input.ReportName,
+                Schedule = input.Schedule,
+                Frequency = input.Frequency,
+                Recipients = input.Recipients,
+                Format = input.Format,
+                IsActive = input.IsActive,
+                NextRun = input.NextRun
+            };
+
+            var result = await scheduledReportService.CreateScheduledReportAsync(schedule);
+            
+            if (result != null)
+            {
+                return new ScheduledReportResult
+                {
+                    Success = true,
+                    Message = "Scheduled report created successfully",
+                    Schedule = result
+                };
+            }
+
+            return new ScheduledReportResult
+            {
+                Success = false,
+                Message = "Failed to create scheduled report"
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error creating scheduled report");
+            return new ScheduledReportResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Update an existing scheduled report
+    /// </summary>
+    [Authorize(Roles = new[] { "Admin" })]
+    public async Task<ScheduledReportResult> UpdateScheduledReport(
+        UpdateScheduledReportInput input,
+        [Service] IScheduledReportService scheduledReportService,
+        [Service] ILogger<Mutation> logger)
+    {
+        try
+        {
+            var schedule = new ScheduledReport
+            {
+                Id = input.Id,
+                ReportId = input.ReportId,
+                ReportName = input.ReportName,
+                Schedule = input.Schedule,
+                Frequency = input.Frequency,
+                Recipients = input.Recipients,
+                Format = input.Format,
+                IsActive = input.IsActive,
+                NextRun = input.NextRun
+            };
+
+            var success = await scheduledReportService.UpdateScheduledReportAsync(schedule);
+            
+            if (success)
+            {
+                var updated = await scheduledReportService.GetScheduledReportAsync(input.Id);
+                return new ScheduledReportResult
+                {
+                    Success = true,
+                    Message = "Scheduled report updated successfully",
+                    Schedule = updated
+                };
+            }
+
+            return new ScheduledReportResult
+            {
+                Success = false,
+                Message = "Failed to update scheduled report"
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error updating scheduled report");
+            return new ScheduledReportResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Delete a scheduled report
+    /// </summary>
+    [Authorize(Roles = new[] { "Admin" })]
+    public async Task<ScheduledReportResult> DeleteScheduledReport(
+        string id,
+        [Service] IScheduledReportService scheduledReportService,
+        [Service] ILogger<Mutation> logger)
+    {
+        try
+        {
+            var success = await scheduledReportService.DeleteScheduledReportAsync(id);
+            
+            return new ScheduledReportResult
+            {
+                Success = success,
+                Message = success ? "Scheduled report deleted successfully" : "Failed to delete scheduled report"
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error deleting scheduled report");
+            return new ScheduledReportResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Execute a scheduled report immediately (Run Now)
+    /// </summary>
+    [Authorize(Roles = new[] { "Admin" })]
+    public async Task<ScheduledReportExecutionResult> ExecuteScheduledReportNow(
+        string id,
+        bool sendEmail,
+        [Service] IScheduledReportService scheduledReportService,
+        [Service] ILogger<Mutation> logger)
+    {
+        try
+        {
+            logger.LogInformation("Manually executing scheduled report: {Id}", id);
+            
+            var execution = await scheduledReportService.ExecuteScheduledReportAsync(id, sendEmail);
+            
+            if (execution != null)
+            {
+                // Get updated schedule info for the response
+                var updatedSchedule = await scheduledReportService.GetScheduledReportAsync(id);
+                
+                // Try to extract report file data from execution
+                string? reportBase64 = null;
+                string? fileName = null;
+                string? mimeType = null;
+
+                if (!string.IsNullOrEmpty(execution.ReportDataJson))
+                {
+                    try
+                    {
+                        var reportData = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(execution.ReportDataJson);
+                        if (reportData.TryGetProperty("ReportBase64", out var base64Prop))
+                            reportBase64 = base64Prop.GetString();
+                        if (reportData.TryGetProperty("FileName", out var fileNameProp))
+                            fileName = fileNameProp.GetString();
+                        if (reportData.TryGetProperty("MimeType", out var mimeTypeProp))
+                            mimeType = mimeTypeProp.GetString();
+                    }
+                    catch
+                    {
+                        // Ignore parsing errors for report data
+                    }
+                }
+
+                return new ScheduledReportExecutionResult
+                {
+                    Success = execution.Status == "Success",
+                    Message = execution.Status == "Success" 
+                        ? $"Report executed successfully. Sent to {execution.RecipientsSent} recipient(s)."
+                        : $"Report execution failed: {execution.ErrorMessage}",
+                    Execution = execution,
+                    ReportBase64 = reportBase64,
+                    FileName = fileName,
+                    MimeType = mimeType,
+                    LastRun = updatedSchedule?.LastRun,
+                    NextRun = updatedSchedule?.NextRun
+                };
+            }
+
+            return new ScheduledReportExecutionResult
+            {
+                Success = false,
+                Message = "Scheduled report not found"
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error executing scheduled report");
+            return new ScheduledReportExecutionResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+}
+
+// ========================
+// Scheduled Report DTOs
+// ========================
+
+public class CreateScheduledReportInput
+{
+    public string ReportId { get; set; } = "";
+    public string ReportName { get; set; } = "";
+    public string Schedule { get; set; } = "0 9 * * 1";
+    public string Frequency { get; set; } = "Weekly";
+    public List<string> Recipients { get; set; } = new();
+    public string Format { get; set; } = "PDF";
+    public bool IsActive { get; set; } = true;
+    public DateTime? NextRun { get; set; }
+}
+
+public class UpdateScheduledReportInput
+{
+    public string Id { get; set; } = "";
+    public string ReportId { get; set; } = "";
+    public string ReportName { get; set; } = "";
+    public string Schedule { get; set; } = "0 9 * * 1";
+    public string Frequency { get; set; } = "Weekly";
+    public List<string> Recipients { get; set; } = new();
+    public string Format { get; set; } = "PDF";
+    public bool IsActive { get; set; } = true;
+    public DateTime? NextRun { get; set; }
+}
+
+public class ScheduledReportResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public ScheduledReport? Schedule { get; set; }
+}
+
+public class ScheduledReportExecutionResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public ScheduledReportExecution? Execution { get; set; }
+    public string? ReportBase64 { get; set; }
+    public string? FileName { get; set; }
+    public string? MimeType { get; set; }
+    public DateTime? LastRun { get; set; }
+    public DateTime? NextRun { get; set; }
 }
 
 /// <summary>

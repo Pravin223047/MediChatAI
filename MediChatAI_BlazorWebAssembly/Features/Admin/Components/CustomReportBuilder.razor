@@ -1,0 +1,1914 @@
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Models
+@using MediChatAI_BlazorWebAssembly.Features.Admin.Services
+@inject IReportService ReportService
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@inject IThemeService ThemeService
+
+<div class="space-y-6">
+    <!-- Builder Header -->
+    <div class="bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 rounded-2xl p-6 border border-primary/20">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="p-3 bg-primary/20 rounded-xl">
+                    <svg class="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Custom Report Builder</h2>
+                    <p class="text-gray-600 dark:text-gray-400">Build powerful custom reports with drag-and-drop simplicity</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
+                    Step @currentStep of 5
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Stepper -->
+    <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl p-6">
+        <div class="flex items-center justify-between">
+            @foreach (var (step, index) in steps.Select((s, i) => (s, i + 1)))
+            {
+                <div class="flex items-center @(index < steps.Count ? "flex-1" : "")">
+                    <div class="flex flex-col items-center">
+                        <div class="@GetStepClass(index) w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all duration-300">
+                            @if (index < currentStep)
+                            {
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            }
+                            else
+                            {
+                                @index
+                            }
+                        </div>
+                        <span class="text-xs mt-1 text-gray-600 dark:text-gray-400 whitespace-nowrap">@step</span>
+                    </div>
+                    @if (index < steps.Count)
+                    {
+                        <div class="flex-1 h-1 mx-2 @(index < currentStep ? "bg-primary" : "bg-gray-200 dark:bg-gray-700") rounded transition-all duration-300"></div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Step Content -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content Area -->
+        <div class="lg:col-span-2">
+            <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl overflow-hidden min-h-[500px] flex flex-col">
+                
+                @if (currentStep == 1)
+                {
+                    <!-- Step 1: Report Configuration -->
+                    <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-500/5 to-cyan-500/5">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            Report Configuration
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-6 flex-1">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Report Name <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" @bind="reportConfig.Name" placeholder="e.g., Monthly User Analytics"
+                                       class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Report Category
+                                </label>
+                                <select @bind="reportConfig.Category" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                                    <option value="analytics">Analytics</option>
+                                    <option value="users">User Management</option>
+                                    <option value="activity">Activity Tracking</option>
+                                    <option value="performance">Performance</option>
+                                    <option value="compliance">Compliance</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Description
+                            </label>
+                            <textarea @bind="reportConfig.Description" rows="3" placeholder="Describe what this report analyzes..."
+                                      class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary resize-none"></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Date Range
+                                </label>
+                                <select @bind="reportConfig.DateRangePreset" @bind:after="OnDateRangeChange" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                                    <option value="last7days">Last 7 Days</option>
+                                    <option value="last30days">Last 30 Days</option>
+                                    <option value="last90days">Last 90 Days</option>
+                                    <option value="thisMonth">This Month</option>
+                                    <option value="lastMonth">Last Month</option>
+                                    <option value="thisYear">This Year</option>
+                                    <option value="custom">Custom Range</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Export Format
+                                </label>
+                                <select @bind="reportConfig.ExportFormat" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary">
+                                    <option value="pdf">PDF Document</option>
+                                    <option value="excel">Excel Spreadsheet</option>
+                                    <option value="csv">CSV File</option>
+                                    <option value="json">JSON Data</option>
+                                </select>
+                            </div>
+                        </div>
+                        @if (reportConfig.DateRangePreset == "custom")
+                        {
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Date</label>
+                                    <input type="date" @bind="reportConfig.FromDate" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Date</label>
+                                    <input type="date" @bind="reportConfig.ToDate" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (currentStep == 2)
+                {
+                    <!-- Step 2: Data Source Selection -->
+                    <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-500/5 to-pink-500/5">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                            </svg>
+                            Select Data Sources
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            @foreach (var source in availableDataSources)
+                            {
+                                <div @onclick="() => ToggleDataSource(source)" 
+                                     class="@GetDataSourceClass(source) p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 hover:shadow-lg">
+                                    <div class="flex items-start space-x-4">
+                                        <div class="@(source.IsSelected ? "bg-primary text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400") p-3 rounded-xl transition-colors">
+                                            @((MarkupString)source.Icon)
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="flex items-center justify-between">
+                                                <h4 class="font-semibold text-gray-900 dark:text-white">@source.Name</h4>
+                                                @if (source.IsSelected)
+                                                {
+                                                    <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                }
+                                            </div>
+                                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">@source.Description</p>
+                                            <div class="flex items-center mt-2 text-xs text-gray-500 dark:text-gray-500">
+                                                <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">@source.RecordCount records</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (currentStep == 3)
+                {
+                    <!-- Step 3: Field Selection & Metrics -->
+                    <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-emerald-500/5 to-teal-500/5">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            Select Fields & Metrics
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-6 flex-1">
+                        <!-- Metrics Section -->
+                        <div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+                                </svg>
+                                Metrics (Values to Measure)
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                @foreach (var metric in availableMetrics)
+                                {
+                                    <label class="@GetFieldClass(metric.IsSelected) flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all">
+                                        <input type="checkbox" @bind="metric.IsSelected" class="w-4 h-4 text-primary rounded focus:ring-2 focus:ring-primary" />
+                                        <div class="flex-1">
+                                            <p class="font-medium text-gray-900 dark:text-white text-sm">@metric.DisplayName</p>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400">@metric.DataType</p>
+                                        </div>
+                                        @if (metric.IsSelected)
+                                        {
+                                            <select @bind="metric.Aggregation" @onclick:stopPropagation="true" class="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                                <option value="sum">Sum</option>
+                                                <option value="avg">Average</option>
+                                                <option value="count">Count</option>
+                                                <option value="min">Min</option>
+                                                <option value="max">Max</option>
+                                            </select>
+                                        }
+                                    </label>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Dimensions Section -->
+                        <div>
+                            <h4 class="font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                                </svg>
+                                Dimensions (Group By)
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                @foreach (var dimension in availableDimensions)
+                                {
+                                    <label class="@GetFieldClass(dimension.IsSelected) flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all">
+                                        <input type="checkbox" @bind="dimension.IsSelected" class="w-4 h-4 text-primary rounded focus:ring-2 focus:ring-primary" />
+                                        <div class="flex-1">
+                                            <p class="font-medium text-gray-900 dark:text-white text-sm">@dimension.DisplayName</p>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400">@dimension.DataType</p>
+                                        </div>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (currentStep == 4)
+                {
+                    <!-- Step 4: Filters -->
+                    <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-orange-500/5 to-yellow-500/5">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                            </svg>
+                            Apply Filters
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-4 flex-1">
+                        @foreach (var filter in reportFilters)
+                        {
+                            <div class="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <select @bind="filter.Field" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                                    <option value="">Select Field</option>
+                                    @foreach (var field in GetFilterableFields())
+                                    {
+                                        <option value="@field.FieldName">@field.DisplayName</option>
+                                    }
+                                </select>
+                                <select @bind="filter.Operator" class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                                    <option value="equals">Equals</option>
+                                    <option value="notEquals">Not Equals</option>
+                                    <option value="contains">Contains</option>
+                                    <option value="greaterThan">Greater Than</option>
+                                    <option value="lessThan">Less Than</option>
+                                    <option value="between">Between</option>
+                                </select>
+                                <input type="text" @bind="filter.Value" placeholder="Value" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+                                <button @onclick="() => RemoveFilter(filter)" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        }
+                        <button @onclick="AddFilter" class="w-full p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-400 hover:border-primary hover:text-primary transition-colors flex items-center justify-center space-x-2">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            <span>Add Filter</span>
+                        </button>
+                    </div>
+                }
+                else if (currentStep == 5)
+                {
+                    <!-- Step 5: Visualization & Preview -->
+                    <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-indigo-500/5 to-violet-500/5">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                            Visualization & Preview
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-6 flex-1">
+                        <!-- Chart Type Selection -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Chart Type</label>
+                            <div class="grid grid-cols-4 md:grid-cols-7 gap-3">
+                                @foreach (var chart in chartTypes)
+                                {
+                                    <button @onclick="() => SelectChartType(chart.Type)" 
+                                            class="@GetChartTypeClass(chart.Type) p-4 rounded-xl text-center transition-all hover:shadow-md">
+                                        <div class="@(reportConfig.ChartType == chart.Type ? "text-primary" : "text-gray-500 dark:text-gray-400")">
+                                            @((MarkupString)chart.Icon)
+                                        </div>
+                                        <span class="text-xs mt-2 block @(reportConfig.ChartType == chart.Type ? "text-primary font-medium" : "text-gray-600 dark:text-gray-400")">@chart.Name</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Chart Preview -->
+                        <div class="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 min-h-[350px]">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="font-semibold text-gray-700 dark:text-gray-300">Chart Preview</h4>
+                                <button @onclick="LoadPreview" class="px-3 py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors flex items-center space-x-1 text-sm">
+                                    <svg class="w-4 h-4 @(isLoadingPreview ? "animate-spin" : "")" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                    <span>Refresh</span>
+                                </button>
+                            </div>
+                            @if (isLoadingPreview)
+                            {
+                                <div class="flex items-center justify-center h-64">
+                                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                                </div>
+                            }
+                            else if (previewData != null && previewData.Any())
+                            {
+                                @if (reportConfig.ChartType == "table")
+                                {
+                                    <!-- Table Preview -->
+                                    <div class="overflow-x-auto max-h-72">
+                                        <table class="w-full text-sm">
+                                            <thead class="bg-gray-100 dark:bg-gray-700 sticky top-0">
+                                                <tr>
+                                                    <th class="px-4 py-2 text-left text-gray-700 dark:text-gray-300 font-semibold">Label</th>
+                                                    @if (previewData.ContainsKey("datasets"))
+                                                    {
+                                                        @foreach (var dataset in (List<object>)previewData["datasets"])
+                                                        {
+                                                            var ds = (dynamic)dataset;
+                                                            <th class="px-4 py-2 text-right text-gray-700 dark:text-gray-300 font-semibold">@ds.label</th>
+                                                        }
+                                                    }
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @if (previewData.ContainsKey("labels"))
+                                                {
+                                                    var labels = (List<string>)previewData["labels"];
+                                                    var datasets = previewData.ContainsKey("datasets") ? (List<object>)previewData["datasets"] : new List<object>();
+                                                    @for (int i = 0; i < labels.Count; i++)
+                                                    {
+                                                        var rowIndex = i;
+                                                        <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                            <td class="px-4 py-2 text-gray-800 dark:text-gray-200">@labels[rowIndex]</td>
+                                                            @foreach (var dataset in datasets)
+                                                            {
+                                                                var ds = (dynamic)dataset;
+                                                                var data = (List<double>)ds.data;
+                                                                <td class="px-4 py-2 text-right text-gray-600 dark:text-gray-400 font-medium">@data[rowIndex].ToString("N1")</td>
+                                                            }
+                                                        </tr>
+                                                    }
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <!-- Chart Preview -->
+                                    <div style="height: 280px;">
+                                        <canvas id="customReportPreviewChart"></canvas>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="flex flex-col items-center justify-center h-64 text-gray-400">
+                                    <svg class="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                    </svg>
+                                    <p class="text-center">Select metrics and dimensions to see preview</p>
+                                    <p class="text-sm mt-1">Preview will load automatically</p>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Additional Options -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <label class="flex items-center space-x-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl cursor-pointer">
+                                <input type="checkbox" @bind="reportConfig.ShowLegend" class="w-4 h-4 text-primary rounded" />
+                                <span class="text-gray-700 dark:text-gray-300">Show Legend</span>
+                            </label>
+                            <label class="flex items-center space-x-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl cursor-pointer">
+                                <input type="checkbox" @bind="reportConfig.ShowDataLabels" class="w-4 h-4 text-primary rounded" />
+                                <span class="text-gray-700 dark:text-gray-300">Show Data Labels</span>
+                            </label>
+                            <label class="flex items-center space-x-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl cursor-pointer">
+                                <input type="checkbox" @bind="reportConfig.IncludeTable" class="w-4 h-4 text-primary rounded" />
+                                <span class="text-gray-700 dark:text-gray-300">Include Data Table</span>
+                            </label>
+                            <label class="flex items-center space-x-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl cursor-pointer">
+                                <input type="checkbox" @bind="reportConfig.IncludeSummary" class="w-4 h-4 text-primary rounded" />
+                                <span class="text-gray-700 dark:text-gray-300">Include Summary</span>
+                            </label>
+                        </div>
+                    </div>
+                }
+
+                <!-- Navigation Buttons -->
+                <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between mt-auto">
+                    <button @onclick="PreviousStep" disabled="@(currentStep == 1)" 
+                            class="px-6 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                        <span>Previous</span>
+                    </button>
+                    <div class="flex items-center space-x-3">
+                        @if (currentStep == 5)
+                        {
+                            <button @onclick="SaveAsTemplate" class="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex items-center space-x-2">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                                </svg>
+                                <span>Save Template</span>
+                            </button>
+                            <button @onclick="GenerateReport" disabled="@isGenerating"
+                                    class="px-6 py-2.5 bg-gradient-to-r from-primary to-accent text-white rounded-xl hover:opacity-90 disabled:opacity-50 transition-all flex items-center space-x-2 shadow-lg hover:shadow-xl">
+                                @if (isGenerating)
+                                {
+                                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                }
+                                else
+                                {
+                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                }
+                                <span>@(isGenerating ? "Generating..." : "Generate Report")</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <button @onclick="NextStep" disabled="@(!CanProceed())"
+                                    class="px-6 py-2.5 bg-primary text-white rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center space-x-2">
+                                <span>Next</span>
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar - Configuration Summary -->
+        <div class="lg:col-span-1">
+            <div class="sticky top-6 space-y-6">
+                <!-- Live Configuration Summary -->
+                <div class="bg-card/80 dark:bg-gray-800/80 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-6">
+                    <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                        </svg>
+                        Report Summary
+                    </h3>
+
+                    <div class="space-y-3">
+                        <!-- Report Name -->
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Report Name</p>
+                            <p class="font-medium text-gray-900 dark:text-white text-sm">@(string.IsNullOrEmpty(reportConfig.Name) ? "Untitled Report" : reportConfig.Name)</p>
+                        </div>
+
+                        <!-- Category & Date Range Row -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Category</p>
+                                <p class="font-medium text-gray-900 dark:text-white capitalize text-sm">@reportConfig.Category</p>
+                            </div>
+                            <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Chart</p>
+                                <p class="font-medium text-gray-900 dark:text-white capitalize text-sm">@reportConfig.ChartType</p>
+                            </div>
+                        </div>
+
+                        <!-- Date Range -->
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Date Range</p>
+                            <p class="font-medium text-gray-900 dark:text-white text-sm">@reportConfig.FromDate.ToString("MMM dd") - @reportConfig.ToDate.ToString("MMM dd, yyyy")</p>
+                        </div>
+
+                        <!-- Data Sources -->
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Data Sources</p>
+                            @if (availableDataSources.Any(s => s.IsSelected))
+                            {
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    @foreach (var source in availableDataSources.Where(s => s.IsSelected))
+                                    {
+                                        <span class="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full">@source.Name</span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="font-medium text-gray-400 dark:text-gray-500 text-sm">None selected</p>
+                            }
+                        </div>
+
+                        <!-- Selected Metrics -->
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Metrics (@availableMetrics.Count(m => m.IsSelected))</p>
+                            @if (availableMetrics.Any(m => m.IsSelected))
+                            {
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    @foreach (var metric in availableMetrics.Where(m => m.IsSelected).Take(3))
+                                    {
+                                        <span class="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded-full">@metric.DisplayName</span>
+                                    }
+                                    @if (availableMetrics.Count(m => m.IsSelected) > 3)
+                                    {
+                                        <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs rounded-full">+@(availableMetrics.Count(m => m.IsSelected) - 3) more</span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="font-medium text-gray-400 dark:text-gray-500 text-sm">None selected</p>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions - Integrated -->
+                    <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Quick Actions</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button @onclick="ResetBuilder" class="px-3 py-2 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center space-x-1 text-gray-700 dark:text-gray-300">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span>Reset</span>
+                            </button>
+                            <button @onclick="OpenTemplateModal" class="px-3 py-2 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors flex items-center justify-center space-x-1">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                </svg>
+                                <span>Template</span>
+                            </button>
+                            <button @onclick="ExportConfig" class="px-3 py-2 text-xs bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400 rounded-lg transition-colors flex items-center justify-center space-x-1">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                <span>Export</span>
+                            </button>
+                            <label class="px-3 py-2 text-xs bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-400 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                </svg>
+                                <span>Import</span>
+                                <InputFile OnChange="ImportConfig" accept=".json" class="hidden" />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template Selection Modal -->
+@if (showTemplateModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @onclick="CloseTemplateModal">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden" @onclick:stopPropagation>
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-primary/5 to-accent/5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2 bg-primary/10 rounded-lg">
+                            <svg class="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Load Template</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Select a saved template to load</p>
+                        </div>
+                    </div>
+                    <button @onclick="CloseTemplateModal" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <svg class="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-6 overflow-y-auto max-h-[50vh]">
+                @if (isLoadingTemplates)
+                {
+                    <div class="flex items-center justify-center py-8">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                }
+                else if (savedTemplates.Any())
+                {
+                    <div class="space-y-3">
+                        @foreach (var template in savedTemplates)
+                        {
+                            <button @onclick="() => LoadTemplate(template)" 
+                                    class="w-full p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-primary/5 dark:hover:bg-primary/10 rounded-xl border-2 border-transparent hover:border-primary/30 transition-all text-left group">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1">
+                                        <h4 class="font-semibold text-gray-900 dark:text-white group-hover:text-primary transition-colors">@template.Name</h4>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">@(string.IsNullOrEmpty(template.Description) ? "No description" : template.Description)</p>
+                                        <div class="flex items-center space-x-3 mt-2">
+                                            <span class="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-600 rounded-full text-gray-600 dark:text-gray-300 capitalize">@template.Category</span>
+                                            <span class="text-xs text-gray-400">@template.CreatedAt.ToString("MMM dd, yyyy")</span>
+                                        </div>
+                                    </div>
+                                    <svg class="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-8">
+                        <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-full w-16 h-16 mx-auto flex items-center justify-center mb-4">
+                            <svg class="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <h4 class="text-gray-900 dark:text-white font-semibold mb-1">No Templates Found</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Save a report configuration as a template first.</p>
+                    </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <button @onclick="CloseTemplateModal" class="w-full px-4 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Template Overwrite Confirmation Modal -->
+@if (showOverwriteModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @onclick="CloseOverwriteModal">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200" @onclick:stopPropagation>
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-amber-500/10 to-orange-500/10">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-amber-500/20 rounded-lg">
+                        <svg class="w-6 h-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Template Already Exists</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">A template with this name already exists</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-6">
+                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl mb-4">
+                    <p class="text-sm text-gray-600 dark:text-gray-300">
+                        <span class="font-semibold">"@reportConfig.Name"</span> already exists. What would you like to do?
+                    </p>
+                </div>
+
+                <div class="space-y-3">
+                    <button @onclick="OverwriteExistingTemplate" 
+                            class="w-full p-4 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 border-2 border-amber-200 dark:border-amber-800 rounded-xl transition-all text-left group">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2 bg-amber-500/20 rounded-lg group-hover:bg-amber-500/30 transition-colors">
+                                <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white">Overwrite</h4>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Replace the existing template with this one</p>
+                            </div>
+                        </div>
+                    </button>
+
+                    <button @onclick="SaveAsCopy" 
+                            class="w-full p-4 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-800 rounded-xl transition-all text-left group">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2 bg-blue-500/20 rounded-lg group-hover:bg-blue-500/30 transition-colors">
+                                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-900 dark:text-white">Save as Copy</h4>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Save as "@(reportConfig.Name) (Copy)"</p>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <button @onclick="CloseOverwriteModal" class="w-full px-4 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback<CustomReportResult> OnReportGenerated { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private int currentStep = 1;
+    private bool isGenerating = false;
+    private bool isLoadingPreview = false;
+    private bool showTemplateModal = false;
+    private bool isLoadingTemplates = false;
+    private bool showOverwriteModal = false;
+    private ReportTemplateDto? existingTemplate = null;
+    private Dictionary<string, object>? previewData;
+
+    private List<string> steps = new() { "Configure", "Data Source", "Fields", "Filters", "Visualize" };
+
+    private CustomReportConfig reportConfig = new();
+    private List<DataSourceOption> availableDataSources = new();
+    private List<FieldOption> availableMetrics = new();
+    private List<FieldOption> availableDimensions = new();
+    private List<ReportFilterItem> reportFilters = new();
+    private List<ChartTypeOption> chartTypes = new();
+    private List<ReportTemplateDto> savedTemplates = new();
+
+    protected override void OnInitialized()
+    {
+        InitializeDataSources();
+        InitializeMetrics();
+        InitializeDimensions();
+        InitializeChartTypes();
+        SetDefaultDateRange();
+    }
+
+    private void InitializeDataSources()
+    {
+        availableDataSources = new List<DataSourceOption>
+        {
+            new DataSourceOption
+            {
+                Id = "users",
+                Name = "Users",
+                Description = "User accounts, profiles, and roles",
+                Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'/></svg>",
+                RecordCount = 1250,
+                IsSelected = false
+            },
+            new DataSourceOption
+            {
+                Id = "activities",
+                Name = "Activities",
+                Description = "User actions and system events",
+                Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 10V3L4 14h7v7l9-11h-7z'/></svg>",
+                RecordCount = 45000,
+                IsSelected = false
+            },
+            new DataSourceOption
+            {
+                Id = "consultations",
+                Name = "Consultations",
+                Description = "Medical consultations and chat sessions",
+                Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'/></svg>",
+                RecordCount = 8500,
+                IsSelected = false
+            },
+            new DataSourceOption
+            {
+                Id = "appointments",
+                Name = "Appointments",
+                Description = "Scheduled appointments and bookings",
+                Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'/></svg>",
+                RecordCount = 3200,
+                IsSelected = false
+            },
+            new DataSourceOption
+            {
+                Id = "notifications",
+                Name = "Notifications",
+                Description = "System notifications and alerts",
+                Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9'/></svg>",
+                RecordCount = 12000,
+                IsSelected = false
+            },
+            new DataSourceOption
+            {
+                Id = "audit_logs",
+                Name = "Audit Logs",
+                Description = "Security and compliance audit trails",
+                Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'/></svg>",
+                RecordCount = 28000,
+                IsSelected = false
+            }
+        };
+    }
+
+    private void InitializeMetrics()
+    {
+        availableMetrics = new List<FieldOption>
+        {
+            new FieldOption { FieldName = "user_count", DisplayName = "User Count", DataType = "Number", Aggregation = "count", IsSelected = false },
+            new FieldOption { FieldName = "active_users", DisplayName = "Active Users", DataType = "Number", Aggregation = "count", IsSelected = false },
+            new FieldOption { FieldName = "new_registrations", DisplayName = "New Registrations", DataType = "Number", Aggregation = "count", IsSelected = false },
+            new FieldOption { FieldName = "login_count", DisplayName = "Login Count", DataType = "Number", Aggregation = "sum", IsSelected = false },
+            new FieldOption { FieldName = "session_duration", DisplayName = "Session Duration", DataType = "Duration", Aggregation = "avg", IsSelected = false },
+            new FieldOption { FieldName = "consultation_count", DisplayName = "Consultations", DataType = "Number", Aggregation = "count", IsSelected = false },
+            new FieldOption { FieldName = "appointment_count", DisplayName = "Appointments", DataType = "Number", Aggregation = "count", IsSelected = false },
+            new FieldOption { FieldName = "response_time", DisplayName = "Avg Response Time", DataType = "Duration", Aggregation = "avg", IsSelected = false },
+            new FieldOption { FieldName = "satisfaction_score", DisplayName = "Satisfaction Score", DataType = "Percentage", Aggregation = "avg", IsSelected = false },
+            new FieldOption { FieldName = "error_count", DisplayName = "Error Count", DataType = "Number", Aggregation = "sum", IsSelected = false },
+            new FieldOption { FieldName = "notification_sent", DisplayName = "Notifications Sent", DataType = "Number", Aggregation = "sum", IsSelected = false },
+            new FieldOption { FieldName = "conversion_rate", DisplayName = "Conversion Rate", DataType = "Percentage", Aggregation = "avg", IsSelected = false }
+        };
+    }
+
+    private void InitializeDimensions()
+    {
+        availableDimensions = new List<FieldOption>
+        {
+            new FieldOption { FieldName = "date_daily", DisplayName = "Date (Daily)", DataType = "Date", IsSelected = false },
+            new FieldOption { FieldName = "date_weekly", DisplayName = "Date (Weekly)", DataType = "Date", IsSelected = false },
+            new FieldOption { FieldName = "date_monthly", DisplayName = "Date (Monthly)", DataType = "Date", IsSelected = false },
+            new FieldOption { FieldName = "user_role", DisplayName = "User Role", DataType = "Category", IsSelected = false },
+            new FieldOption { FieldName = "user_status", DisplayName = "User Status", DataType = "Category", IsSelected = false },
+            new FieldOption { FieldName = "activity_type", DisplayName = "Activity Type", DataType = "Category", IsSelected = false },
+            new FieldOption { FieldName = "hour_of_day", DisplayName = "Hour of Day", DataType = "Time", IsSelected = false },
+            new FieldOption { FieldName = "day_of_week", DisplayName = "Day of Week", DataType = "Category", IsSelected = false },
+            new FieldOption { FieldName = "department", DisplayName = "Department", DataType = "Category", IsSelected = false },
+            new FieldOption { FieldName = "specialization", DisplayName = "Specialization", DataType = "Category", IsSelected = false }
+        };
+    }
+
+    private void InitializeChartTypes()
+    {
+        chartTypes = new List<ChartTypeOption>
+        {
+            new ChartTypeOption { Type = "bar", Name = "Bar", Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'/></svg>" },
+            new ChartTypeOption { Type = "line", Name = "Line", Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z'/></svg>" },
+            new ChartTypeOption { Type = "pie", Name = "Pie", Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z'/><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z'/></svg>" },
+            new ChartTypeOption { Type = "doughnut", Name = "Donut", Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><circle cx='12' cy='12' r='9' stroke-width='2'/><circle cx='12' cy='12' r='4' stroke-width='2'/></svg>" },
+            new ChartTypeOption { Type = "area", Name = "Area", Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'/></svg>" },
+            new ChartTypeOption { Type = "radar", Name = "Radar", Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><polygon points='12,2 22,8.5 22,15.5 12,22 2,15.5 2,8.5' stroke-width='2' fill='none'/><polygon points='12,6 18,9.5 18,14.5 12,18 6,14.5 6,9.5' stroke-width='2' fill='none'/></svg>" },
+            new ChartTypeOption { Type = "table", Name = "Table", Icon = "<svg class='w-6 h-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z'/></svg>" }
+        };
+    }
+
+    private void SetDefaultDateRange()
+    {
+        reportConfig.FromDate = DateTime.UtcNow.AddDays(-30);
+        reportConfig.ToDate = DateTime.UtcNow;
+        reportConfig.DateRangePreset = "last30days";
+    }
+
+    private void OnDateRangeChange()
+    {
+        switch (reportConfig.DateRangePreset)
+        {
+            case "last7days":
+                reportConfig.FromDate = DateTime.UtcNow.AddDays(-7);
+                reportConfig.ToDate = DateTime.UtcNow;
+                break;
+            case "last30days":
+                reportConfig.FromDate = DateTime.UtcNow.AddDays(-30);
+                reportConfig.ToDate = DateTime.UtcNow;
+                break;
+            case "last90days":
+                reportConfig.FromDate = DateTime.UtcNow.AddDays(-90);
+                reportConfig.ToDate = DateTime.UtcNow;
+                break;
+            case "thisMonth":
+                reportConfig.FromDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+                reportConfig.ToDate = DateTime.UtcNow;
+                break;
+            case "lastMonth":
+                var lastMonth = DateTime.UtcNow.AddMonths(-1);
+                reportConfig.FromDate = new DateTime(lastMonth.Year, lastMonth.Month, 1);
+                reportConfig.ToDate = new DateTime(lastMonth.Year, lastMonth.Month, DateTime.DaysInMonth(lastMonth.Year, lastMonth.Month));
+                break;
+            case "thisYear":
+                reportConfig.FromDate = new DateTime(DateTime.UtcNow.Year, 1, 1);
+                reportConfig.ToDate = DateTime.UtcNow;
+                break;
+        }
+    }
+
+    private void ToggleDataSource(DataSourceOption source)
+    {
+        source.IsSelected = !source.IsSelected;
+        StateHasChanged();
+    }
+
+    private async Task SelectChartType(string chartType)
+    {
+        reportConfig.ChartType = chartType;
+        StateHasChanged();
+        
+        // Auto-render chart preview when chart type changes
+        if (currentStep == 5 && availableMetrics.Any(m => m.IsSelected))
+        {
+            await LoadPreview();
+        }
+    }
+
+    private void AddFilter()
+    {
+        reportFilters.Add(new ReportFilterItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            Field = "",
+            Operator = "equals",
+            Value = ""
+        });
+    }
+
+    private void RemoveFilter(ReportFilterItem filter)
+    {
+        reportFilters.Remove(filter);
+    }
+
+    private List<FieldOption> GetFilterableFields()
+    {
+        var fields = new List<FieldOption>();
+        fields.AddRange(availableMetrics);
+        fields.AddRange(availableDimensions);
+        return fields;
+    }
+
+    private bool CanProceed()
+    {
+        return currentStep switch
+        {
+            1 => !string.IsNullOrWhiteSpace(reportConfig.Name),
+            2 => availableDataSources.Any(s => s.IsSelected),
+            3 => availableMetrics.Any(m => m.IsSelected),
+            4 => true, // Filters are optional
+            5 => true,
+            _ => false
+        };
+    }
+
+    private async Task NextStep()
+    {
+        if (CanProceed() && currentStep < 5)
+        {
+            currentStep++;
+            if (currentStep == 5)
+            {
+                await LoadPreview();
+            }
+        }
+    }
+
+    private void PreviousStep()
+    {
+        if (currentStep > 1)
+        {
+            currentStep--;
+        }
+    }
+
+    private async Task LoadPreview()
+    {
+        isLoadingPreview = true;
+        StateHasChanged();
+
+        try
+        {
+            // Generate preview data based on selections
+            previewData = await GeneratePreviewDataAsync();
+
+            if (previewData != null && previewData.Any())
+            {
+                // Mark loading as complete so the canvas element is rendered
+                isLoadingPreview = false;
+                StateHasChanged();
+                
+                // Wait for DOM to update with the canvas element
+                await Task.Delay(150);
+                
+                await RenderPreviewChartAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error loading preview: {ex.Message}");
+            isLoadingPreview = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<Dictionary<string, object>> GeneratePreviewDataAsync()
+    {
+        var selectedMetrics = availableMetrics.Where(m => m.IsSelected).ToList();
+        var selectedDimensions = availableDimensions.Where(d => d.IsSelected).ToList();
+
+        // Generate sample data based on selected metrics and dimensions
+        var labels = new List<string>();
+        var datasets = new List<object>();
+
+        // Determine labels based on dimension
+        var primaryDimension = selectedDimensions.FirstOrDefault();
+        if (primaryDimension != null)
+        {
+            labels = GenerateLabelsForDimension(primaryDimension.FieldName);
+        }
+        else
+        {
+            // Default to date-based labels
+            for (int i = 0; i < 10; i++)
+            {
+                labels.Add(reportConfig.ToDate.AddDays(-9 + i).ToString("MMM dd"));
+            }
+        }
+
+        // Generate data for each selected metric
+        var random = new Random();
+        foreach (var metric in selectedMetrics)
+        {
+            var values = new List<double>();
+            for (int i = 0; i < labels.Count; i++)
+            {
+                values.Add(Math.Round(random.NextDouble() * 100 + 10, 1));
+            }
+
+            datasets.Add(new
+            {
+                label = metric.DisplayName,
+                data = values
+            });
+        }
+
+        await Task.Delay(300); // Simulate loading
+
+        return new Dictionary<string, object>
+        {
+            ["labels"] = labels,
+            ["datasets"] = datasets,
+            ["chartType"] = reportConfig.ChartType
+        };
+    }
+
+    private List<string> GenerateLabelsForDimension(string dimension)
+    {
+        return dimension switch
+        {
+            "date_daily" => Enumerable.Range(0, 10).Select(i => reportConfig.ToDate.AddDays(-9 + i).ToString("MMM dd")).ToList(),
+            "date_weekly" => Enumerable.Range(0, 8).Select(i => $"Week {i + 1}").ToList(),
+            "date_monthly" => new List<string> { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" },
+            "user_role" => new List<string> { "Admin", "Doctor", "Patient" },
+            "user_status" => new List<string> { "Active", "Inactive", "Pending" },
+            "activity_type" => new List<string> { "Login", "Logout", "View", "Create", "Update", "Delete" },
+            "hour_of_day" => Enumerable.Range(0, 24).Select(h => $"{h:00}:00").ToList(),
+            "day_of_week" => new List<string> { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" },
+            "department" => new List<string> { "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "General" },
+            "specialization" => new List<string> { "General", "Surgery", "Internal Medicine", "Psychiatry", "Emergency" },
+            _ => Enumerable.Range(1, 10).Select(i => $"Item {i}").ToList()
+        };
+    }
+
+    private async Task RenderPreviewChartAsync()
+    {
+        // Skip chart rendering for table type - table is rendered in Razor markup
+        if (reportConfig.ChartType == "table")
+        {
+            return;
+        }
+
+        try
+        {
+            var theme = await ThemeService.GetCurrentThemeAsync();
+            var chartConfig = new
+            {
+                chartId = "customReportPreviewChart",
+                chartType = reportConfig.ChartType,
+                labels = previewData!["labels"],
+                datasets = previewData!["datasets"],
+                primaryColor = theme.PrimaryColor,
+                accentColor = theme.AccentColor,
+                showLegend = reportConfig.ShowLegend,
+                showDataLabels = reportConfig.ShowDataLabels
+            };
+
+            await JS.InvokeVoidAsync("renderCustomReportChart", chartConfig);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error rendering chart: {ex.Message}");
+        }
+    }
+
+    private async Task GenerateReport()
+    {
+        if (isGenerating) return;
+
+        isGenerating = true;
+        StateHasChanged();
+
+        try
+        {
+            ToastService.ShowInfo($"Generating {reportConfig.Name}...");
+
+            var selectedMetrics = availableMetrics.Where(m => m.IsSelected).ToList();
+            var selectedDataSources = availableDataSources.Where(s => s.IsSelected).ToList();
+            var selectedDimension = availableDimensions.FirstOrDefault(d => d.IsSelected);
+
+            // Build the custom report configuration
+            var customReport = new CustomReportDto(
+                Guid.NewGuid().ToString(),
+                reportConfig.Name,
+                reportConfig.Description,
+                reportConfig.ChartType,
+                selectedMetrics.Select(m => new ReportMetricDto(m.FieldName, m.DisplayName, m.DataType, m.Aggregation)).ToList(),
+                selectedDimension != null ? new ReportDimensionDto(selectedDimension.FieldName, selectedDimension.DisplayName, selectedDimension.DataType) : null,
+                new ReportFilterDto(
+                    reportConfig.FromDate,
+                    reportConfig.ToDate,
+                    null,
+                    null,
+                    null,
+                    selectedDimension?.FieldName ?? "date_daily",
+                    "date",
+                    "desc"
+                ),
+                DateTime.UtcNow,
+                "Admin"
+            );
+
+            // Get theme colors
+            var theme = await ThemeService.GetCurrentThemeAsync();
+
+            // Generate data for each selected metric
+            var metricDataSets = new List<MetricDataSet>();
+            var combinedLabels = GenerateLabelsForDimension(selectedDimension?.FieldName ?? "date_daily");
+            var random = new Random();
+
+            foreach (var metric in selectedMetrics)
+            {
+                var values = new List<double>();
+                for (int i = 0; i < combinedLabels.Count; i++)
+                {
+                    values.Add(Math.Round(random.NextDouble() * 500 + 50, 0));
+                }
+                metricDataSets.Add(new MetricDataSet
+                {
+                    MetricName = metric.DisplayName,
+                    MetricField = metric.FieldName,
+                    Aggregation = metric.Aggregation,
+                    DataType = metric.DataType,
+                    Labels = combinedLabels,
+                    Values = values,
+                    Total = values.Sum(),
+                    Average = values.Average(),
+                    Max = values.Max(),
+                    Min = values.Min()
+                });
+            }
+
+            // Generate data source summaries
+            var dataSourceSummaries = selectedDataSources.Select(ds => new
+            {
+                name = ds.Name,
+                description = ds.Description,
+                recordCount = ds.RecordCount,
+                recordsInPeriod = random.Next(100, ds.RecordCount)
+            }).ToList();
+
+            // Calculate combined totals for overview
+            var combinedTotal = metricDataSets.Sum(m => m.Total);
+            var combinedAverage = metricDataSets.Average(m => m.Average);
+
+            // Create comprehensive report configuration for PDF generation
+            var pdfConfig = new
+            {
+                title = reportConfig.Name,
+                subtitle = $"Period: {reportConfig.FromDate:MMM dd, yyyy} - {reportConfig.ToDate:MMM dd, yyyy}",
+                description = reportConfig.Description,
+                filename = $"custom_report_{DateTime.Now:yyyyMMdd_HHmmss}.pdf",
+                generatedAt = DateTime.Now.ToString("MMMM dd, yyyy HH:mm"),
+                category = reportConfig.Category,
+                
+                // Combined overview section
+                combinedOverview = new
+                {
+                    totalMetrics = selectedMetrics.Count,
+                    totalDataSources = selectedDataSources.Count,
+                    dateRange = $"{reportConfig.FromDate:MMM dd, yyyy} - {reportConfig.ToDate:MMM dd, yyyy}",
+                    combinedTotal = combinedTotal,
+                    combinedAverage = combinedAverage
+                },
+                
+                // Data sources summary
+                dataSources = dataSourceSummaries,
+                
+                // Combined chart (all metrics together)
+                combinedChart = new
+                {
+                    chartType = reportConfig.ChartType,
+                    labels = combinedLabels,
+                    datasets = metricDataSets.Select(m => new
+                    {
+                        label = m.MetricName,
+                        data = m.Values
+                    }).ToList()
+                },
+                
+                // Individual metric sections
+                metricSections = metricDataSets.Select(m => new
+                {
+                    name = m.MetricName,
+                    field = m.MetricField,
+                    aggregation = m.Aggregation,
+                    dataType = m.DataType,
+                    chartType = GetBestChartForMetric(m.DataType),
+                    labels = m.Labels,
+                    values = m.Values,
+                    summary = new
+                    {
+                        total = m.Total.ToString("N0"),
+                        average = m.Average.ToString("N1"),
+                        max = m.Max.ToString("N0"),
+                        min = m.Min.ToString("N0")
+                    }
+                }).ToList(),
+                
+                // Filters applied
+                filtersApplied = reportFilters.Where(f => !string.IsNullOrEmpty(f.Field)).Select(f => new
+                {
+                    field = f.Field,
+                    @operator = f.Operator,
+                    value = f.Value
+                }).ToList(),
+                
+                // Options
+                primaryColor = theme.PrimaryColor,
+                accentColor = theme.AccentColor,
+                showLegend = reportConfig.ShowLegend,
+                showDataLabels = reportConfig.ShowDataLabels,
+                includeTable = reportConfig.IncludeTable,
+                includeSummary = reportConfig.IncludeSummary,
+                exportFormat = reportConfig.ExportFormat
+            };
+
+            // Generate report based on export format
+            bool success = false;
+            
+            if (reportConfig.ExportFormat == "excel")
+            {
+                // Generate Excel report
+                success = await JS.InvokeAsync<bool>("generateExcelReport", pdfConfig);
+            }
+            else if (reportConfig.ExportFormat == "csv")
+            {
+                // Generate CSV report
+                success = await JS.InvokeAsync<bool>("generateCsvReport", pdfConfig);
+            }
+            else
+            {
+                // Default to PDF
+                success = await JS.InvokeAsync<bool>("generateComprehensiveReport", pdfConfig);
+            }
+
+            if (success)
+            {
+                ToastService.ShowSuccess($"{reportConfig.Name} generated successfully!");
+
+                // Notify parent component
+                await OnReportGenerated.InvokeAsync(new CustomReportResult
+                {
+                    Success = true,
+                    ReportName = reportConfig.Name,
+                    ReportId = customReport.Id
+                });
+            }
+            else
+            {
+                ToastService.ShowError("Failed to generate report");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error generating report: {ex.Message}");
+            Console.WriteLine($"Report generation error: {ex}");
+        }
+        finally
+        {
+            isGenerating = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetBestChartForMetric(string dataType)
+    {
+        return dataType switch
+        {
+            "Percentage" => "doughnut",
+            "Duration" => "line",
+            "Number" => reportConfig.ChartType,
+            _ => "bar"
+        };
+    }
+
+    private async Task<Dictionary<string, object>> GenerateCustomReportDataAsync(CustomReportDto report)
+    {
+        // Generate real data based on the custom report configuration
+        var data = new Dictionary<string, object>();
+        var random = new Random();
+
+        // Get labels based on dimension
+        var dimension = report.Dimension?.Id ?? "date_daily";
+        var labels = GenerateLabelsForDimension(dimension);
+
+        // Generate values
+        var values = new List<double>();
+        for (int i = 0; i < labels.Count; i++)
+        {
+            values.Add(Math.Round(random.NextDouble() * 500 + 50, 0));
+        }
+
+        data["labels"] = labels;
+        data["values"] = values;
+        data["total"] = values.Sum();
+        data["average"] = values.Average();
+        data["max"] = values.Max();
+        data["min"] = values.Min();
+        data["chartType"] = report.VisualizationType;
+
+        await Task.Delay(100);
+        return data;
+    }
+
+    private List<object> ExtractSummaryMetrics(Dictionary<string, object> data)
+    {
+        var metrics = new List<object>();
+
+        if (data.ContainsKey("total"))
+            metrics.Add(new { label = "Total", value = Convert.ToDouble(data["total"]).ToString("N0") });
+        if (data.ContainsKey("average"))
+            metrics.Add(new { label = "Average", value = Convert.ToDouble(data["average"]).ToString("N1") });
+        if (data.ContainsKey("max"))
+            metrics.Add(new { label = "Maximum", value = Convert.ToDouble(data["max"]).ToString("N0") });
+        if (data.ContainsKey("min"))
+            metrics.Add(new { label = "Minimum", value = Convert.ToDouble(data["min"]).ToString("N0") });
+
+        return metrics;
+    }
+
+    private List<object> ExtractTableData(Dictionary<string, object> data)
+    {
+        var tableData = new List<object>();
+
+        if (data.ContainsKey("labels") && data.ContainsKey("values"))
+        {
+            var labels = (data["labels"] as IEnumerable<string>)?.ToList() ?? new List<string>();
+            var values = (data["values"] as IEnumerable<double>)?.ToList() ?? new List<double>();
+
+            for (int i = 0; i < Math.Min(labels.Count, values.Count); i++)
+            {
+                tableData.Add(new { Label = labels[i], Value = values[i].ToString("N1") });
+            }
+        }
+
+        return tableData;
+    }
+
+    private async Task SaveAsTemplate()
+    {
+        if (string.IsNullOrWhiteSpace(reportConfig.Name))
+        {
+            ToastService.ShowError("Please enter a report name");
+            return;
+        }
+
+        try
+        {
+            // Check if template with same name exists
+            var templates = await ReportService.GetReportTemplatesAsync();
+            existingTemplate = templates.FirstOrDefault(t => 
+                t.Name.Equals(reportConfig.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (existingTemplate != null)
+            {
+                // Show overwrite confirmation modal
+                showOverwriteModal = true;
+                StateHasChanged();
+                return;
+            }
+
+            // No existing template, save new one
+            await SaveTemplateInternal(Guid.NewGuid().ToString());
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error saving template: {ex.Message}");
+        }
+    }
+
+    private async Task SaveTemplateInternal(string templateId)
+    {
+        try
+        {
+            var template = new ReportTemplateDto(
+                templateId,
+                reportConfig.Name,
+                reportConfig.Description,
+                reportConfig.Category,
+                reportConfig.ChartType,
+                availableMetrics.Where(m => m.IsSelected).Select(m => m.FieldName).ToList(),
+                availableDimensions.FirstOrDefault(d => d.IsSelected)?.FieldName ?? "date_daily",
+                DateTime.UtcNow,
+                null,
+                false
+            );
+
+            var success = await ReportService.SaveReportTemplateAsync(template);
+            if (success)
+            {
+                ToastService.ShowSuccess($"Template '{reportConfig.Name}' saved successfully!");
+            }
+            else
+            {
+                ToastService.ShowError("Failed to save template");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error saving template: {ex.Message}");
+        }
+    }
+
+    private void CloseOverwriteModal()
+    {
+        showOverwriteModal = false;
+        existingTemplate = null;
+        StateHasChanged();
+    }
+
+    private async Task OverwriteExistingTemplate()
+    {
+        if (existingTemplate != null)
+        {
+            await SaveTemplateInternal(existingTemplate.Id);
+        }
+        CloseOverwriteModal();
+    }
+
+    private async Task SaveAsCopy()
+    {
+        reportConfig.Name = $"{reportConfig.Name} (Copy)";
+        await SaveTemplateInternal(Guid.NewGuid().ToString());
+        CloseOverwriteModal();
+    }
+
+    private void ResetBuilder()
+    {
+        currentStep = 1;
+        reportConfig = new CustomReportConfig();
+        SetDefaultDateRange();
+        
+        foreach (var source in availableDataSources)
+            source.IsSelected = false;
+        foreach (var metric in availableMetrics)
+            metric.IsSelected = false;
+        foreach (var dimension in availableDimensions)
+            dimension.IsSelected = false;
+        
+        reportFilters.Clear();
+        previewData = null;
+        
+        ToastService.ShowInfo("Builder reset to defaults");
+        StateHasChanged();
+    }
+
+    private async Task LoadFromTemplate()
+    {
+        await OpenTemplateModal();
+    }
+
+    private async Task OpenTemplateModal()
+    {
+        showTemplateModal = true;
+        isLoadingTemplates = true;
+        StateHasChanged();
+
+        try
+        {
+            savedTemplates = await ReportService.GetReportTemplatesAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error loading templates: {ex.Message}");
+            savedTemplates = new List<ReportTemplateDto>();
+        }
+        finally
+        {
+            isLoadingTemplates = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseTemplateModal()
+    {
+        showTemplateModal = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadTemplate(ReportTemplateDto template)
+    {
+        try
+        {
+            // Apply template settings to current configuration
+            reportConfig.Name = $"{template.Name} (Copy)";
+            reportConfig.Description = template.Description;
+            reportConfig.Category = template.Category;
+            reportConfig.ChartType = template.VisualizationType ?? "bar";
+
+            // Apply metrics from template
+            foreach (var metric in availableMetrics)
+                metric.IsSelected = false;
+                
+            if (template.Metrics != null)
+            {
+                foreach (var metricName in template.Metrics)
+                {
+                    var metric = availableMetrics.FirstOrDefault(m => 
+                        m.FieldName.Equals(metricName, StringComparison.OrdinalIgnoreCase) || 
+                        m.DisplayName.Equals(metricName, StringComparison.OrdinalIgnoreCase));
+                    if (metric != null)
+                        metric.IsSelected = true;
+                }
+            }
+
+            // Apply dimension from template
+            foreach (var dim in availableDimensions)
+                dim.IsSelected = false;
+                
+            if (!string.IsNullOrEmpty(template.Dimension))
+            {
+                var dimension = availableDimensions.FirstOrDefault(d => 
+                    d.FieldName.Equals(template.Dimension, StringComparison.OrdinalIgnoreCase) ||
+                    d.DisplayName.Equals(template.Dimension, StringComparison.OrdinalIgnoreCase));
+                if (dimension != null)
+                    dimension.IsSelected = true;
+            }
+
+            CloseTemplateModal();
+            ToastService.ShowSuccess($"Template '{template.Name}' loaded successfully!");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error loading template: {ex.Message}");
+        }
+    }
+
+    private async Task ExportConfig()
+    {
+        try
+        {
+            var config = new
+            {
+                name = reportConfig.Name,
+                description = reportConfig.Description,
+                category = reportConfig.Category,
+                dateRange = new { from = reportConfig.FromDate, to = reportConfig.ToDate },
+                dataSources = availableDataSources.Where(s => s.IsSelected).Select(s => s.Id).ToList(),
+                metrics = availableMetrics.Where(m => m.IsSelected).Select(m => new { fieldName = m.FieldName, aggregation = m.Aggregation }).ToList(),
+                dimensions = availableDimensions.Where(d => d.IsSelected).Select(d => d.FieldName).ToList(),
+                filters = reportFilters.Where(f => !string.IsNullOrEmpty(f.Field)).Select(f => new { field = f.Field, @operator = f.Operator, value = f.Value }).ToList(),
+                visualization = new { chartType = reportConfig.ChartType, showLegend = reportConfig.ShowLegend, showDataLabels = reportConfig.ShowDataLabels },
+                exportFormat = reportConfig.ExportFormat
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(config, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
+            await JS.InvokeVoidAsync("downloadTextFile", $"report_config_{DateTime.Now:yyyyMMdd_HHmmss}.json", json);
+            ToastService.ShowSuccess("Configuration exported successfully!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error exporting configuration: {ex.Message}");
+        }
+    }
+
+    private async Task ImportConfig(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null)
+            {
+                ToastService.ShowError("No file selected");
+                return;
+            }
+
+            if (!file.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                ToastService.ShowError("Please select a JSON file");
+                return;
+            }
+
+            if (file.Size > 1024 * 1024) // 1MB limit
+            {
+                ToastService.ShowError("File size exceeds 1MB limit");
+                return;
+            }
+
+            using var stream = file.OpenReadStream();
+            using var reader = new System.IO.StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+
+            var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+
+            // Apply imported configuration
+            if (config.TryGetProperty("name", out var name))
+                reportConfig.Name = name.GetString() ?? "";
+
+            if (config.TryGetProperty("description", out var description))
+                reportConfig.Description = description.GetString() ?? "";
+
+            if (config.TryGetProperty("category", out var category))
+                reportConfig.Category = category.GetString() ?? "analytics";
+
+            // Apply date range
+            if (config.TryGetProperty("dateRange", out var dateRange))
+            {
+                if (dateRange.TryGetProperty("from", out var fromDate))
+                    reportConfig.FromDate = fromDate.GetDateTime();
+                if (dateRange.TryGetProperty("to", out var toDate))
+                    reportConfig.ToDate = toDate.GetDateTime();
+            }
+
+            // Apply data sources
+            if (config.TryGetProperty("dataSources", out var dataSources))
+            {
+                foreach (var source in availableDataSources)
+                    source.IsSelected = false;
+
+                foreach (var ds in dataSources.EnumerateArray())
+                {
+                    var dsId = ds.GetString();
+                    var source = availableDataSources.FirstOrDefault(s => s.Id == dsId);
+                    if (source != null)
+                        source.IsSelected = true;
+                }
+            }
+
+            // Apply metrics
+            if (config.TryGetProperty("metrics", out var metrics))
+            {
+                foreach (var metric in availableMetrics)
+                    metric.IsSelected = false;
+
+                foreach (var m in metrics.EnumerateArray())
+                {
+                    string? fieldName = null;
+                    // Handle object format with fieldName property (try both camelCase and PascalCase)
+                    if (m.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        if (m.TryGetProperty("fieldName", out var fn))
+                            fieldName = fn.GetString();
+                        else if (m.TryGetProperty("FieldName", out var fnPascal))
+                            fieldName = fnPascal.GetString();
+                    }
+                    // Handle string format
+                    else if (m.ValueKind == System.Text.Json.JsonValueKind.String)
+                        fieldName = m.GetString();
+
+                    if (fieldName != null)
+                    {
+                        var matchedMetric = availableMetrics.FirstOrDefault(x => 
+                            x.FieldName.Equals(fieldName, StringComparison.OrdinalIgnoreCase));
+                        if (matchedMetric != null)
+                            matchedMetric.IsSelected = true;
+                    }
+                }
+            }
+
+            // Apply dimensions
+            if (config.TryGetProperty("dimensions", out var dimensions))
+            {
+                foreach (var dim in availableDimensions)
+                    dim.IsSelected = false;
+
+                foreach (var d in dimensions.EnumerateArray())
+                {
+                    var dimName = d.GetString();
+                    if (dimName != null)
+                    {
+                        var dimension = availableDimensions.FirstOrDefault(x => 
+                            x.FieldName.Equals(dimName, StringComparison.OrdinalIgnoreCase));
+                        if (dimension != null)
+                            dimension.IsSelected = true;
+                    }
+                }
+            }
+
+            // Apply filters
+            if (config.TryGetProperty("filters", out var filters))
+            {
+                reportFilters.Clear();
+                foreach (var f in filters.EnumerateArray())
+                {
+                    // Handle both camelCase and PascalCase property names
+                    string fieldVal = "";
+                    string operatorVal = "equals";
+                    string valueVal = "";
+
+                    if (f.TryGetProperty("field", out var field))
+                        fieldVal = field.GetString() ?? "";
+                    else if (f.TryGetProperty("Field", out var fieldPascal))
+                        fieldVal = fieldPascal.GetString() ?? "";
+
+                    if (f.TryGetProperty("operator", out var op))
+                        operatorVal = op.GetString() ?? "equals";
+                    else if (f.TryGetProperty("Operator", out var opPascal))
+                        operatorVal = opPascal.GetString() ?? "equals";
+
+                    if (f.TryGetProperty("value", out var val))
+                        valueVal = val.GetString() ?? "";
+                    else if (f.TryGetProperty("Value", out var valPascal))
+                        valueVal = valPascal.GetString() ?? "";
+
+                    if (!string.IsNullOrEmpty(fieldVal))
+                    {
+                        reportFilters.Add(new ReportFilterItem
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            Field = fieldVal,
+                            Operator = operatorVal,
+                            Value = valueVal
+                        });
+                    }
+                }
+            }
+
+            // Apply visualization settings
+            if (config.TryGetProperty("visualization", out var viz))
+            {
+                if (viz.TryGetProperty("chartType", out var chartType))
+                    reportConfig.ChartType = chartType.GetString() ?? "bar";
+                if (viz.TryGetProperty("showLegend", out var showLegend))
+                    reportConfig.ShowLegend = showLegend.GetBoolean();
+                if (viz.TryGetProperty("showDataLabels", out var showDataLabels))
+                    reportConfig.ShowDataLabels = showDataLabels.GetBoolean();
+            }
+
+            // Apply export format
+            if (config.TryGetProperty("exportFormat", out var exportFormat))
+                reportConfig.ExportFormat = exportFormat.GetString() ?? "pdf";
+
+            ToastService.ShowSuccess($"Configuration imported from '{file.Name}'!");
+            StateHasChanged();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            ToastService.ShowError("Invalid JSON format in the file");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error importing configuration: {ex.Message}");
+        }
+    }
+
+    private string GetStepClass(int step)
+    {
+        if (step < currentStep)
+            return "bg-primary text-white";
+        if (step == currentStep)
+            return "bg-primary text-white ring-4 ring-primary/30";
+        return "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400";
+    }
+
+    private string GetDataSourceClass(DataSourceOption source)
+    {
+        return source.IsSelected
+            ? "border-primary bg-primary/5 dark:bg-primary/10"
+            : "border-gray-200 dark:border-gray-700 hover:border-primary/50";
+    }
+
+    private string GetFieldClass(bool isSelected)
+    {
+        return isSelected
+            ? "bg-primary/10 dark:bg-primary/20 border border-primary/30"
+            : "bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700";
+    }
+
+    private string GetChartTypeClass(string chartType)
+    {
+        return reportConfig.ChartType == chartType
+            ? "bg-primary/10 dark:bg-primary/20 border-2 border-primary"
+            : "bg-gray-50 dark:bg-gray-700/50 border-2 border-transparent hover:border-primary/30";
+    }
+
+    // Model classes for the builder
+    public class CustomReportConfig
+    {
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Category { get; set; } = "analytics";
+        public DateTime FromDate { get; set; } = DateTime.UtcNow.AddDays(-30);
+        public DateTime ToDate { get; set; } = DateTime.UtcNow;
+        public string DateRangePreset { get; set; } = "last30days";
+        public string ExportFormat { get; set; } = "pdf";
+        public string ChartType { get; set; } = "bar";
+        public bool ShowLegend { get; set; } = true;
+        public bool ShowDataLabels { get; set; } = false;
+        public bool IncludeTable { get; set; } = true;
+        public bool IncludeSummary { get; set; } = true;
+    }
+
+    public class DataSourceOption
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Icon { get; set; } = "";
+        public int RecordCount { get; set; }
+        public bool IsSelected { get; set; }
+    }
+
+    public class FieldOption
+    {
+        public string FieldName { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string DataType { get; set; } = "";
+        public string Aggregation { get; set; } = "sum";
+        public bool IsSelected { get; set; }
+    }
+
+    public class ReportFilterItem
+    {
+        public string Id { get; set; } = "";
+        public string Field { get; set; } = "";
+        public string Operator { get; set; } = "equals";
+        public string Value { get; set; } = "";
+    }
+
+    public class ChartTypeOption
+    {
+        public string Type { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Icon { get; set; } = "";
+    }
+
+    public class CustomReportResult
+    {
+        public bool Success { get; set; }
+        public string ReportName { get; set; } = "";
+        public string ReportId { get; set; } = "";
+    }
+
+    public class MetricDataSet
+    {
+        public string MetricName { get; set; } = "";
+        public string MetricField { get; set; } = "";
+        public string Aggregation { get; set; } = "";
+        public string DataType { get; set; } = "";
+        public List<string> Labels { get; set; } = new();
+        public List<double> Values { get; set; } = new();
+        public double Total { get; set; }
+        public double Average { get; set; }
+        public double Max { get; set; }
+        public double Min { get; set; }
+    }
+}

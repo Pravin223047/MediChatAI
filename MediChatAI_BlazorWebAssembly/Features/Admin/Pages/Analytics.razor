@@ -453,7 +453,9 @@
 <ExportModal IsOpen="@showExportModal"
              OnClose="@CloseExportModal"
              OnExportCsv="@ExportUserDataCsv"
+             OnExportXlsx="@ExportUserDataXlsx"
              OnExportJson="@ExportAnalyticsJson"
+             OnExportPdf="@ExportAnalyticsPdf"
              OnExportPng="@ExportAllChartsAsPng" />
 
 </AuthorizeRouteGuard>
@@ -763,7 +765,7 @@
                 var csvString = System.Text.Encoding.UTF8.GetString(csvData);
 
                 var filename = $"user-data-export-{DateTime.Now:yyyy-MM-dd-HHmmss}.csv";
-                await JS.InvokeVoidAsync("downloadFile", filename, csvString, "text/csv");
+                await JS.InvokeVoidAsync("downloadFileContent", filename, csvString, "text/csv");
 
                 ToastService.ShowSuccess("User data exported successfully!");
             }
@@ -775,6 +777,72 @@
         catch (Exception ex)
         {
             ToastService.ShowError($"Export failed: {ex.Message}");
+        }
+    }
+
+    private async Task ExportUserDataXlsx()
+    {
+        try
+        {
+            ToastService.ShowSuccess("Exporting to Excel...");
+            var result = await AdminService.ExportUserDataAsync();
+
+            if (result?.Success == true && !string.IsNullOrEmpty(result.Message))
+            {
+                // Convert CSV to XLSX format using JavaScript
+                var base64Csv = result.Message;
+                var csvData = System.Convert.FromBase64String(base64Csv);
+                var csvString = System.Text.Encoding.UTF8.GetString(csvData);
+
+                var filename = $"user-data-export-{DateTime.Now:yyyy-MM-dd-HHmmss}.xlsx";
+                await JS.InvokeVoidAsync("exportCsvToXlsx", csvString, filename);
+
+                ToastService.ShowSuccess("Excel file exported successfully!");
+            }
+            else
+            {
+                ToastService.ShowError("No data to export");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Export failed: {ex.Message}");
+        }
+    }
+
+    private async Task ExportAnalyticsPdf()
+    {
+        try
+        {
+            ToastService.ShowSuccess("Generating PDF report...");
+            
+            var reportConfig = new
+            {
+                title = "Analytics Report",
+                subtitle = $"Period: {fromDate:MMM dd, yyyy} - {toDate:MMM dd, yyyy}",
+                dateRange = $"Generated on {DateTime.Now:MMMM dd, yyyy 'at' hh:mm tt}",
+                type = "analytics",
+                stats = new
+                {
+                    totalUsers = adminStats?.TotalUsers ?? 0,
+                    totalPatients = adminStats?.TotalPatients ?? 0,
+                    totalDoctors = adminStats?.TotalDoctors ?? 0,
+                    totalAdmins = adminStats?.TotalAdmins ?? 0,
+                    activeUsersToday = adminStats?.ActiveUsersToday ?? 0,
+                    newUsersThisWeek = adminStats?.NewUsersThisWeek ?? 0,
+                    totalActivities = adminStats?.TotalActivities ?? 0
+                },
+                userGrowth = PrepareUserGrowthData(),
+                activityBreakdown = PrepareActivityBreakdownData(),
+                roleDistribution = PrepareRoleDistributionData()
+            };
+
+            await JS.InvokeVoidAsync("generateAnalyticsPdfReport", reportConfig);
+            ToastService.ShowSuccess("PDF report generated successfully!");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"PDF export failed: {ex.Message}");
         }
     }
 
@@ -819,7 +887,7 @@
             });
 
             var filename = $"analytics-export-{DateTime.Now:yyyy-MM-dd-HHmmss}.json";
-            await JS.InvokeVoidAsync("downloadFile", filename, json, "application/json");
+            await JS.InvokeVoidAsync("downloadFileContent", filename, json, "application/json");
 
             ToastService.ShowSuccess("Analytics data exported successfully!");
         }

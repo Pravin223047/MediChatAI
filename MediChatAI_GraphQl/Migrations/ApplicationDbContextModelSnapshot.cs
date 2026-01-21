@@ -2830,6 +2830,101 @@ namespace MediChatAI_GraphQl.Migrations
                     b.ToTable("PrescriptionItems");
                 });
 
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.ScheduledReport", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastRun")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastRunError")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LastRunStatus")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("NextRun")
+                        .HasColumnType("datetime2");
+
+                    b.PrimitiveCollection<string>("Recipients")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReportId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReportName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Schedule")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ScheduledReports");
+                });
+
+            modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.ScheduledReportExecution", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<TimeSpan>("Duration")
+                        .HasColumnType("time");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ExecutedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RecipientsFailed")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecipientsSent")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReportDataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ScheduledReportId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ScheduledReportExecutions");
+                });
+
             modelBuilder.Entity("MediChatAI_GraphQl.Core.Entities.SystemSettings", b =>
                 {
                     b.Property<int>("Id")

@@ -31,8 +31,9 @@ public interface IReportService
     // Scheduling
     Task<ScheduledReportDto?> ScheduleReportAsync(ScheduledReportDto schedule);
     Task<List<ScheduledReportDto>> GetScheduledReportsAsync();
-    Task<bool> UpdateScheduledReportAsync(ScheduledReportDto schedule);
+    Task<ScheduledReportDto?> UpdateScheduledReportAsync(ScheduledReportDto schedule);
     Task<bool> DeleteScheduledReportAsync(string scheduleId);
+    Task<ScheduledReportExecutionResult?> ExecuteScheduledReportNowAsync(string scheduleId, bool sendEmail = true);
 
     // History
     Task<List<ReportHistoryDto>> GetReportHistoryAsync(int skip = 0, int take = 50);

@@ -124,6 +124,50 @@ namespace MediChatAI_GraphQl.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ScheduledReportExecutions",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    ScheduledReportId = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ExecutedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RecipientsSent = table.Column<int>(type: "int", nullable: false),
+                    RecipientsFailed = table.Column<int>(type: "int", nullable: false),
+                    ReportDataJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Duration = table.Column<TimeSpan>(type: "time", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ScheduledReportExecutions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ScheduledReports",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    ReportId = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ReportName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Schedule = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Frequency = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Recipients = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Format = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    NextRun = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    LastRun = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    LastRunStatus = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    LastRunError = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ScheduledReports", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "SystemSettings",
                 columns: table => new
                 {
@@ -2295,6 +2339,12 @@ namespace MediChatAI_GraphQl.Migrations
 
             migrationBuilder.DropTable(
                 name: "PrescriptionItems");
+
+            migrationBuilder.DropTable(
+                name: "ScheduledReportExecutions");
+
+            migrationBuilder.DropTable(
+                name: "ScheduledReports");
 
             migrationBuilder.DropTable(
                 name: "SystemSettings");

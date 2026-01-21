@@ -80,8 +80,21 @@ public class AdminService : IAdminService
                 query = query.Where(u => !u.LockoutEnd.HasValue == input.IsActive.Value);
             }
 
+            // Apply date range filter (based on CreatedAt)
+            if (input.FromDate.HasValue)
+            {
+                Console.WriteLine($"[AdminService] Filtering users FromDate: {input.FromDate.Value}");
+                query = query.Where(u => u.CreatedAt >= input.FromDate.Value);
+            }
+            if (input.ToDate.HasValue)
+            {
+                Console.WriteLine($"[AdminService] Filtering users ToDate: {input.ToDate.Value}");
+                query = query.Where(u => u.CreatedAt <= input.ToDate.Value);
+            }
+
             // Get total count
             var totalCount = await query.CountAsync();
+            Console.WriteLine($"[AdminService] Total users after date filter: {totalCount}");
 
             // Apply sorting
             query = input.SortBy?.ToLower() switch

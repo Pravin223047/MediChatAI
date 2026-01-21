@@ -223,6 +223,38 @@ public class EmailService : IEmailService
         }
     }
 
+    public async Task SendEmailWithAttachmentAsync(string email, string subject, string body, byte[] attachmentData, string attachmentName, string attachmentMimeType)
+    {
+        try
+        {
+            var smtpSettings = _configuration.GetSection("SmtpSettings");
+            
+            using var client = new SmtpClient(smtpSettings["Server"], int.Parse(smtpSettings["Port"]!))
+            {
+                Credentials = new NetworkCredential(smtpSettings["Username"], smtpSettings["Password"]),
+                EnableSsl = bool.Parse(smtpSettings["EnableSsl"]!)
+            };
+
+            var message = new MailMessage(smtpSettings["FromEmail"]!, email, subject, body)
+            {
+                IsBodyHtml = true
+            };
+
+            // Add attachment
+            var stream = new MemoryStream(attachmentData);
+            var attachment = new Attachment(stream, attachmentName, attachmentMimeType);
+            message.Attachments.Add(attachment);
+
+            await client.SendMailAsync(message);
+            _logger.LogInformation("Email with attachment sent successfully to {Email}", email);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send email with attachment to {Email}", email);
+            throw;
+        }
+    }
+
     private async Task<string> LoadEmailTemplateAsync(string templateName, Dictionary<string, string> tokens)
     {
         try

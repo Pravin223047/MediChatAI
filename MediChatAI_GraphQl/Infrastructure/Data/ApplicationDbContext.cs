@@ -43,6 +43,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ConsultationNote> ConsultationNotes { get; set; }
     public DbSet<AIChatSession> AIChatSessions { get; set; }
     public DbSet<AIChatMessage> AIChatMessages { get; set; }
+    public DbSet<ScheduledReport> ScheduledReports { get; set; }
+    public DbSet<ScheduledReportExecution> ScheduledReportExecutions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -966,5 +968,14 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .WithMany(c => c.Prescriptions)
             .HasForeignKey(e => e.ConsultationSessionId)
             .OnDelete(DeleteBehavior.NoAction);
+
+        // Configure ScheduledReportExecution relationship
+        builder.Entity<ScheduledReportExecution>(entity =>
+        {
+            entity.HasOne(e => e.ScheduledReport)
+                .WithMany()
+                .HasForeignKey(e => e.ScheduledReportId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
