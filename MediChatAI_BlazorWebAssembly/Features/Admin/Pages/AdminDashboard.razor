@@ -62,7 +62,7 @@
     <!-- Modern Content Area -->
     <main class="py-8 px-4 sm:px-6 lg:px-8">
         <!-- Enhanced Stats Cards with Modern Design -->
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-12">
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5 mb-12">
             <!-- Total Users Card -->
             <div class="group relative overflow-hidden bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105">
                 <div class="absolute inset-0 bg-primary/5 dark:bg-primary/10"></div>
@@ -142,6 +142,26 @@
                     <div class="mt-4 h-1 bg-green-500 rounded-full animate-pulse"></div>
                 </div>
             </div>
+
+            <!-- Appointments Card -->
+            <div class="group relative overflow-hidden bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105">
+                <div class="absolute inset-0 bg-purple-500/5 dark:bg-purple-500/10"></div>
+                <div class="relative p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <dt class="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">Appointments</dt>
+                            <dd class="mt-2 text-3xl font-bold text-gray-900 dark:text-white">@(adminStats?.TotalAppointments ?? 0)</dd>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">📅 Total bookings</p>
+                        </div>
+                        <div class="p-3 bg-purple-500 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                            <svg class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="mt-4 h-1 bg-purple-500 rounded-full"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Modern Quick Actions with Beautiful Grid -->
@@ -155,7 +175,7 @@
                     <p class="mt-2 text-gray-600 dark:text-gray-400">Manage your system with these powerful tools</p>
                 </div>
 
-                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
                     <!-- User Management -->
                     <button @onclick="NavigateToUsers" class="group relative overflow-hidden bg-card dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center hover:border-primary hover:shadow-xl transition-all duration-300 transform hover:scale-105">
                         <div class="absolute inset-0 bg-primary/5 dark:bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -210,6 +230,20 @@
                             </div>
                             <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Audit Logs</h4>
                             <p class="text-sm text-gray-600 dark:text-gray-400">Monitor system activity logs</p>
+                        </div>
+                    </button>
+
+                    <!-- Appointments -->
+                    <button @onclick="NavigateToAppointments" class="group relative overflow-hidden bg-card dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center hover:border-purple-500 hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+                        <div class="absolute inset-0 bg-purple-500/5 dark:bg-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <div class="relative">
+                            <div class="mx-auto w-16 h-16 bg-purple-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">
+                                <svg class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                            <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Appointments</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Manage all appointments</p>
                         </div>
                     </button>
                 </div>
@@ -518,4 +552,5 @@
     private void NavigateToAnalytics() => Navigation.NavigateTo("/admin/analytics");
     private void NavigateToSettings() => Navigation.NavigateTo("/admin/settings");
     private void NavigateToAuditLogs() => Navigation.NavigateTo("/admin/audit-logs");
+    private void NavigateToAppointments() => Navigation.NavigateTo("/admin/appointments");
 }

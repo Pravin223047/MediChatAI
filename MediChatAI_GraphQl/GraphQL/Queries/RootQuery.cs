@@ -99,6 +99,14 @@ namespace MediChatAI_GraphQl.GraphQL.Queries
             return await adminService.GetAdminStatsAsync();
         }
 
+        [Authorize(Roles = new[] { "Admin" })]
+        public async Task<AllAppointmentsResult> GetAllAppointmentsAsync(
+            GetAllAppointmentsInput input,
+            [Service] IAdminService adminService)
+        {
+            return await adminService.GetAllAppointmentsAsync(input);
+        }
+
         // Doctor onboarding queries
         [Authorize(Roles = new[] { "Doctor" })]
         public async Task<DoctorOnboardingStatus> GetDoctorOnboardingStatusAsync(

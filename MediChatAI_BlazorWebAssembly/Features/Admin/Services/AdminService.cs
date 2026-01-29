@@ -175,6 +175,7 @@ public class AdminService : IAdminService
                     totalPatients
                     totalDoctors
                     totalAdmins
+                    totalAppointments
                     activeUsersToday
                     newUsersThisWeek
                     totalActivities
@@ -242,5 +243,61 @@ public class AdminService : IAdminService
 
             return null;
         }
+    }
+
+    public async Task<AppointmentsResult?> GetAllAppointmentsAsync(int skip = 0, int take = 20, string? searchTerm = null, string? status = null, DateTime? fromDate = null, DateTime? toDate = null)
+    {
+        var query = @"
+            query GetAllAppointments($input: GetAllAppointmentsInput!) {
+                allAppointments(input: $input) {
+                    appointments {
+                        id
+                        patientId
+                        patientName
+                        patientEmail
+                        doctorId
+                        doctorName
+                        specialization
+                        appointmentDate
+                        appointmentTime
+                        appointmentType
+                        status
+                        notes
+                        createdAt
+                        isRequest
+                    }
+                    totalCount
+                    pendingCount
+                    confirmedCount
+                    completedTodayCount
+                    requestCount
+                    success
+                    errors
+                }
+            }";
+
+        var variables = new
+        {
+            input = new
+            {
+                skip,
+                take,
+                searchTerm,
+                status,
+                fromDate = fromDate?.ToString("o"),
+                toDate = toDate?.ToString("o")
+            }
+        };
+
+        Console.WriteLine($"GetAllAppointmentsAsync: Sending GraphQL query with input: skip={skip}, take={take}, status={status}");
+        var response = await _graphQLService.SendQueryAsync<GetAppointmentsResponse>(query, variables);
+        Console.WriteLine($"GetAllAppointmentsAsync: Response = {(response != null ? "received" : "null")}, AllAppointments = {(response?.AllAppointments != null ? "exists" : "null")}");
+        
+        if (response?.AllAppointments != null)
+        {
+            Console.WriteLine($"GetAllAppointmentsAsync: Appointments count = {response.AllAppointments.Appointments?.Count ?? 0}, TotalCount = {response.AllAppointments.TotalCount}");
+        }
+        
+        return response?.AllAppointments;
     }
 }

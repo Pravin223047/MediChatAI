@@ -61,6 +61,7 @@ public record AdminStatsDto(
     int TotalPatients,
     int TotalDoctors,
     int TotalAdmins,
+    int TotalAppointments,
     int ActiveUsersToday,
     int NewUsersThisWeek,
     int TotalActivities,
@@ -101,6 +102,15 @@ public record UpdateUserRoleInput(
     string NewRole
 );
 
+public record GetAllAppointmentsInput(
+    int Skip = 0,
+    int Take = 20,
+    string? SearchTerm = null,
+    string? Status = null,
+    DateTime? FromDate = null,
+    DateTime? ToDate = null
+);
+
 // Result DTOs
 public record UsersResult(
     List<UserListItem> Users,
@@ -126,4 +136,32 @@ public record AdminOperationResult(
     bool Success,
     string[] Errors,
     string? Message = null
+);
+
+public record AdminAppointmentDto(
+    string Id,
+    string PatientId,
+    string PatientName,
+    string PatientEmail,
+    string DoctorId,
+    string DoctorName,
+    string Specialization,
+    DateTime AppointmentDate,
+    string AppointmentTime,
+    string AppointmentType,
+    string Status,
+    string? Notes,
+    DateTime CreatedAt,
+    bool IsRequest = false  // True if this is an AppointmentRequest, false if Appointment
+);
+
+public record AllAppointmentsResult(
+    List<AdminAppointmentDto> Appointments,
+    int TotalCount,
+    int PendingCount,
+    int ConfirmedCount,
+    int CompletedTodayCount,
+    int RequestCount,  // Count of pending appointment requests
+    bool Success,
+    string[] Errors
 );

@@ -61,6 +61,7 @@ public record AdminStatsDto(
     int TotalPatients,
     int TotalDoctors,
     int TotalAdmins,
+    int TotalAppointments,
     int ActiveUsersToday,
     int NewUsersThisWeek,
     int TotalActivities,
@@ -222,4 +223,35 @@ public record GetAdminStatsResponse(AdminStatsDto AdminStats);
 public record UpdateUserStatusResponse(AdminOperationResult UpdateUserStatus);
 public record UpdateUserRoleResponse(AdminOperationResult UpdateUserRole);
 public record DeleteUserResponse(AdminOperationResult DeleteUser);
+
+// Appointments Management
+public record AdminAppointmentDto(
+    string Id,
+    string PatientId,
+    string PatientName,
+    string PatientEmail,
+    string DoctorId,
+    string DoctorName,
+    string Specialization,
+    DateTime AppointmentDate,
+    string AppointmentTime,
+    string AppointmentType,
+    string Status,
+    string? Notes,
+    DateTime CreatedAt,
+    bool IsRequest = false  // True if this is an AppointmentRequest, false if Appointment
+);
+
+public record AppointmentsResult(
+    List<AdminAppointmentDto> Appointments,
+    int TotalCount,
+    int PendingCount,
+    int ConfirmedCount,
+    int CompletedTodayCount,
+    int RequestCount,  // Count of pending appointment requests
+    bool Success,
+    string[]? Errors
+);
+
+public record GetAppointmentsResponse(AppointmentsResult AllAppointments);
 public record ExportUserDataResponse(AdminOperationResult ExportUserData);

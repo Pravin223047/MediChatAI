@@ -452,12 +452,15 @@ public class AdminService : IAdminService
                 .CountAsync(u => u.CreatedAt >= weekAgo);
 
             var totalActivities = await _context.UserActivities.CountAsync();
+            
+            var totalAppointments = await _context.Appointments.CountAsync();
 
             return new AdminStatsDto(
                 totalUsers,
                 totalPatients,
                 totalDoctors,
                 totalAdmins,
+                totalAppointments,
                 activeUsersToday,
                 newUsersThisWeek,
                 totalActivities,
@@ -641,5 +644,166 @@ public class AdminService : IAdminService
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;
         return value.Replace("\"", "\"\"").Replace("\n", " ").Replace("\r", "");
+    }
+
+    public async Task<AllAppointmentsResult> GetAllAppointmentsAsync(GetAllAppointmentsInput input)
+    {
+        try
+        {
+            Console.WriteLine($"[AdminService] GetAllAppointmentsAsync called with Skip={input.Skip}, Take={input.Take}, Status={input.Status}");
+            
+            // First, get ALL appointments without any filter to debug
+            var allAppointmentsInDb = await _context.Appointments.ToListAsync();
+            Console.WriteLine($"[AdminService] RAW appointments in database: {allAppointmentsInDb.Count}");
+            foreach (var apt in allAppointmentsInDb)
+            {
+                Console.WriteLine($"[AdminService] Appointment ID={apt.Id}, PatientId={apt.PatientId}, DoctorId={apt.DoctorId}, Status={apt.Status}");
+            }
+            
+            var query = _context.Appointments
+                .Include(a => a.Patient)
+                .Include(a => a.Doctor)
+                .AsQueryable();
+            
+            // Log total appointments in database
+            var totalInDb = await _context.Appointments.CountAsync();
+            Console.WriteLine($"[AdminService] Total appointments in database: {totalInDb}");
+
+            // Apply filters
+            if (!string.IsNullOrEmpty(input.SearchTerm))
+            {
+                var searchLower = input.SearchTerm.ToLower();
+                query = query.Where(a => 
+                    (a.Patient != null && (a.Patient.FirstName + " " + a.Patient.LastName).ToLower().Contains(searchLower)) ||
+                    (a.Doctor != null && (a.Doctor.FirstName + " " + a.Doctor.LastName).ToLower().Contains(searchLower)));
+            }
+
+            if (!string.IsNullOrEmpty(input.Status))
+            {
+                if (Enum.TryParse<AppointmentStatus>(input.Status, out var statusEnum))
+                {
+                    query = query.Where(a => a.Status == statusEnum);
+                }
+            }
+
+            if (input.FromDate.HasValue)
+            {
+                query = query.Where(a => a.AppointmentDateTime >= input.FromDate.Value);
+            }
+
+            if (input.ToDate.HasValue)
+            {
+                query = query.Where(a => a.AppointmentDateTime <= input.ToDate.Value);
+            }
+
+            var today = DateTime.UtcNow.Date;
+
+            // Count from Appointments table
+            var pendingCount = await _context.Appointments.CountAsync(a => a.Status == AppointmentStatus.Pending);
+            var confirmedCount = await _context.Appointments.CountAsync(a => a.Status == AppointmentStatus.Confirmed);
+            var completedTodayCount = await _context.Appointments
+                .CountAsync(a => a.Status == AppointmentStatus.Completed && a.AppointmentDateTime.Date == today);
+            
+            // Count pending appointment requests
+            var requestCount = await _context.AppointmentRequests
+                .CountAsync(r => r.Status == RequestStatus.Pending || r.Status == RequestStatus.UnderReview);
+
+            // Get confirmed appointments
+            var appointments = await query
+                .OrderByDescending(a => a.AppointmentDateTime)
+                .Select(a => new AdminAppointmentDto(
+                    a.Id.ToString(),
+                    a.PatientId,
+                    a.Patient != null ? $"{a.Patient.FirstName} {a.Patient.LastName}" : "Unknown",
+                    a.Patient != null ? a.Patient.Email ?? "" : "",
+                    a.DoctorId ?? "",
+                    a.Doctor != null ? $"{a.Doctor.FirstName} {a.Doctor.LastName}" : "Not Assigned",
+                    a.Doctor != null ? a.Doctor.Specialization ?? "General" : "Pending Assignment",
+                    a.AppointmentDateTime,
+                    a.AppointmentDateTime.ToString("HH:mm"),
+                    a.Type.ToString(),
+                    a.Status.ToString(),
+                    a.ReasonForVisit,
+                    a.CreatedAt,
+                    false  // IsRequest = false for confirmed appointments
+                ))
+                .ToListAsync();
+            
+            // Get pending appointment requests
+            var requestQuery = _context.AppointmentRequests
+                .Include(r => r.Patient)
+                .Include(r => r.PreferredDoctor)
+                .Where(r => r.Status == RequestStatus.Pending || r.Status == RequestStatus.UnderReview)
+                .AsQueryable();
+            
+            // Apply search filter to requests
+            if (!string.IsNullOrEmpty(input.SearchTerm))
+            {
+                var searchLower = input.SearchTerm.ToLower();
+                requestQuery = requestQuery.Where(r => 
+                    r.FullName.ToLower().Contains(searchLower) ||
+                    (r.Patient != null && (r.Patient.FirstName + " " + r.Patient.LastName).ToLower().Contains(searchLower)) ||
+                    (r.PreferredDoctor != null && (r.PreferredDoctor.FirstName + " " + r.PreferredDoctor.LastName).ToLower().Contains(searchLower)));
+            }
+            
+            var appointmentRequests = await requestQuery
+                .OrderByDescending(r => r.RequestedAt)
+                .Select(r => new AdminAppointmentDto(
+                    $"REQ-{r.Id}",  // Prefix with REQ- to distinguish from appointments
+                    r.PatientId,
+                    r.FullName,
+                    r.Email,
+                    r.PreferredDoctorId ?? "",
+                    r.PreferredDoctor != null ? $"{r.PreferredDoctor.FirstName} {r.PreferredDoctor.LastName}" : "Not Assigned",
+                    r.PreferredDoctor != null ? r.PreferredDoctor.Specialization ?? "General" : "Pending Assignment",
+                    r.PreferredDate ?? r.RequestedAt,
+                    r.PreferredTimeSlot ?? "Not specified",
+                    r.PreferredAppointmentType.ToString(),
+                    r.Status == RequestStatus.Pending ? "Awaiting Review" : r.Status.ToString(),
+                    r.SymptomDescription,
+                    r.RequestedAt,
+                    true  // IsRequest = true for appointment requests
+                ))
+                .ToListAsync();
+            
+            // Combine both lists - requests first, then appointments
+            var allItems = new List<AdminAppointmentDto>();
+            allItems.AddRange(appointmentRequests);
+            allItems.AddRange(appointments);
+            
+            // Apply pagination
+            var paginatedItems = allItems
+                .Skip(input.Skip)
+                .Take(input.Take)
+                .ToList();
+            
+            var totalCount = appointments.Count + appointmentRequests.Count;
+            
+            Console.WriteLine($"[AdminService] Returning {paginatedItems.Count} items (Appointments: {appointments.Count}, Requests: {appointmentRequests.Count}), Total: {totalCount}");
+
+            return new AllAppointmentsResult(
+                paginatedItems,
+                totalCount,
+                pendingCount,
+                confirmedCount,
+                completedTodayCount,
+                requestCount,
+                true,
+                Array.Empty<string>()
+            );
+        }
+        catch (Exception ex)
+        {
+            return new AllAppointmentsResult(
+                new List<AdminAppointmentDto>(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                false,
+                new[] { ex.Message }
+            );
+        }
     }
 }

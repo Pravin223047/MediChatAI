@@ -20,4 +20,7 @@ public interface IAdminService
     // System Operations
     Task<AdminOperationResult> SendSystemNotificationAsync(string adminUserId, string title, string message, string? targetRole = null);
     Task<AdminOperationResult> ExportUserDataAsync(string adminUserId, string? userId = null);
+
+    // Appointments Management
+    Task<AllAppointmentsResult> GetAllAppointmentsAsync(GetAllAppointmentsInput input);
 }
